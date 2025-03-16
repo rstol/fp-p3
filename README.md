@@ -161,3 +161,6 @@ Tags:
 - Week 2: ..
 - Week 3: ..
 - ...
+
+link pitch video:
+https://polybox.ethz.ch/index.php/s/bjtuIzQxFkGUOqX
