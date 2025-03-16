@@ -1,3 +1,37 @@
+[tool.poetry]
+name = "server"
+version = "0.0.1"
+description = "Backend for the dummy project of the XAI-IML 2025 course."
+readme = "README.md"
+authors = ["Romeo Stoll stollr@student.ethz.ch"]
+packages = [{include = "server", from = "src"}]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Development Status :: 4 - Beta"
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+gunicorn = "^21.2.0"
+flask = "^3.1.0"
+flask-restful = "^0.3.10"
+flask-cors = "^5.0.1"
+pandas = "^2.2.3"
+scikit-learn = "^1.6.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.4.0"
+isort = "^5.13.2"
+pylint = "^3.1.0"
+pre-commit = "^2.20.0"
+
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry>=1.8.5"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py312']

@@ -1,26 +1,28 @@
 services:
   frontend:
-    container_name: fullstack-reference-project_frontend
-    image: fullstack-reference-project_frontend:latest
+    container_name: xaiml_p3_frontend
+    image: xaiml_p3_frontend:latest
     build:
       context: ./frontend/
       dockerfile: ./Dockerfile
-      target: base
+      # target: base
     volumes:
       - ./frontend/http:/http
     ports:
-      - "3000:3000"
+      - '3000:3000'
     depends_on:
       - backend
 
   backend:
-    container_name: fullstack-reference-project_backend
-    image: fullstack-reference-project_backend:latest
+    container_name: xaiml_p3_backend
+    image: xaiml_p3_backend:latest
     build:
       context: ./backend/
       dockerfile: ./Dockerfile
-      target: base
+      target: development
+      args:
+        PORT: 8080
     volumes:
       - ./backend/http:/http
     ports:
-      - "8080:8080"
+      - '8080:8080'
