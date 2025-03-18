@@ -2,17 +2,27 @@
 
 ## Installation
 
-You can simply install the package through [pip](https://pypi.org/project/pip/):
+Ensure you have Python 3.13 installed. (e.g. with `pyenv install 3.13`)
+
+You can simply install the package through poetry:
 
 ```
-cd backend-project
-pip install .
+cd backend
+poetry install
 ```
 
-If you want to make changes and test them in real time, you can install the package in editable mode (`-e`):
+To generate the source command to your virtual environment enter:
 
 ```
-pip install -e .
+poetry env activate
+```
+
+To activate the virtual environment run the generated `source ...` command
+
+Then following should return a path to poetry virtualenvs:
+
+```
+which python3
 ```
 
 ## How to run

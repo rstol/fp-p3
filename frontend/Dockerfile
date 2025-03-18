@@ -14,10 +14,16 @@ COPY --from=development-dependencies-env /app/node_modules /app/node_modules
 WORKDIR /app
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:20-alpine AS development
+WORKDIR /app
+COPY package.json .
+RUN npm install
+COPY . .
+CMD ["npm", "run", "dev"]
+
+FROM node:20-alpine AS production
 COPY ./package.json package-lock.json /app/
 COPY --from=production-dependencies-env /app/node_modules /app/node_modules
 COPY --from=build-env /app/build /app/build
 WORKDIR /app
-EXPOSE 3000
 CMD ["npm", "run", "start"]

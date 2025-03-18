@@ -5,13 +5,18 @@ services:
     build:
       context: ./frontend/
       dockerfile: ./Dockerfile
-      # target: base
+      target: development
     volumes:
-      - ./frontend/http:/http
+      - ./frontend/app:/app/app:cached
+      - ./frontend/public:/app/public:cached
     ports:
       - '3000:3000'
+      - '3010:3010'
     depends_on:
       - backend
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
 
   backend:
     container_name: xaiml_p3_backend
@@ -23,6 +28,10 @@ services:
       args:
         PORT: 8080
     volumes:
-      - ./backend/http:/http
+      - ./backend/src/server:/application_root/server:cached
+      - ./backend/data:/application_root/data:cached
+      - ./backend/http:/application_root/http:cached
     ports:
       - '8080:8080'
+volumes:
+  node_modules: {}

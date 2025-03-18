@@ -95,31 +95,43 @@ Write here all intructions to build the environment and run your code.\
 
 ## How to Run
 
-Write here **DETAILED** intructions on how to run your code.\
-**NOTE:** If we cannot run your code following these instructions we will not be able to evaluate it.
+### Using Docker Compose (Recommended)
 
-As an example here are the instructions to run the Dummy Project:
-To run the Dummy project you have to:
+To run the development server using Docker Compose:
 
-- clone the repository;
-- open a terminal instance and using the command `cd` move to the folder where the project has been downloaded;
+1. Make sure you have Docker and Docker Compose installed
+2. From the project root directory, run:
+   ```bash
+   docker compose up
+   ```
+   This will start both the frontend and backend services in development mode.
+   - Frontend will be available at: http://localhost:3000
+   - Backend will be available at: http://localhost:8000
 
-To run the backend
+To rebuild the containers (e.g., after making changes to the Dockerfile or dependencies):
 
-- open the backend folder called "backend-project"
-- to start the backend first you need to create a virtual environment using conda
-  `conda create -n nameOfTheEnvironment`
-  - to activate the virtual environment run the command `conda activate nameOfTheEnvironment`
-  - install the requirements using the command `pip3 install .`
-  - If you want to make changes and test them in real time, you can install the package in editable mode using the command`pip install -e .`
-  - to start the backend use the command `python3 -m gamut_server.router.app` or use the `start-server` command directly on your terminal
+```bash
+docker compose up --build
+```
 
-To run the frontend
+To view the logs:
 
-- Open a new terminal window and go to the project folder
-- Enter the frontend folder called "react-frontend"
-- Do the following command to start the front end `npm install`, `npm start`
-  If all the steps have been successfully executed a new browser window witht he dummy project loaded will open automatically.
+```bash
+docker compose logs -f
+```
+
+You can also view logs for specific services:
+
+```bash
+docker compose logs -f frontend  # for frontend logs
+docker compose logs -f backend   # for backend logs
+```
+
+To stop the services:
+
+```bash
+docker compose down
+```
 
 ## Milestones
 

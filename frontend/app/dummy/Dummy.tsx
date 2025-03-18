@@ -10,10 +10,11 @@ interface FetchError {
 }
 
 async function postPoints(
-  id: string
+  choice: string
 ): Promise<{ data?: DataArray; error?: FetchError }> {
   try {
-    const response = await fetch(`${BASE_URL}/data/${id}`);
+    console.log(`${BASE_URL}/data/${choice}`);
+    const response = await fetch(`${BASE_URL}/data/${choice}`);
     if (!response.ok) {
       return {
         error: {

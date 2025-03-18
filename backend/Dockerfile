@@ -66,7 +66,7 @@ COPY --chown=app-user:app-user poetry.lock pyproject.toml ${PYTHONPATH}
 RUN poetry install --no-interaction --no-root --no-ansi --without dev
 
 # Copy application files
-COPY --chown=app-user:app-user src/ ${PYTHONPATH}src
+COPY --chown=app-user:app-user src/server ${PYTHONPATH}server/
 COPY --chown=app-user:app-user data/ ${PYTHONPATH}data
 
 # Activate entrypoint for running the Gunicorn application server
