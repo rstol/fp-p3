@@ -131,3 +131,10 @@ dmypy.json
 
 # MISC
 .DS_Store
+
+# Hugging Face
+.cache/
+cache/
+
+# Data 
+nba_tracking_data

@@ -53,7 +53,6 @@ RUN poetry install --no-interaction --no-root --no-ansi
 
 # Copy application files
 COPY --chown=app-user:app-user src/server ${PYTHONPATH}server/
-COPY --chown=app-user:app-user data/ ${PYTHONPATH}data
 
 CMD ["python", "-m", "server.router.app"]
 
@@ -67,7 +66,6 @@ RUN poetry install --no-interaction --no-root --no-ansi --without dev
 
 # Copy application files
 COPY --chown=app-user:app-user src/server ${PYTHONPATH}server/
-COPY --chown=app-user:app-user data/ ${PYTHONPATH}data
 
 # Activate entrypoint for running the Gunicorn application server
 # For environments with multiple CPU cores, increase the number of workers

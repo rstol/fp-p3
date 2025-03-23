@@ -1,12 +1,13 @@
 import os
-import pandas as pd
 
+import pandas as pd
 from flask_restful import Resource
 from sklearn.cluster import KMeans
 
 
 class DatasetResource(Resource):
     """dataset resource."""
+
     data_root = os.path.join(".", "data")
 
     def get(self, name):
@@ -16,7 +17,7 @@ class DatasetResource(Resource):
         # process the data, e.g. find the clusters
         kmeans = KMeans(n_clusters=2, n_init=10, random_state=0).fit(data)
         labels = kmeans.labels_.tolist()
-        
+
         # Add cluster to data
         data["cluster"] = labels
 

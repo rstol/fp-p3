@@ -106,7 +106,7 @@ To run the development server using Docker Compose:
    ```
    This will start both the frontend and backend services in development mode.
    - Frontend will be available at: http://localhost:3000
-   - Backend will be available at: http://localhost:8000
+   - Backend will be available at: http://localhost:8080/api/v1/
 
 To rebuild the containers (e.g., after making changes to the Dockerfile or dependencies):
 

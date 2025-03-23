@@ -1,9 +1,10 @@
-from re import S
-from sklearn import datasets
-import numpy as np
-import os
 import argparse
+import os
+from re import S
+
+import numpy as np
 import pandas as pd
+from sklearn import datasets
 
 
 def generate_data(n_samples: int, type: str, save_dir: str):
@@ -26,9 +27,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_dir", type=str, help="Directory path where to save the generated data"
     )
-    parser.add_argument(
-        "--sample_size", type=int, help="Number of points in the generated dataset"
-    )
+    parser.add_argument("--sample_size", type=int, help="Number of points in the generated dataset")
     parser.add_argument(
         "--type",
         type=str,

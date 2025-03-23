@@ -2,8 +2,8 @@ import os
 
 from flask import Flask
 from flask_cors import CORS
-
 from server.router.routes import add_routes
+from server.settings import DATASET_DIR
 
 
 def create_app():
@@ -11,13 +11,9 @@ def create_app():
     CORS(app, resources={r"/*": {"origins": "*"}})
     add_routes(app)
 
-    @app.route('/version')
+    @app.route("/version")
     def version():
         return f"Job ID: {os.environ['JOB_ID']}\nCommit ID: {os.environ['COMMIT_ID']}"
-
-    @app.route('/dargons')
-    def dargons():
-        return f"There be dragons here!"
 
     return app
 

@@ -27,6 +27,9 @@ services:
       target: development
       args:
         PORT: 8080
+    restart: unless-stopped
+    environment:
+      - DATASET_DIR=/application_root/data/nba_tracking_data
     volumes:
       - ./backend/src/server:/application_root/server:cached
       - ./backend/data:/application_root/data:cached
