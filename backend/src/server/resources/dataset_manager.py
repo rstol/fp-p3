@@ -4,10 +4,19 @@ import json
 class DatasetManager:
     def __init__(self, data_dir="data"):
         self.data_dir = data_dir
-        self.teams = self._load_json("teams.json")
-        self.games = self._load_json("games.json")
+        # TODO load lines
+        self.teams = self._load_jsonl("teams.jsonl")
+        self.games = self._load_jsonl("games.jsonl")
 
         self._play_cache = {}
+
+    def _load_jsonl(self, filename):
+        results = []
+        with open(f"{self.data_dir}/{filename}", "r") as f:
+            for line in f:
+                if line.strip():  # Skip empty lines
+                    results.append(json.loads(line))
+        return results
 
     def _load_json(self, filename):
         with open(f"{self.data_dir}/{filename}", "r") as f:
@@ -18,14 +27,14 @@ class DatasetManager:
 
     def get_team_details(self, team_id):
         for team in self.teams:
-            if str(team["team_id"]) == str(team_id):
+            if str(team["teamid"]) == str(team_id):
                 return team
         return None
 
     def get_games_for_team(self, team_id):
         game_ids = [
-            gid
-            for gid, game in self.games.items()
+            game["game_id"]
+            for game in self.games
             if str(team_id) in [str(game["home_team_id"]), str(game["visitor_team_id"])]
         ]
         return [self.games[gid] for gid in game_ids]
@@ -41,7 +50,7 @@ class DatasetManager:
     def get_play_id(self, game_id, play_id):
         plays = self._load_game_plays(game_id)
         for play in plays:
-            if str(play["eventid"]) == str(play_id):
+            if str(play["event_id"]) == str(play_id):
                 return play
         return None
 
@@ -50,9 +59,8 @@ class DatasetManager:
             return self._play_cache[game_id]
 
         try:
-            with open(f"{self.data_dir}/plays/{game_id}.json", "r") as f:
-                plays = json.load(f)
-                self._play_cache[game_id] = plays
-                return plays
+            plays = self._load_jsonl(f"plays/{game_id}.jsonl")
+            self._play_cache[game_id] = plays
+            return plays
         except FileNotFoundError:
             return []

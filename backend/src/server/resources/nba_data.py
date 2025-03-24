@@ -16,7 +16,7 @@ class TeamDetailsResource(Resource):
         team = dataset_manager.get_team_details(team_id)
         if team:
             return jsonify(team)
-        return jsonify({"error": "Team not found"}), 404
+        return {"error": "Team not found"}, 404
 
 
 class TeamGamesResource(Resource):
@@ -29,7 +29,7 @@ class GameDetailsResource(Resource):
         game = dataset_manager.get_game_details(game_id)
         if game:
             return jsonify(game)
-        return jsonify({"error": "Game not found"}), 404
+        return {"error": "Game not found"}, 404
 
 
 class GamePlaysResource(Resource):
@@ -43,6 +43,6 @@ class PlayDetailsResource(Resource):
             play = dataset_manager.get_play_id(game_id, play_id)
             if play:
                 return jsonify(play)
-            return jsonify({"error": "Play not found"}), 404
+            return {"error": "Play not found"}, 404
         except ValueError:
-            return jsonify({"error": "Invalid play ID format"}), 400
+            return {"error": "Invalid play ID format"}, 400

@@ -1,31 +1,25 @@
 import argparse
 import json
 import logging
-import math
 import os
 from pathlib import Path
 
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
 from server.settings import SAMPLING_RATE
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-class NaNEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, float) and math.isnan(obj):
-            return None
-        return super().default(obj)
+NUM_PROCESSES = 2 * (os.cpu_count() or 2)
 
 
-def load_nba_dataset(split: str = "train", name: str = "full"):
+def load_nba_dataset(split: str | None = None, name: str = "full"):
     """
     Load the NBA tracking dataset.
 
     Args:
-        split (str): Dataset split to load ('train' or 'test')
+        split (str, Optional): Dataset split to load ('train', 'test', 'validation')
         name (str): Dataset size to load ('tiny', 'small', 'medium', or 'full')
     """
     return load_dataset(
@@ -33,7 +27,7 @@ def load_nba_dataset(split: str = "train", name: str = "full"):
         trust_remote_code=True,
         name=name,
         split=split,
-        num_proc=4,
+        num_proc=NUM_PROCESSES,
     )
 
 
@@ -48,91 +42,103 @@ def simplify_player_coords(player_coords):
     ]
 
 
-def process_dataset(dataset, output_path):
-    os.makedirs(output_path, exist_ok=True)
-    os.makedirs(f"{output_path}/plays", exist_ok=True)
+def process_play(play):
+    """Process a single play for the dataset map function."""
+    if "moments" not in play or not play["moments"]:
+        return None
 
-    game_data = {}
-    team_data = {}
-    game_plays = {}
-
-    for play in dataset:
-        game_id = play["gameid"]
-
-        # Game metadata
-        if game_id not in game_data:
-            game_data[game_id] = {
-                "id": game_id,
-                "date": play["gamedate"],
-                "home_team_id": play["home"]["teamid"],
-                "visitor_team_id": play["visitor"]["teamid"],
+    processed_moments = []
+    for m in downsample_moments(play["moments"], SAMPLING_RATE):
+        processed_moments.append(
+            {
+                "quarter": m["quarter"],
+                "game_clock": m["game_clock"],
+                "shot_clock": m["shot_clock"],
+                "ball_coordinates": m["ball_coordinates"],
+                "player_coordinates": simplify_player_coords(m["player_coordinates"]),
             }
-            game_plays[game_id] = []
+        )
+    return {
+        "game_id": play["gameid"],
+        "primary_player_info": play["primary_info"],
+        "secondary_player_info": play["secondary_info"],
+        "event_id": play["event_info"]["id"],
+        "event_type": play["event_info"]["type"],
+        "possession_team_id": play["event_info"]["possession_team_id"],
+        "event_desc_home": play["event_info"]["desc_home"],
+        "event_desc_away": play["event_info"]["desc_away"],
+        "moments": processed_moments,
+    }
 
-        # Team data
-        for team in ["home", "visitor"]:
-            team_info = play[team]
-            team_id = team_info["teamid"]
-            if team_id not in team_data:
-                team_data[team_id] = {
-                    "id": team_id,
-                    "name": team_info["name"],
-                    "abbreviation": team_info["abbreviation"],
-                    "players": team_info["players"],
-                }
 
-        # Build play objects
-        event_info = play["event_info"]
-        game_play = {
-            "gameid": game_id,
-            "eventid": event_info["id"],
-            "type": event_info["type"],
-            "possession_team_id": event_info["possession_team_id"],
-            "desc_home": event_info["desc_home"],
-            "desc_away": event_info["desc_away"],
-            "moments": [],
-        }
+def extract_game_and_team_info(play):
+    return {
+        "game_id": play["gameid"],
+        "game_date": play["gamedate"],
+        "home_team_id": play["home"]["teamid"],
+        "visitor_team_id": play["visitor"]["teamid"],
+        "home_team": play["home"],
+        "visitor_team": play["visitor"],
+    }
 
-        if "moments" not in play:
-            logger.warning(f"No moments found in play {event_info['id']} of game {game_id}")
-            continue
 
-        moments = play["moments"]
-        if not moments:
-            logger.warning(f"Empty moments array in play {event_info['id']} of game {game_id}")
-            continue
+def process_dataset(dataset, output_path):
+    """Process the dataset using datasets library features."""
+    logger.info("Start processing data.")
 
-        for m in downsample_moments(moments, SAMPLING_RATE):
-            game_play["moments"].append(
-                {
-                    "quarter": m["quarter"],
-                    "game_clock": m["game_clock"],
-                    "shot_clock": m["shot_clock"],
-                    "ball_coordinates": m["ball_coordinates"],
-                    "player_coordinates": simplify_player_coords(m["player_coordinates"]),
-                }
-            )
+    filtered_dataset = dataset.filter(
+        lambda x: "moments" in x and bool(x["moments"]),
+        num_proc=NUM_PROCESSES,
+        desc="Filtering empty plays",
+    )
 
-        game_plays[game_id].append(game_play)
+    processed_plays = filtered_dataset.map(
+        process_play,
+        num_proc=NUM_PROCESSES,
+        remove_columns=list(set(dataset.column_names) - {"moments"}),
+        desc="Processing plays",
+    )
 
-    # Sort games by date
-    sorted_games = dict(sorted(game_data.items(), key=lambda x: x[1]["date"]))
+    plays_dir = output_path / "plays"
+    os.makedirs(plays_dir, exist_ok=True)
 
-    # Sort teams by ID
-    sorted_teams = dict(sorted(team_data.items(), key=lambda x: x[0]))
+    # TODO parallelise this due to disk io
+    seen_game_ids = set()
+    for play in processed_plays:
+        game_id = play["game_id"]
+        seen_game_ids.add(game_id)
+        # play.to_json(plays_dir / f"{game_id}.jsonl")
+        with open(plays_dir / f"{game_id}.jsonl", "a") as f:
+            f.write(f"{json.dumps(play)}\n")
 
-    # Write JSON files
-    with open(f"{output_path}/games.json", "w") as f:
-        json.dump(sorted_games, f, indent=4, cls=NaNEncoder)
+    info_dataset = filtered_dataset.map(
+        extract_game_and_team_info,
+        num_proc=NUM_PROCESSES,
+        remove_columns=filtered_dataset.column_names,
+        desc="Extracting game and team metadata",
+    )
 
-    with open(f"{output_path}/teams.json", "w") as f:
-        json.dump(sorted_teams, f, indent=4, cls=NaNEncoder)
+    seen_games = {}
+    for row in info_dataset:
+        game_id = row["game_id"]
+        if game_id not in seen_games:
+            seen_games[game_id] = {
+                "game_id": game_id,
+                "game_date": row["game_date"],
+                "home_team_id": row["home_team_id"],
+                "visitor_team_id": row["visitor_team_id"],
+            }
+    games_dataset = Dataset.from_list(list(seen_games.values())).sort("game_date")
+    games_dataset.to_json(output_path / "games.jsonl")
 
-    for game_id, plays in game_plays.items():
-        with open(f"{output_path}/plays/{game_id}.json", "w") as f:
-            json.dump(plays, f, indent=4, cls=NaNEncoder)
-
-    print("Saved processed data.")
+    seen_teams = {}
+    for row in info_dataset:
+        for prefix in ["home", "visitor"]:
+            team_id = row[f"{prefix}_team_id"]
+            if team_id not in seen_teams:
+                seen_teams[team_id] = row[f"{prefix}_team"]
+    teams_dataset = Dataset.from_list(list(seen_teams.values())).sort("teamid")
+    teams_dataset.to_json(output_path / "teams.jsonl")
 
 
 if __name__ == "__main__":
@@ -140,15 +146,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--split",
         type=str,
-        choices=["train", "test"],
         default="train",
+        choices=["train", "test", "validation"],
         help="Dataset split to load (train or test)",
     )
     parser.add_argument(
         "--name",
         type=str,
         choices=["tiny", "small", "medium", "full"],
-        default="small",
+        default="tiny",
         help="Dataset size to load (tiny: 5 games, small: 25 games, medium: 100 games, full: all games)",
     )
     target_path = Path(os.getenv("DATASET_DIR", "data/nba_tracking_data")).resolve()
