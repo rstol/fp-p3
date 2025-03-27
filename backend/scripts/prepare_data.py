@@ -3,9 +3,6 @@ import json
 import logging
 import os
 from collections import defaultdict
-from functools import partial
-from itertools import islice
-from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
@@ -101,13 +98,16 @@ def batch_write_plays(plays_dir, plays_iterator, batch_size=500):
     """
     game_buffers = defaultdict(list)
     file_handles = {}
+    seen_games = set()
 
     try:
         for play in plays_iterator:
             game_id = play["game_id"]
 
             if game_id not in file_handles:
-                file_handles[game_id] = open(plays_dir / f"{game_id}.jsonl", "a")
+                mode = "w" if game_id not in seen_games else "a"
+                file_handles[game_id] = open(plays_dir / f"{game_id}.jsonl", mode)
+                seen_games.add(game_id)
 
             game_buffers[game_id].append(json.dumps(play, cls=NaNEncoder))
 
@@ -132,12 +132,12 @@ def filter_empty_moments(examples):
     return ["moments" in example and bool(example["moments"]) for example in batch]
 
 
-def process_dataset(dataset, output_path):
+def process_dataset(dataset: Dataset, output_path: Path):
     """Process the dataset using datasets library features."""
     logger.info("Start processing data.")
 
-    dataset = dataset.to_iterable_dataset()
-    filtered_dataset = dataset.filter(
+    dataset_stream = dataset.to_iterable_dataset()
+    filtered_dataset = dataset_stream.filter(
         filter_empty_moments,
         batched=True,
         batch_size=1000,
@@ -145,7 +145,7 @@ def process_dataset(dataset, output_path):
 
     processed_plays = filtered_dataset.map(
         process_play,
-        remove_columns=list(set(dataset.column_names) - {"moments"}),
+        remove_columns=list(set(dataset_stream.column_names) - {"moments"}),
     )
 
     plays_dir = output_path / "plays"
@@ -201,4 +201,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     dataset = load_nba_dataset(split=args.split, name=args.name)
-    process_dataset(dataset, target_path)
+    if isinstance(dataset, Dataset):
+        process_dataset(dataset, target_path)
