@@ -100,15 +100,15 @@ export default function Home() {
     }
   };
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto py-6">
       <CardHeader className="pb-2">
-        <CardTitle className="text-center text-xl">
-          Dashboard 2: Clustering View
+        <CardTitle className="text-center text-xl pb-2">
+          Basketball Play Tactics Tool
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Teams Navigation */}
-        <div className="bg-blue-900 p-3 rounded-md flex items-center space-x-2">
+        <div className="bg-blue-900 p-3 flex items-center space-x-2">
           <span className="text-white font-medium">Teams</span>
           <Button
             variant={
@@ -143,21 +143,12 @@ export default function Home() {
         </div>
 
         {/* Filters */}
-        <div className="bg-gray-200 p-3 rounded-md flex items-center space-x-2">
+        <div className="bg-gray-100 p-3 flex items-center space-x-2">
           <span className="font-medium">Filters:</span>
-          <Button variant="outline" className="bg-white">
-            Offense
-          </Button>
-          <Button variant="outline" className="bg-white">
-            Last 5 Games
-          </Button>
-          <Button className="bg-green-500 hover:bg-green-600">
-            + Add
-          </Button>
         </div>
 
         {/* 2D Projection */}
-        <div className="bg-gray-100 p-4 rounded-md h-80 relative">
+        <div className="bg-gray-50 p-4 h-80 relative">
           {clusters.map((cluster) => (
             <div key={cluster.id}>
               {/* Cluster ellipse */}
@@ -209,9 +200,9 @@ export default function Home() {
         </div>
 
         {/* Bottom panels */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-2">
           {/* Selected Play Panel */}
-          <Card className="bg-gray-200">
+          <Card className="bg-gray-100 rounded-none">
             <CardHeader className="py-2 px-4">
               <CardTitle className="text-base">
                 Selected Play
@@ -258,7 +249,7 @@ export default function Home() {
           </Card>
 
           {/* Controls Panel */}
-          <Card className="bg-gray-200">
+          <Card className="bg-gray-100 rounded-none">
             <CardHeader className="py-2 px-4">
               <CardTitle className="text-base">
                 Clustering Controls
