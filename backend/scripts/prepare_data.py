@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from datasets import Dataset, load_dataset
+from datasets import Dataset, IterableDataset, load_dataset
 from server.settings import SAMPLING_RATE
 from tqdm import tqdm
 
@@ -95,36 +95,33 @@ def extract_game_and_team_info(play):
     }
 
 
-def batch_write_plays(plays_dir, plays_iterator, batch_size=500):
-    """Write plays in batches grouped by game_id.
-    Using batch_size=500 to accommodate full games (400-460 plays) plus some buffer.
+def write_sorted_plays_by_game(plays_dir: Path, plays_iterator: IterableDataset):
+    """Write plays to JSONL files, assuming plays are sorted by game_id and plays in the game.
+    Each file is overwritten and written sequentially per game.
     """
-    game_buffers = defaultdict(list)
-    file_handles = {}
+    plays_dir.mkdir(parents=True, exist_ok=True)
+
+    current_game_id = None
+    current_file = None
 
     try:
-        for play in plays_iterator:
+        for play in tqdm(plays_iterator, desc="Writing plays", unit="play"):
             game_id = play["game_id"]
 
-            if game_id not in file_handles:
-                file_handles[game_id] = open(plays_dir / f"{game_id}.jsonl", "a")
+            if game_id != current_game_id:
+                logger.info("Writing play for game id: %s", game_id)
+                if current_file:
+                    current_file.close()
+                current_game_id = game_id
+                file_path = plays_dir / f"{game_id}.jsonl"
+                current_file = open(file_path, "w")  # always start fresh
 
-            game_buffers[game_id].append(json.dumps(play, cls=NaNEncoder))
-
-            # Flush when buffer gets full
-            if len(game_buffers[game_id]) >= batch_size:
-                file_handles[game_id].write("\n".join(game_buffers[game_id]) + "\n")
-                game_buffers[game_id] = []
-
-        # Flush remaining buffers
-        for game_id, buffer in game_buffers.items():
-            if buffer:
-                file_handles[game_id].write("\n".join(buffer) + "\n")
+            if current_file:
+                current_file.write(json.dumps(play, cls=NaNEncoder) + "\n")
 
     finally:
-        # Make sure we close all file handles
-        for fh in file_handles.values():
-            fh.close()
+        if current_file:
+            current_file.close()
 
 
 def filter_empty_moments(examples):
@@ -151,7 +148,7 @@ def process_dataset(dataset, output_path):
     plays_dir = output_path / "plays"
     os.makedirs(plays_dir, exist_ok=True)
 
-    batch_write_plays(plays_dir, tqdm(processed_plays, desc="Writing play files"))
+    write_sorted_plays_by_game(plays_dir, processed_plays)
 
     info_dataset = filtered_dataset.map(
         extract_game_and_team_info,
