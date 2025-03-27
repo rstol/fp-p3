@@ -22,7 +22,7 @@ Install the dependencies:
 
 ```bash
 npm install
-npm prepare # Sets up husky for pre-commit formatting
+npm prepare
 ```
 
 ### Development
