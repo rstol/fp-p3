@@ -8,8 +8,6 @@ class DatasetManager:
         self.teams = self._load_jsonl("teams.jsonl")
         self.games = self._load_jsonl("games.jsonl")
 
-        self._play_cache = {}
-
     def _load_jsonl(self, filename):
         results = []
         with open(f"{self.data_dir}/{filename}", "r") as f:
@@ -32,16 +30,16 @@ class DatasetManager:
         return None
 
     def get_games_for_team(self, team_id):
-        game_ids = [
-            game["game_id"]
+        return [
+            game
             for game in self.games
             if str(team_id) in [str(game["home_team_id"]), str(game["visitor_team_id"])]
         ]
-        return [self.games[gid] for gid in game_ids]
 
     def get_game_details(self, game_id):
-        if game_id in self.games:
-            return self.games[game_id]
+        for game in self.games:
+            if str(game["game_id"]) == str(game_id):
+                return game
         return None
 
     def get_plays_for_game(self, game_id):
@@ -55,12 +53,7 @@ class DatasetManager:
         return None
 
     def _load_game_plays(self, game_id):
-        if game_id in self._play_cache:
-            return self._play_cache[game_id]
-
         try:
-            plays = self._load_jsonl(f"plays/{game_id}.jsonl")
-            self._play_cache[game_id] = plays
-            return plays
+            return self._load_jsonl(f"plays/{game_id}.jsonl")
         except FileNotFoundError:
             return []

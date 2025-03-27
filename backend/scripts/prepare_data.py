@@ -2,16 +2,32 @@ import argparse
 import json
 import logging
 import os
+from collections import defaultdict
+from functools import partial
+from itertools import islice
+from multiprocessing import Pool
 from pathlib import Path
 
+import numpy as np
+import torch
 from datasets import Dataset, load_dataset
 from server.settings import SAMPLING_RATE
+from tqdm import tqdm
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 NUM_PROCESSES = 2 * (os.cpu_count() or 2)
+
+# torch.set_num_threads(1)
+
+
+class NaNEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if np.isnan(obj):
+            return None
+        return super().default(obj)
 
 
 def load_nba_dataset(split: str | None = None, name: str = "full"):
@@ -37,16 +53,13 @@ def downsample_moments(moments, rate):
 
 def simplify_player_coords(player_coords):
     return [
-        {"teamid": p["teamid"], "playerid": p["playerid"], "x": p["x"], "z": p["z"]}
+        {"teamid": p["teamid"], "playerid": p["playerid"], "x": p["x"], "y": p["y"]}
         for p in player_coords
     ]
 
 
 def process_play(play):
     """Process a single play for the dataset map function."""
-    if "moments" not in play or not play["moments"]:
-        return None
-
     processed_moments = []
     for m in downsample_moments(play["moments"], SAMPLING_RATE):
         processed_moments.append(
@@ -82,40 +95,67 @@ def extract_game_and_team_info(play):
     }
 
 
+def batch_write_plays(plays_dir, plays_iterator, batch_size=500):
+    """Write plays in batches grouped by game_id.
+    Using batch_size=500 to accommodate full games (400-460 plays) plus some buffer.
+    """
+    game_buffers = defaultdict(list)
+    file_handles = {}
+
+    try:
+        for play in plays_iterator:
+            game_id = play["game_id"]
+
+            if game_id not in file_handles:
+                file_handles[game_id] = open(plays_dir / f"{game_id}.jsonl", "a")
+
+            game_buffers[game_id].append(json.dumps(play, cls=NaNEncoder))
+
+            # Flush when buffer gets full
+            if len(game_buffers[game_id]) >= batch_size:
+                file_handles[game_id].write("\n".join(game_buffers[game_id]) + "\n")
+                game_buffers[game_id] = []
+
+        # Flush remaining buffers
+        for game_id, buffer in game_buffers.items():
+            if buffer:
+                file_handles[game_id].write("\n".join(buffer) + "\n")
+
+    finally:
+        # Make sure we close all file handles
+        for fh in file_handles.values():
+            fh.close()
+
+
+def filter_empty_moments(examples):
+    batch = [dict(zip(examples.keys(), values)) for values in zip(*examples.values())]
+    return ["moments" in example and bool(example["moments"]) for example in batch]
+
+
 def process_dataset(dataset, output_path):
     """Process the dataset using datasets library features."""
     logger.info("Start processing data.")
 
+    dataset = dataset.to_iterable_dataset()
     filtered_dataset = dataset.filter(
-        lambda x: "moments" in x and bool(x["moments"]),
-        num_proc=NUM_PROCESSES,
-        desc="Filtering empty plays",
+        filter_empty_moments,
+        batched=True,
+        batch_size=1000,
     )
 
     processed_plays = filtered_dataset.map(
         process_play,
-        num_proc=NUM_PROCESSES,
         remove_columns=list(set(dataset.column_names) - {"moments"}),
-        desc="Processing plays",
     )
 
     plays_dir = output_path / "plays"
     os.makedirs(plays_dir, exist_ok=True)
 
-    # TODO parallelise this due to disk io
-    seen_game_ids = set()
-    for play in processed_plays:
-        game_id = play["game_id"]
-        seen_game_ids.add(game_id)
-        # play.to_json(plays_dir / f"{game_id}.jsonl")
-        with open(plays_dir / f"{game_id}.jsonl", "a") as f:
-            f.write(f"{json.dumps(play)}\n")
+    batch_write_plays(plays_dir, tqdm(processed_plays, desc="Writing play files"))
 
     info_dataset = filtered_dataset.map(
         extract_game_and_team_info,
-        num_proc=NUM_PROCESSES,
         remove_columns=filtered_dataset.column_names,
-        desc="Extracting game and team metadata",
     )
 
     seen_games = {}
