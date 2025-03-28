@@ -29,18 +29,14 @@ async function postPoints(
     return {
       error: {
         message:
-          err instanceof Error
-            ? err.message
-            : 'An unexpected error occurred',
+          err instanceof Error ? err.message : 'An unexpected error occurred',
       },
     };
   }
 }
 
 export function Dummy() {
-  const [exampleData, setExampleData] = useState<
-    DataArray | undefined
-  >();
+  const [exampleData, setExampleData] = useState<DataArray | undefined>();
   const [dataChoice, setDataChoice] = useState<string>();
   const [error, setError] = useState<string>();
   const [isLoading, setIsLoading] = useState(false);

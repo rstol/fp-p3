@@ -1,11 +1,7 @@
 import { useEffect, createRef } from 'react';
 import * as d3 from 'd3';
 import { type DataArray } from '../types/data';
-import {
-  type ChartStyle,
-  getChildOrAppend,
-  getMargin,
-} from './utils';
+import { type ChartStyle, getChildOrAppend, getMargin } from './utils';
 
 interface ScatterPlotProp extends ChartStyle {
   data?: DataArray;
@@ -75,11 +71,9 @@ function renderScatterPlot(
     .attr('r', 5)
     .style('fill', (d) => colors(d.cluster) || '#fff');
 
-  getChildOrAppend<SVGGElement, SVGGElement>(
-    base,
-    'g',
-    'y-axis-base'
-  ).call(d3.axisLeft(y).ticks(4));
+  getChildOrAppend<SVGGElement, SVGGElement>(base, 'g', 'y-axis-base').call(
+    d3.axisLeft(y).ticks(4)
+  );
 
   getChildOrAppend<SVGGElement, SVGGElement>(base, 'g', 'x-axis-base')
     .attr('transform', `translate(0, ${height})`)

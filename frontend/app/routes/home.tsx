@@ -1,9 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '~/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import type { Route } from './+types/home';
 import { Button } from '~/components/ui/button';
 import { useState } from 'react';
@@ -80,16 +75,11 @@ const courtPlayers = [
 
 export default function Home() {
   // State
-  const [selectedPlay, setSelectedPlay] = useState<number | null>(
-    null
-  );
-  const [similarityThreshold, setSimilarityThreshold] = useState([
-    50,
-  ]);
+  const [selectedPlay, setSelectedPlay] = useState<number | null>(null);
+  const [similarityThreshold, setSimilarityThreshold] = useState([50]);
   const [clusterMethod, setClusterMethod] = useState('t-SNE');
-  const [featureImportance, setFeatureImportance] = useState(
-    'Player Positions'
-  );
+  const [featureImportance, setFeatureImportance] =
+    useState('Player Positions');
   const [selectedTeams, setSelectedTeams] = useState(['Warriors']);
   // Toggle team selection
   const toggleTeam = (team: string) => {
@@ -112,29 +102,19 @@ export default function Home() {
           <span className="text-white font-medium">Teams</span>
           <Button
             variant={
-              selectedTeams.includes('Warriors')
-                ? 'default'
-                : 'secondary'
+              selectedTeams.includes('Warriors') ? 'default' : 'secondary'
             }
             className={
-              selectedTeams.includes('Warriors')
-                ? 'bg-blue-600'
-                : 'bg-gray-600'
+              selectedTeams.includes('Warriors') ? 'bg-blue-600' : 'bg-gray-600'
             }
             onClick={() => toggleTeam('Warriors')}
           >
             Warriors
           </Button>
           <Button
-            variant={
-              selectedTeams.includes('Lakers')
-                ? 'default'
-                : 'secondary'
-            }
+            variant={selectedTeams.includes('Lakers') ? 'default' : 'secondary'}
             className={
-              selectedTeams.includes('Lakers')
-                ? 'bg-gray-600'
-                : 'bg-gray-600'
+              selectedTeams.includes('Lakers') ? 'bg-gray-600' : 'bg-gray-600'
             }
             onClick={() => toggleTeam('Lakers')}
           >
@@ -181,9 +161,7 @@ export default function Home() {
                 <div
                   key={play.id}
                   className={`absolute rounded-full cursor-pointer ${
-                    selectedPlay === play.id
-                      ? 'ring-2 ring-black'
-                      : ''
+                    selectedPlay === play.id ? 'ring-2 ring-black' : ''
                   }`}
                   style={{
                     left: `${play.x}px`,
@@ -204,9 +182,7 @@ export default function Home() {
           {/* Selected Play Panel */}
           <Card className="bg-gray-100 rounded-none">
             <CardHeader className="py-2 px-4">
-              <CardTitle className="text-base">
-                Selected Play
-              </CardTitle>
+              <CardTitle className="text-base">Selected Play</CardTitle>
             </CardHeader>
             <CardContent className="p-2">
               {/* Basketball court */}
@@ -222,9 +198,7 @@ export default function Home() {
                   <div
                     key={player.id}
                     className={`absolute rounded-full ${
-                      player.team === 'offense'
-                        ? 'bg-red-500'
-                        : 'bg-blue-500'
+                      player.team === 'offense' ? 'bg-red-500' : 'bg-blue-500'
                     }`}
                     style={{
                       left: `${player.x}px`,
@@ -238,12 +212,8 @@ export default function Home() {
 
               {/* Play actions */}
               <div className="mt-2 grid grid-cols-2 gap-2">
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  Edit
-                </Button>
-                <Button className="bg-green-500 hover:bg-green-600">
-                  Tag
-                </Button>
+                <Button className="bg-blue-600 hover:bg-blue-700">Edit</Button>
+                <Button className="bg-green-500 hover:bg-green-600">Tag</Button>
               </div>
             </CardContent>
           </Card>
@@ -251,16 +221,12 @@ export default function Home() {
           {/* Controls Panel */}
           <Card className="bg-gray-100 rounded-none">
             <CardHeader className="py-2 px-4">
-              <CardTitle className="text-base">
-                Clustering Controls
-              </CardTitle>
+              <CardTitle className="text-base">Clustering Controls</CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
               {/* Similarity slider */}
               <div className="space-y-2">
-                <div className="font-medium">
-                  Similarity Threshold
-                </div>
+                <div className="font-medium">Similarity Threshold</div>
                 <Slider
                   value={similarityThreshold}
                   onValueChange={setSimilarityThreshold}
@@ -272,10 +238,7 @@ export default function Home() {
               {/* Cluster method dropdown */}
               <div className="space-y-2">
                 <div className="font-medium">Cluster Method</div>
-                <Select
-                  value={clusterMethod}
-                  onValueChange={setClusterMethod}
-                >
+                <Select value={clusterMethod} onValueChange={setClusterMethod}>
                   <SelectTrigger className="bg-white">
                     <SelectValue placeholder="Select method" />
                   </SelectTrigger>
@@ -301,12 +264,8 @@ export default function Home() {
                     <SelectItem value="Player Positions">
                       Player Positions
                     </SelectItem>
-                    <SelectItem value="Ball Movement">
-                      Ball Movement
-                    </SelectItem>
-                    <SelectItem value="Play Outcome">
-                      Play Outcome
-                    </SelectItem>
+                    <SelectItem value="Ball Movement">Ball Movement</SelectItem>
+                    <SelectItem value="Play Outcome">Play Outcome</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
