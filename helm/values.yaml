@@ -1,39 +1,66 @@
 frontend:
   image:
-    repository: null
+    repository: xaiml_p3_frontend
     tag: latest
+    # Ensure we use the production target
+    buildArgs:
+      target: production
     # cmd: ["your_cmd"]
     # args: ["an", "array", "of", "values"]
 
-  # Port to expose on the pod.
+  # Only production port
   port: 3000
 
   # Path for health check.
-  health: "/"
+  health: '/'
 
   # Define extra environment variables for your application
   extraEnv: |
-  #  - name: DEBUG
-  #    value: true
+    - name: NODE_ENV
+      value: "production"
 
   url: null
+
+  # Dependencies
+  dependencies:
+    - backend
 
 backend:
   image:
-    repository: null
+    repository: xaiml_p3_backend
     tag: latest
+    # Ensure we use the production target and set PORT
+    buildArgs:
+      target: production
+      PORT: 8080
     # cmd: ["your_cmd"]
     # args: ["an", "array", "of", "values"]
 
-  # Port to expose on the pod.
   port: 8080
 
   # Path for health check.
-  health: "/"
+  health: '/'
+
+  # Security context for the app-user created in Dockerfile
+  securityContext:
+    runAsUser: 1001
+    runAsGroup: 1001
 
   # Define extra environment variables for your application
   extraEnv: |
-  #  - name: DEBUG
-  #    value: true
+    - name: DATASET_DIR
+      value: "/application_root/data/nba_tracking_data"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: PYTHONDONTWRITEBYTECODE
+      value: "1"
+    - name: PYTHONPATH
+      value: "/application_root/"
 
   url: null
+
+  volumes:
+    - name: data-volume
+      hostPath:
+        path: ./backend/data
+      mountPath: /application_root/data

@@ -34,7 +34,6 @@ variables:
   # Helm chart repository.
   HELM_CHART: oci://${CI_REGISTRY}/course-fwe2024/helm-chart/ivia-course-fullstack-chart
 
-
 ###########################################
 # DOCKERIZE
 ###########################################
@@ -44,7 +43,7 @@ build:kaniko:
   stage: build
   image:
     name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [ "" ]
+    entrypoint: ['']
   # Run parallel builds for multi-arch support. See: https://github.com/GoogleContainerTools/kaniko#building-the-separate-container-images
   parallel:
     matrix:
@@ -71,7 +70,8 @@ build:kaniko:
     - >
       /kaniko/executor
       --context "./${APP_LAYER}"
-      --dockerfile "./Dockerfile"
+      --dockerfile "./${APP_LAYER}/Dockerfile"
+      --target production
       --destination $IMG
       --no-push-cache
 
@@ -88,7 +88,7 @@ build:merge-manifests:
       artifacts: true
   image:
     name: mplatform/manifest-tool:alpine
-    entrypoint: [ "" ]
+    entrypoint: ['']
   parallel:
     matrix:
       - APP_LAYER: frontend
@@ -104,7 +104,6 @@ build:merge-manifests:
       --template "${IMG}-ARCH"
       --target "${IMG}"
 
-
 ###########################################
 # DEPLOY
 ###########################################
@@ -114,7 +113,7 @@ deploy:
   stage: deploy
   image:
     name: alpine/helm:3.14.1
-    entrypoint: [ "bash" ]
+    entrypoint: ['bash']
   before_script:
     # Log into docker registry.
     - echo ${CI_REGISTRY_PASSWORD} | helm registry login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
@@ -132,13 +131,17 @@ deploy:
       --set frontend.image.repository="${CI_REGISTRY_IMAGE}-frontend"
       --set frontend.url="${URL_FRONTEND}"
       --set frontend.port=3000
+      --set frontend.image.buildArgs.target=production
       --set backend.image.repository="${CI_REGISTRY_IMAGE}-backend"
       --set backend.url="${URL_BACKEND}"
       --set backend.port=8080
+      --set backend.image.buildArgs.target=production
+      --set backend.image.buildArgs.PORT=8080
+      --set backend.securityContext.runAsUser=1001
+      --set backend.securityContext.runAsGroup=1001
   environment:
     url: https://$URL_FRONTEND
     name: $CI_PROJECT_NAME/$CI_COMMIT_REF_SLUG
-
 
 ############################################
 ## VERIFY & DEBUG
