@@ -1,10 +1,14 @@
 import { type Margin } from '../types/margin';
 import * as d3 from 'd3';
 
-export function getChildOrAppend<
-  GElement extends d3.BaseType,
-  PElement extends d3.BaseType,
->(root: d3.Selection<PElement, any, any, any>, tag: string, className: string) {
+// --------------------------
+// DUMMY UTILS
+// --------------------------
+export function getChildOrAppend<GElement extends d3.BaseType, PElement extends d3.BaseType>(
+  root: d3.Selection<PElement, any, any, any>,
+  tag: string,
+  className: string,
+) {
   const node = root.selectAll(`${tag}.${className}`);
 
   node.data([tag]).enter().append<GElement>(tag).attr('class', className);

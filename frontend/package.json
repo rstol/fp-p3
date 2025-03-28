@@ -64,7 +64,7 @@
       "prettier --write"
     ],
     "**/*.ts": [
-      "typecheck"
+      "bash -c 'tsc --noEmit --esModuleInterop --pretty'"
     ]
   }
 }
