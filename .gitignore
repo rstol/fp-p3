@@ -3,6 +3,7 @@ node_modules
 .vscode
 *.config
 clips
+.husky
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
