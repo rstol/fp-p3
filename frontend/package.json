@@ -6,7 +6,7 @@
     "build": "react-router build",
     "dev": "vite -d --logLevel info",
     "start": "serve -s build/client -l 3000",
-    "typecheck": "react-router typegen && tsc",
+    "typecheck": "react-router typegen && tsc --noEmit --esModuleInterop --pretty",
     "prepare": "cd .. && husky install frontend/.husky",
     "format": "prettier --write ."
   },
