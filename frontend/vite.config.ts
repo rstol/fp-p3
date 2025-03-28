@@ -9,14 +9,13 @@ export default defineConfig({
     host: '0.0.0.0',
     strictPort: true,
     hmr: {
-      port: 3010,
       host: '0.0.0.0',
       protocol: 'ws',
-      clientPort: 3010,
+      overlay: true,
     },
     watch: {
-      usePolling: true,
-      interval: 100,
+      useFsEvents: true,
+      alwaysStat: true,
     },
   },
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],

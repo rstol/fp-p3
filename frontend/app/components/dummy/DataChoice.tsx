@@ -1,9 +1,6 @@
 import React from 'react';
 
-class DataChoiceComponent extends React.Component<
-  { onChoiceMade: any },
-  { text: string }
-> {
+class DataChoiceComponent extends React.Component<{ onChoiceMade: any }, { text: string }> {
   constructor(props: any) {
     super(props);
     this.state = { text: '' };
@@ -13,13 +10,13 @@ class DataChoiceComponent extends React.Component<
 
   render() {
     return (
-      <div className="flex gap-2 items-center">
+      <div className="flex items-center gap-2">
         <label htmlFor="data-choice">
           Which dataset do you want to use? (moons, blobs, circles)
         </label>
         <input
           id="data-choice"
-          className="border-2 border-gray-300 rounded-md p-2 bg-white"
+          className="rounded-md border-2 border-gray-300 bg-white p-2"
           onChange={this.handleChange}
           value={this.state.text}
         />
