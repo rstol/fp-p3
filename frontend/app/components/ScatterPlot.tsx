@@ -1,5 +1,6 @@
 import * as d3 from 'd3';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { getPanelElement } from 'react-resizable-panels';
 
 type Point = {
   x: number;
@@ -33,21 +34,38 @@ const generateData = () => {
 const ScatterPlot = () => {
   const svgRef = useRef<SVGSVGElement>(null);
   const dataRef = useRef<Point[]>(generateData());
+  const [dimensions, setDimensions] = useState({ width: 500, height: 400 });
+
+  useEffect(() => {
+    const panel = getPanelElement('left-panel');
+    if (!panel) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        const { width, height } = entry.contentRect;
+        setDimensions({ width, height });
+      }
+    });
+
+    resizeObserver.observe(panel);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     const svg = d3.select(svgRef.current);
-    const width = 500;
-    const height = 400;
     const margin = 30;
 
     const xScale = d3
       .scaleLinear()
       .domain([0, 500])
-      .range([margin, width - margin]);
+      .range([margin, dimensions.width - margin]);
     const yScale = d3
       .scaleLinear()
       .domain([0, 400])
-      .range([height - margin, margin]);
+      .range([dimensions.height - margin, margin]);
 
     const color = d3.scaleOrdinal(d3.schemeCategory10);
 
@@ -62,7 +80,7 @@ const ScatterPlot = () => {
           .contourDensity<Point>()
           .x((d) => xScale(d.x))
           .y((d) => yScale(d.y))
-          .size([width, height])
+          .size([dimensions.width, dimensions.height])
           .bandwidth(5)(points);
 
         const outermost = density.slice(0, 1);
@@ -84,7 +102,7 @@ const ScatterPlot = () => {
         .drag<SVGCircleElement, Point>()
         .on('start', function (event, d) {
           // Bring to front
-          d3.select(this).raise().classed('dragging', true);
+          d3.select(this).raise().attr('class', 'stroke-black stroke-[2px] cursor-grabbing');
         })
         .on('drag', function (event, d) {
           d.x = xScale.invert(event.x);
@@ -92,7 +110,7 @@ const ScatterPlot = () => {
           d3.select(this).attr('cx', xScale(d.x)).attr('cy', yScale(d.y));
         })
         .on('end', function (event, d) {
-          d3.select(this).classed('dragging', false);
+          d3.select(this).attr('class', 'stroke-white stroke-[1px] cursor-grab');
           assignCluster(d); // possibly updates d.cluster
           draw(); // redraw everything (could be optimized)
         });
@@ -136,7 +154,7 @@ const ScatterPlot = () => {
 
   return (
     <div className="">
-      <svg ref={svgRef} width={500} height={400} className="border" />
+      <svg ref={svgRef} viewBox="0 0 600 500" className="w-full border" />
     </div>
   );
 };

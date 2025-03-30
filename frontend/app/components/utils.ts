@@ -1,4 +1,4 @@
-import { type Margin } from '../types/margin';
+import { type Margin } from '~/types/margin';
 import * as d3 from 'd3';
 
 // --------------------------
