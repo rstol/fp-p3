@@ -16,6 +16,9 @@ class DatasetManager:
         team_dicts = self.teams.filter(pl.col("teamid") == team_id).head(1).to_dicts()
         return team_dicts[0] if len(team_dicts) > 0 else None
 
+    def get_games(self):
+        return self.games
+
     def get_games_for_team(self, team_id: str) -> list[dict[str, str]]:
         team_id = int(team_id)
         return self.games.filter(
