@@ -10,12 +10,15 @@ export default defineConfig({
     strictPort: true,
     hmr: {
       host: '0.0.0.0',
+      // clientPort: 3000,
       protocol: 'ws',
       overlay: true,
     },
     watch: {
       useFsEvents: true,
       alwaysStat: true,
+      // usePolling: true,
+      // interval: 100,
     },
   },
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
