@@ -29,6 +29,10 @@ class DatasetManager:
                 return team
         return None
 
+    def get_games(self):
+        return self.games
+          
+  
     def get_games_for_team(self, team_id):
         return [
             game

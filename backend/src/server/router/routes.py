@@ -14,6 +14,7 @@ def add_routes(app):
     api.add_resource(res.nba_data.TeamsResource, API + "teams")
     api.add_resource(res.nba_data.TeamDetailsResource, API + "teams/<string:team_id>")
     api.add_resource(res.nba_data.TeamGamesResource, API + "teams/<string:team_id>/games")
+    api.add_resource(res.nba_data.GamesResource, API + "games")
     api.add_resource(res.nba_data.GameDetailsResource, API + "games/<string:game_id>")
     api.add_resource(res.nba_data.GamePlaysResource, API + "games/<string:game_id>/plays")
     api.add_resource(

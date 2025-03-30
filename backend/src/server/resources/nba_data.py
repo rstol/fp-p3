@@ -24,6 +24,11 @@ class TeamGamesResource(Resource):
         return jsonify(dataset_manager.get_games_for_team(team_id))
 
 
+class GamesResource(Resource):
+    def get(self):
+        return dataset_manager.get_games()
+
+
 class GameDetailsResource(Resource):
     def get(self, game_id):
         game = dataset_manager.get_game_details(game_id)
