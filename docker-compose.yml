@@ -6,9 +6,9 @@ services:
       context: ./frontend/
       dockerfile: ./Dockerfile
       target: development
-    # volumes:
-    #   - ./frontend/app:/app/app:cached
-    #   - ./frontend/public:/app/public:cached
+    volumes:
+      - ./frontend/app:/app/app:cached
+      - ./frontend/public:/app/public:cached
     ports:
       - '3000:3000'
       - '3010:3010'
