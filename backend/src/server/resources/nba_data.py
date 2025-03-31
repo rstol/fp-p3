@@ -1,5 +1,6 @@
 from flask import jsonify
 from flask_restful import Resource
+
 from server.resources.dataset_manager import DatasetManager
 from server.settings import DATASET_DIR
 
