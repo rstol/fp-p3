@@ -1,59 +1,41 @@
-import json
+import polars as pl
 
 
 class DatasetManager:
-    def __init__(self, data_dir="data"):
+    def __init__(self, data_dir: str = "data") -> None:
         self.data_dir = data_dir
-        # TODO load lines
-        self.teams = self._load_jsonl("teams.jsonl")
-        self.games = self._load_jsonl("games.jsonl")
 
-    def _load_jsonl(self, filename):
-        results = []
-        with open(f"{self.data_dir}/{filename}", "r") as f:
-            for line in f:
-                if line.strip():  # Skip empty lines
-                    results.append(json.loads(line))
-        return results
+        self.teams = pl.read_ndjson(f"{self.data_dir}/teams.jsonl")
+        self.games = pl.read_ndjson(f"{self.data_dir}/games.jsonl")
 
-    def _load_json(self, filename):
-        with open(f"{self.data_dir}/{filename}", "r") as f:
-            return json.load(f)
+    def get_teams(self) -> list[dict[str, str | int | list[dict[str, str | int]]]]:
+        return self.teams.to_dicts()
 
-    def get_teams(self):
-        return self.teams
+    def get_team_details(self, team_id: str) -> dict[str, str] | None:
+        team_id = int(team_id)
+        team_dicts = self.teams.filter(pl.col("teamid") == team_id).head(1).to_dicts()
+        return team_dicts[0] if len(team_dicts) > 0 else None
 
-    def get_team_details(self, team_id):
-        for team in self.teams:
-            if str(team["teamid"]) == str(team_id):
-                return team
-        return None
+    def get_games_for_team(self, team_id: str) -> list[dict[str, str]]:
+        team_id = int(team_id)
+        return self.games.filter(
+            (pl.col("home_team_id") == team_id) | (pl.col("visitor_team_id") == team_id)
+        ).to_dicts()
 
-    def get_games_for_team(self, team_id):
-        return [
-            game
-            for game in self.games
-            if str(team_id) in [str(game["home_team_id"]), str(game["visitor_team_id"])]
-        ]
+    def get_game_details(self, game_id: str) -> dict[str, str] | None:
+        game_dicts = self.games.filter(pl.col("game_id") == game_id).head(1).to_dicts()
+        return game_dicts[0] if len(game_dicts) > 0 else None
 
-    def get_game_details(self, game_id):
-        for game in self.games:
-            if str(game["game_id"]) == str(game_id):
-                return game
-        return None
+    def get_plays_for_game(self, game_id: str) -> list[dict[str, str]]:
+        return self._load_game_plays(game_id).to_dicts()
 
-    def get_plays_for_game(self, game_id):
-        return self._load_game_plays(game_id)
-
-    def get_play_id(self, game_id, play_id):
+    def get_play_id(self, game_id: str, play_id: str) -> dict[str, str] | None:
         plays = self._load_game_plays(game_id)
-        for play in plays:
-            if str(play["event_id"]) == str(play_id):
-                return play
-        return None
+        play_dicts = plays.filter(pl.col("event_id") == play_id).head(1).to_dicts()
+        return play_dicts[0] if len(play_dicts) > 0 else None
 
-    def _load_game_plays(self, game_id):
+    def _load_game_plays(self, game_id: str) -> list[dict[str, str]]:
         try:
-            return self._load_jsonl(f"plays/{game_id}.jsonl")
+            return pl.read_ndjson(f"{self.data_dir}/plays/{game_id}.jsonl")
         except FileNotFoundError:
             return []

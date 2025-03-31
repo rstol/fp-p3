@@ -1,29 +1,17 @@
 import argparse
-import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
-import numpy as np
-import torch
-from datasets import Dataset, IterableDataset, load_dataset
-from server.settings import SAMPLING_RATE
-from tqdm import tqdm
+import polars as pl
+from datasets import Dataset, load_dataset
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-NUM_PROCESSES = 2 * (os.cpu_count() or 2)
-
-# torch.set_num_threads(1)
-
-
-class NaNEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if np.isnan(obj):
-            return None
-        return super().default(obj)
+NUM_PROCESSES = os.cpu_count()
 
 
 def load_nba_dataset(split: str | None = None, name: str = "full"):
@@ -43,30 +31,23 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
     )
 
 
-def downsample_moments(moments, rate):
+def downsample_moments(moments: list[dict], rate: int) -> list[dict]:
     return moments[::rate]
 
 
-def simplify_player_coords(player_coords):
+def simplify_player_coords(player_coords: list[dict]) -> list[dict]:
     return [
         {"teamid": p["teamid"], "playerid": p["playerid"], "x": p["x"], "y": p["y"]}
         for p in player_coords
     ]
 
 
-def process_play(play):
+def process_play(play: dict[str, Any], sampling_rate: int) -> dict[str, Any]:
     """Process a single play for the dataset map function."""
-    processed_moments = []
-    for m in downsample_moments(play["moments"], SAMPLING_RATE):
-        processed_moments.append(
-            {
-                "quarter": m["quarter"],
-                "game_clock": m["game_clock"],
-                "shot_clock": m["shot_clock"],
-                "ball_coordinates": m["ball_coordinates"],
-                "player_coordinates": simplify_player_coords(m["player_coordinates"]),
-            }
-        )
+    play["moments"] = downsample_moments(play["moments"], sampling_rate)
+    for moment in play["moments"]:
+        moment["player_coordinates"] = simplify_player_coords(moment["player_coordinates"])
+
     return {
         "game_id": play["gameid"],
         "primary_player_info": play["primary_info"],
@@ -76,11 +57,11 @@ def process_play(play):
         "possession_team_id": play["event_info"]["possession_team_id"],
         "event_desc_home": play["event_info"]["desc_home"],
         "event_desc_away": play["event_info"]["desc_away"],
-        "moments": processed_moments,
+        "moments_processed": play["moments"],
     }
 
 
-def extract_game_and_team_info(play):
+def extract_game_and_team_info(play: dict[str, Any]) -> dict[str, Any]:
     return {
         "game_id": play["gameid"],
         "game_date": play["gamedate"],
@@ -91,91 +72,91 @@ def extract_game_and_team_info(play):
     }
 
 
-def write_sorted_plays_by_game(plays_dir: Path, plays_iterator: IterableDataset):
-    """Write plays to JSONL files, assuming plays are sorted by game_id and plays in the game.
-    Each file is overwritten and written sequentially per game.
-    """
-    plays_dir.mkdir(parents=True, exist_ok=True)
-
-    current_game_id = None
-    current_file = None
-
-    try:
-        for play in tqdm(plays_iterator, desc="Writing plays", unit="play"):
-            game_id = play["game_id"]
-
-            if game_id != current_game_id:
-                logger.info("Writing play for game id: %s", game_id)
-                if current_file:
-                    current_file.close()
-                current_game_id = game_id
-                file_path = plays_dir / f"{game_id}.jsonl"
-                current_file = open(file_path, "w")  # always start fresh
-
-            if current_file:
-                current_file.write(json.dumps(play, cls=NaNEncoder) + "\n")
-
-    finally:
-        if current_file:
-            current_file.close()
+def filter_empty_moments(moments_batch: list[list[dict[str, Any]]]) -> list[bool]:
+    return [moments is not None and len(moments) > 0 for moments in moments_batch]
 
 
-def filter_empty_moments(examples):
-    batch = [dict(zip(examples.keys(), values)) for values in zip(*examples.values())]
-    return ["moments" in example and bool(example["moments"]) for example in batch]
-
-
-def process_dataset(dataset: Dataset, output_path: Path):
+def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> None:
     """Process the dataset using datasets library features."""
     logger.info("Start processing data.")
 
-    dataset_stream = dataset.to_iterable_dataset()
-    filtered_dataset = dataset_stream.filter(
+    dataset_filtered = dataset.filter(
         filter_empty_moments,
         batched=True,
-        batch_size=1000,
+        input_columns="moments",
+        batch_size=64,
+        num_proc=NUM_PROCESSES,
     )
 
-    processed_plays = filtered_dataset.map(
-        process_play,
-        remove_columns=list(set(dataset_stream.column_names) - {"moments"}),
+    dataset_plays = dataset_filtered.select_columns(
+        [
+            "gameid",
+            "primary_info",
+            "secondary_info",
+            "event_info",
+            "moments",
+        ]
     )
+    dataset_plays = dataset_plays.map(
+        process_play,
+        fn_kwargs={"sampling_rate": sampling_rate},
+        remove_columns=list(set(dataset_plays.column_names)),
+        num_proc=NUM_PROCESSES,
+    )
+    dataset_plays = dataset_plays.rename_column("moments_processed", "moments")
 
     plays_dir = output_path / "plays"
     os.makedirs(plays_dir, exist_ok=True)
 
-    write_sorted_plays_by_game(plays_dir, processed_plays)
+    df_plays = dataset_plays.to_polars()
+    for (game_id,), game in df_plays.group_by("game_id", maintain_order=True):
+        output_file = plays_dir / f"{game_id}.jsonl"
+        game.write_ndjson(output_file)
 
-    info_dataset = filtered_dataset.map(
+    # Extract game and team info
+    dataset_info = dataset_filtered.select_columns(
+        [
+            "gameid",
+            "gamedate",
+            "home",
+            "visitor",
+        ]
+    )
+    dataset_info = dataset_info.map(
         extract_game_and_team_info,
-        remove_columns=filtered_dataset.column_names,
+        remove_columns=dataset_info.column_names,
     )
 
-    seen_games = {}
-    for row in info_dataset:
-        game_id = row["game_id"]
-        if game_id not in seen_games:
-            seen_games[game_id] = {
-                "game_id": game_id,
-                "game_date": row["game_date"],
-                "home_team_id": row["home_team_id"],
-                "visitor_team_id": row["visitor_team_id"],
-            }
-    games_dataset = Dataset.from_list(list(seen_games.values())).sort("game_date")
-    games_dataset.to_json(output_path / "games.jsonl")
+    dataset_game = dataset_info.select_columns(
+        [
+            "game_id",
+            "game_date",
+            "home_team_id",
+            "visitor_team_id",
+        ]
+    )
+    df_game = dataset_game.to_polars()
+    df_game = df_game.unique(subset=["game_id"], keep="first")
+    df_game = df_game.sort("game_date")
+    df_game.write_ndjson(output_path / "games.jsonl")
 
-    seen_teams = {}
-    for row in info_dataset:
-        for prefix in ["home", "visitor"]:
-            team_id = row[f"{prefix}_team_id"]
-            if team_id not in seen_teams:
-                seen_teams[team_id] = row[f"{prefix}_team"]
-    teams_dataset = Dataset.from_list(list(seen_teams.values())).sort("teamid")
-    teams_dataset.to_json(output_path / "teams.jsonl")
+    df_teams_home = dataset_info.select_columns(["home_team_id", "home_team"]).to_polars()
+    df_teams_home = df_teams_home.rename({"home_team_id": "teamid", "home_team": "name"})
+    df_teams_visitor = dataset_info.select_columns(["visitor_team_id", "visitor_team"]).to_polars()
+    df_teams_visitor = df_teams_visitor.rename(
+        {"visitor_team_id": "teamid", "visitor_team": "name"}
+    )
+    df_teams = pl.concat([df_teams_home, df_teams_visitor])
+    df_teams = df_teams.unique(subset=["teamid"])
+    df_teams = df_teams.sort("teamid")
+    df_teams = df_teams.drop("teamid")
+    df_teams = df_teams.unnest("name")
+    df_teams.write_ndjson(output_path / "teams.jsonl")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare NBA tracking dataset")
+
     parser.add_argument(
         "--split",
         type=str,
@@ -188,11 +169,17 @@ if __name__ == "__main__":
         type=str,
         choices=["tiny", "small", "medium", "full"],
         default="tiny",
-        help="Dataset size to load (tiny: 5 games, small: 25 games, medium: 100 games, full: all games)",
+        help="Dataset size (tiny: 5 games, small: 25 games, medium: 100 games, full: all games)",
     )
+    parser.add_argument(
+        "--sampling-rate",
+        type=int,
+        default=3,
+        help="Rate at which to downsample moments (e.g., 3 means keep every 3rd moment)",
+    )
+
     target_path = Path(os.getenv("DATASET_DIR", "data/nba_tracking_data")).resolve()
 
     args = parser.parse_args()
     dataset = load_nba_dataset(split=args.split, name=args.name)
-    if isinstance(dataset, Dataset):
-        process_dataset(dataset, target_path)
+    process_dataset(dataset, target_path, args.sampling_rate)
