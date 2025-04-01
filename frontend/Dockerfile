@@ -1,32 +1,28 @@
-FROM node:20-alpine AS development-dependencies-env
-COPY . /app
-WORKDIR /app
-RUN npm ci
-
-FROM node:20-alpine AS production-dependencies-env
-COPY ./package.json package-lock.json /app/
-WORKDIR /app
-# RUN npm ci --omit=dev --ignore-scripts
-# Install all dependencies for now (including dev)
-RUN npm ci --ignore-scripts
-
-
-FROM node:20-alpine AS build-env
-COPY . /app/
-COPY --from=development-dependencies-env /app/node_modules /app/node_modules
-WORKDIR /app
-RUN npm run build
-
 FROM node:20-alpine AS development
-WORKDIR /app
+WORKDIR /app_root
 COPY package.json .
 RUN npm install
 COPY . .
 CMD ["npm", "run", "dev"]
 
+# Production build
+FROM node:20-alpine AS production-dependencies-env
+ENV ROOT_PATH=/app_root
+COPY ./package.json package-lock.json ${ROOT_PATH}/
+WORKDIR ${ROOT_PATH}
+RUN npm ci --ignore-scripts
+
+FROM node:20-alpine AS build-env
+ENV ROOT_PATH=/app_root
+WORKDIR ${ROOT_PATH}
+COPY . .
+COPY --from=production-dependencies-env ${ROOT_PATH}/node_modules ${ROOT_PATH}/node_modules
+RUN npm run build
+
+
 FROM node:20-alpine AS production
-COPY ./package.json package-lock.json /app/
-COPY --from=production-dependencies-env /app/node_modules /app/node_modules
-COPY --from=build-env /app/build /app/build
-WORKDIR /app
+ENV ROOT_PATH=/app_root
+COPY ./package.json package-lock.json ${ROOT_PATH}/
+COPY --from=production-dependencies-env ${ROOT_PATH}/node_modules ${ROOT_PATH}/node_modules
+COPY --from=build-env ${ROOT_PATH}/build ${ROOT_PATH}/build
 CMD ["npm", "run", "start"]
