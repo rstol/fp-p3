@@ -22,7 +22,6 @@ Install the dependencies:
 
 ```bash
 npm install
-npm prepare
 ```
 
 ### Development
@@ -33,7 +32,7 @@ Start the development server with HMR:
 npm run dev
 ```
 
-Your application will be available at `http://localhost:5173`.
+Your application will be available at `http://localhost:3000`.
 
 #### Development with Docker
 
@@ -102,9 +101,7 @@ This template comes with several styling solutions pre-configured:
 [Tailwind CSS](https://tailwindcss.com/) is configured out of the box for utility-first styling. You can start using Tailwind classes immediately in your components:
 
 ```jsx
-<div className="flex items-center justify-between p-4">
-  {/* Your component content */}
-</div>
+<div className="flex items-center justify-between p-4">{/* Your component content */}</div>
 ```
 
 ### shadcn/ui Components
