@@ -11,6 +11,7 @@ import {
   CommandList,
 } from '~/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
+import { useDashboardStore } from '~/lib/stateStore';
 import { cn } from '~/lib/utils';
 import type { clientLoader } from '~/routes/home';
 
@@ -18,7 +19,8 @@ export default function Header() {
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
   const [open, setOpen] = useState(false);
-  const [teamId, setTeamId] = useState('');
+  const homeTeamId = useDashboardStore((state) => state.homeTeamId);
+  const updateHomeTeamId = useDashboardStore((state) => state.updateHomeTeamId);
 
   const commandItems = teams.map((team) => ({
     value: String(team.teamid),
@@ -38,8 +40,8 @@ export default function Header() {
               aria-expanded={open}
               className="h-auto flex-col items-center gap-0 text-2xl"
             >
-              {teamId
-                ? commandItems.find((team) => team.value === teamId)?.abbreviation
+              {homeTeamId
+                ? commandItems.find((team) => team.value === homeTeamId)?.abbreviation
                 : 'Select team'}
               <ChevronDown size={28} className="shrink-0" />
             </Button>
@@ -56,14 +58,14 @@ export default function Header() {
                       value={team.value}
                       keywords={[team.label]}
                       onSelect={(currentTeamId) => {
-                        setTeamId(currentTeamId === teamId ? '' : currentTeamId);
+                        updateHomeTeamId(currentTeamId === homeTeamId ? '' : currentTeamId);
                         setOpen(false);
                       }}
                     >
                       <Check
                         className={cn(
                           'mr-1 h-4 w-4',
-                          teamId === team.value ? 'opacity-100' : 'opacity-0',
+                          homeTeamId === team.value ? 'opacity-100' : 'opacity-0',
                         )}
                       />
                       {team.label}
