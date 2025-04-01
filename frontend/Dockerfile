@@ -8,8 +8,8 @@ CMD ["npm", "run", "dev"]
 # Production build
 FROM node:20-alpine AS production-dependencies-env
 ENV ROOT_PATH=/app_root
-COPY ./package.json package-lock.json ${ROOT_PATH}/
 WORKDIR ${ROOT_PATH}
+COPY package.json package-lock.json .
 RUN npm ci --ignore-scripts
 
 FROM node:20-alpine AS build-env
