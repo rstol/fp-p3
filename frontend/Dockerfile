@@ -6,7 +6,10 @@ RUN npm ci
 FROM node:20-alpine AS production-dependencies-env
 COPY ./package.json package-lock.json /app/
 WORKDIR /app
-RUN npm ci --omit=dev --ignore-scripts
+# RUN npm ci --omit=dev --ignore-scripts
+# Install all dependencies for now (including dev)
+RUN npm ci --ignore-scripts
+
 
 FROM node:20-alpine AS build-env
 COPY . /app/
