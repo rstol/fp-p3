@@ -7,11 +7,11 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 export default defineConfig({
   server: {
     port: 3000,
-    host: '0.0.0.0',
+    host: 'localhost',
     strictPort: true,
     hmr: {
-      host: '0.0.0.0',
-      // clientPort: 3000,
+      host: 'localhost',
+      clientPort: 3000,
       protocol: 'ws',
       overlay: true,
     },
@@ -20,6 +20,13 @@ export default defineConfig({
       alwaysStat: true,
       // usePolling: true,
       // interval: 100,
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   resolve: {
