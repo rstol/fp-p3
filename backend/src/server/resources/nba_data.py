@@ -4,7 +4,7 @@ from flask_restful import Resource
 from server.resources.dataset_manager import DatasetManager
 from server.settings import DATASET_DIR
 
-dataset_manager = DatasetManager(data_dir=DATASET_DIR)
+dataset_manager = DatasetManager(DATASET_DIR)
 
 
 class TeamsResource(Resource):

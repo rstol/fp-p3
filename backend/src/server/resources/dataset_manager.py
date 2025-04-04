@@ -2,7 +2,7 @@ import polars as pl
 
 
 class DatasetManager:
-    def __init__(self, data_dir: str = "data") -> None:
+    def __init__(self, data_dir: str) -> None:
         self.data_dir = data_dir
 
         self.teams = pl.read_ndjson(f"{self.data_dir}/teams.jsonl")
