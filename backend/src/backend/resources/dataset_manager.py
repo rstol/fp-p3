@@ -29,8 +29,9 @@ class DatasetManager:
         game_dicts = self.games.filter(pl.col("game_id") == game_id).head(1).to_dicts()
         return game_dicts[0] if len(game_dicts) > 0 else None
 
-    def get_plays_for_game(self, game_id: str) -> list[dict[str, str]]:
-        return self._load_game_plays(game_id).to_dicts()
+    def get_plays_for_game(self, game_id: str, as_dicts: bool = True) -> list[dict[str, str]]:
+        plays = self._load_game_plays(game_id)
+        return plays if not as_dicts else plays.to_dicts()
 
     def get_play_id(self, game_id: str, play_id: str) -> dict[str, str] | None:
         plays = self._load_game_plays(game_id)

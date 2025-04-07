@@ -69,7 +69,7 @@ class TeamPlaysScatterResource(Resource):
             logger.info(f"Processing plays for game {game_id}")
 
             # Get all plays for this game
-            plays = self.dataset_manager.get_plays_for_game(game_id)
+            plays = self.dataset_manager.get_plays_for_game(game_id, as_dicts=False)
             logger.info(f"Found {len(plays)} plays for game {game_id}")
 
             # Process each play to extract coordinate data
@@ -179,137 +179,28 @@ class TeamPlaysScatterResource(Resource):
         game_id = play.get("game_id", "")
         period = play.get("period", 1)
 
-        # Generate a simple 2D projection for this play
-        try:
-            # Use different strategies to get coordinates depending on what's available
+        if len(points) == 0 and event_type:
+            # Map different event types to different areas of the court
+            event_type_num = hash(str(event_type)) % 100  # Get a number from 0-99
 
-            # Strategy 1: If moments data exists with coordinates, use first and last position
-            if "moments" in play and play["moments"] and len(play["moments"]) > 0:
-                # Get first and last moment to represent start/end positions
-                moments_to_use = [play["moments"][0]]
-                if len(play["moments"]) > 1:
-                    moments_to_use.append(play["moments"][-1])
+            # Create coordinates based on event type (spread across the court)
+            x = 100 + (event_type_num * 3) % 300  # x between 100-400
+            y = 50 + (event_type_num * 7) % 300  # y between 50-350
 
-                for i, moment in enumerate(moments_to_use):
-                    # Try to get ball position
-                    if "ball_coordinates" in moment and moment["ball_coordinates"]:
-                        try:
-                            ball_x = float(moment["ball_coordinates"].get("x", 0))
-                            ball_y = float(moment["ball_coordinates"].get("y", 0))
+            # Add some randomness
+            x += random.randint(-30, 30)
+            y += random.randint(-30, 30)
 
-                            # Scale coordinates to fit within 0-500 x 0-400 range
-                            scaled_x = (ball_x + 250) % 500  # Map to 0-500 range
-                            scaled_y = (ball_y + 200) % 400  # Map to 0-400 range
-
-                            point = {
-                                "x": scaled_x,
-                                "y": scaled_y,
-                                "event_id": f"{event_id}_ball_{i}",
-                                "play_type": f"Event Type {event_type}",
-                                "description": event_desc or "Ball Position",
-                                "period": period,
-                                "game_id": game_id,
-                            }
-                            points.append(point)
-                        except (ValueError, TypeError) as e:
-                            logger.warning(f"Error extracting ball coordinates: {e}")
-
-                    # Get team players' positions (average position as an alternative)
-                    if "player_coordinates" in moment and moment["player_coordinates"]:
-                        team_player_positions = []
-                        for player_pos in moment["player_coordinates"]:
-                            try:
-                                # Only include players from the requested team
-                                if (
-                                    "teamid" in player_pos
-                                    and float(player_pos.get("teamid", 0)) == team_id
-                                ):
-                                    player_x = float(player_pos.get("x", 0))
-                                    player_y = float(player_pos.get("y", 0))
-                                    team_player_positions.append((player_x, player_y))
-                            except (ValueError, TypeError):
-                                pass
-
-                        # If we have team positions, add individual points
-                        for j, (player_x, player_y) in enumerate(team_player_positions):
-                            # Scale coordinates to fit within 0-500 x 0-400 range
-                            scaled_x = (player_x + 250) % 500  # Map to 0-500 range
-                            scaled_y = (player_y + 200) % 400  # Map to 0-400 range
-
-                            point = {
-                                "x": scaled_x,
-                                "y": scaled_y,
-                                "event_id": f"{event_id}_player_{j}_{i}",
-                                "play_type": f"Event Type {event_type}",
-                                "description": event_desc or f"Player Position",
-                                "period": period,
-                                "game_id": game_id,
-                            }
-                            points.append(point)
-
-            # Strategy 2: Use shot location if available (for shot events)
-            if "shot_location" in play and play["shot_location"]:
-                try:
-                    shot_x = float(play["shot_location"].get("x", 250))
-                    shot_y = float(play["shot_location"].get("y", 200))
-
-                    # Scale coordinates to fit within 0-500 x 0-400 range
-                    scaled_x = (shot_x + 250) % 500  # Map to 0-500 range
-                    scaled_y = (shot_y + 200) % 400  # Map to 0-400 range
-
-                    point = {
-                        "x": scaled_x,
-                        "y": scaled_y,
-                        "event_id": f"{event_id}_shot",
-                        "play_type": "Shot",
-                        "description": event_desc or "Shot Location",
-                        "period": period,
-                        "game_id": game_id,
-                    }
-                    points.append(point)
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Error extracting shot location: {e}")
-
-            # Strategy 3: If we have no coordinates but have event type, generate position based on event type
-            if len(points) == 0 and event_type:
-                # Map different event types to different areas of the court
-                event_type_num = hash(str(event_type)) % 100  # Get a number from 0-99
-
-                # Create coordinates based on event type (spread across the court)
-                x = 100 + (event_type_num * 3) % 300  # x between 100-400
-                y = 50 + (event_type_num * 7) % 300  # y between 50-350
-
-                # Add some randomness
-                x += random.randint(-30, 30)
-                y += random.randint(-30, 30)
-
-                point = {
-                    "x": x,
-                    "y": y,
-                    "event_id": f"{event_id}_event",
-                    "play_type": f"Event Type {event_type}",
-                    "description": event_desc or "Play Event",
-                    "period": period,
-                    "game_id": game_id,
-                }
-                points.append(point)
-
-        except Exception as e:
-            logger.error(f"Error generating 2D projection for play {event_id}: {e}")
-            # Generate at least one fallback point for this play
-            x = random.randint(50, 450)
-            y = random.randint(50, 350)
-            points.append(
-                {
-                    "x": x,
-                    "y": y,
-                    "event_id": f"{event_id}_fallback",
-                    "play_type": "Unknown",
-                    "description": event_desc or "Play Event",
-                    "period": period,
-                    "game_id": game_id,
-                }
-            )
+            point = {
+                "x": x,
+                "y": y,
+                "event_id": f"{event_id}_event",
+                "play_type": f"Event Type {event_type}",
+                "description": event_desc or "Play Event",
+                "period": period,
+                "game_id": game_id,
+            }
+            points.append(point)
 
         return points
 

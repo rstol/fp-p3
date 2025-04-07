@@ -6,7 +6,6 @@ ARG DATASET_DIR=/application_root/data/nba_tracking_data
 ENV UV_COMPILE_BYTECODE=0 UV_LINK_MODE=copy
 ENV UV_PYTHON_INSTALL_DIR=/python
 ENV UV_PYTHON_PREFERENCE=only-managed
-ENV UV_CACHE_DIR="/application_root/.cache"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/application_root
@@ -14,7 +13,6 @@ ENV DATASET_DIR=$DATASET_DIR
 ENV PORT=$PORT
 ENV VIRTUAL_ENVIRONMENT_PATH="/application_root/.venv"
 ENV PATH="$VIRTUAL_ENVIRONMENT_PATH/bin:$PATH"
-
 
 RUN uv python install 3.12
 
@@ -36,12 +34,14 @@ EXPOSE ${PORT}
 FROM builder AS development
 
 WORKDIR ${PYTHONPATH}
-COPY --chown=app-user:app-user uv.lock pyproject.toml .
-
-RUN uv sync --frozen --no-install-project
-
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
 # Copy application files
-COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
+COPY --chown=app-user:app-user . ${PYTHONPATH}
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 CMD ["python", "-m", "backend.router.app"]
 
@@ -50,14 +50,16 @@ FROM builder AS production
 
 WORKDIR ${PYTHONPATH}
 
-COPY --chown=app-user:app-user uv.lock pyproject.toml .
-
-RUN uv sync --frozen --no-install-project --no-dev
-
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
 # Copy application files
-COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
+COPY --chown=app-user:app-user . ${PYTHONPATH}
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 # Activate entrypoint for running the Gunicorn application server
 # For environments with multiple CPU cores, increase the number of workers
 # to be equal to the cores available in Cloud.
-CMD ["gunicorn", "--config", "gunicorn.conf.py", "backend.router.app:start_server"]
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:create_app()"]
