@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "datasets",
+#     "polars",
+# ]
+# ///
 import argparse
 import logging
 import os
