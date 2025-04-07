@@ -1,10 +1,11 @@
-[tool.poetry]
-name = "server"
+[project]
+name = "backend"
 version = "0.0.1"
 description = "Backend for the dummy project of the XAI-IML 2025 course."
 readme = "README.md"
-authors = ["Romeo Stoll stollr@student.ethz.ch"]
-packages = [{include = "server", from = "src"}]
+authors = [
+    {name = "Romeo Stoll", email = "stollr@student.ethz.ch"}
+]
 classifiers = [
     "Intended Audience :: Developers",
     "Natural Language :: English",
@@ -12,31 +13,42 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Development Status :: 4 - Beta"
 ]
+requires-python = ">=3.12"
+dependencies = [
+    "gunicorn>=21.2.0",
+    "flask>=3.1.0",
+    "flask-restful>=0.3.10",
+    "flask-cors>=5.0.1",
+    "pandas>=2.2.3",
+    "scikit-learn>=1.6.1",
+    "datasets>=3.4.1",
+    "py7zr>=0.22.0",
+    "tqdm>=4.67.1",
+    "torch>=2.6.0",
+    "torchvision>=0.21.0",
+    "polars>=1.26.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-gunicorn = "^21.2.0"
-flask = "^3.1.0"
-flask-restful = "^0.3.10"
-flask-cors = "^5.0.1"
-pandas = "^2.2.3"
-scikit-learn = "^1.6.1"
-datasets = "^3.4.1"
-py7zr = "^0.22.0"
-tqdm = "^4.67.1"
-torch = "^2.6.0"
-torchvision = "^0.21.0"
-
-[tool.poetry.group.dev.dependencies]
-black = "^24.4.0"
-isort = "^5.13.2"
-pylint = "^3.1.0"
-pre-commit = "^2.20.0"
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.2.0",
+    "pre-commit>=2.20.0",
+]
 
 [build-system]
-requires = ["poetry>=1.8.5"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ['py312']
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "N", "B", "C4", "UP", "BLE", "C90", "A"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+docstring-code-format = true
