@@ -360,6 +360,54 @@ const ScatterPlot = () => {
         svg.transition().duration(300).call(zoom.transform as any, d3.zoomIdentity);
       });
       
+    // Add legend for clusters
+    const uniqueClusters = Array.from(new Set(data.map(d => d.cluster))).sort((a, b) => a - b);
+    const legendPadding = 10;
+    const legendItemHeight = 20;
+    const legendWidth = 120;
+    
+    const legend = svg.append('g')
+      .attr('class', 'legend')
+      .attr('transform', `translate(${legendPadding}, ${legendPadding})`);
+    
+    // Add background for the legend
+    legend.append('rect')
+      .attr('width', legendWidth)
+      .attr('height', uniqueClusters.length * legendItemHeight + legendPadding * 2)
+      .attr('fill', 'white')
+      .attr('stroke', '#ccc')
+      .attr('rx', 5)
+      .attr('ry', 5)
+      .attr('opacity', 0.9);
+    
+    // Add title
+    legend.append('text')
+      .attr('x', legendWidth / 2)
+      .attr('y', legendPadding + 5)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '12px')
+      .attr('font-weight', 'bold')
+      .text('Clusters');
+    
+    // Add legend items
+    uniqueClusters.forEach((cluster, i) => {
+      const legendItem = legend.append('g')
+        .attr('transform', `translate(${legendPadding}, ${legendPadding * 2 + i * legendItemHeight})`);
+      
+      // Add color square
+      legendItem.append('rect')
+        .attr('width', 15)
+        .attr('height', 15)
+        .attr('fill', color(cluster.toString()));
+      
+      // Add text label
+      legendItem.append('text')
+        .attr('x', 25)
+        .attr('y', 12)
+        .attr('font-size', '12px')
+        .text(`Cluster ${cluster}`);
+    });
+      
     // Center view on data after everything is rendered
     if (data.length > 0) {
       // Use requestAnimationFrame to ensure DOM is fully updated
@@ -408,7 +456,7 @@ const ScatterPlot = () => {
 
       <div className="mt-2 text-sm text-gray-600">
         <p>Basketball play positions clustered by similarity. Drag points to reassign clusters.</p>
-        <p>Colors represent different types of plays. Use mouse wheel to zoom, drag the background to pan.</p>
+        <p>Colors represent different clusters of plays. Use mouse wheel to zoom, drag the background to pan.</p>
       </div>
     </div>
   );
