@@ -35,9 +35,9 @@ EXPOSE ${PORT}
 
 FROM builder AS development
 
-WORKDIR ${PYTHONPATH}
-COPY --chown=app-user:app-user uv.lock pyproject.toml .
+COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
 
+WORKDIR ${PYTHONPATH}/backend
 RUN uv sync --frozen --no-install-project
 
 # Copy application files
@@ -48,10 +48,9 @@ CMD ["python", "-m", "backend.router.app"]
 # Start production stage from builder to avoid inheriting dev tools
 FROM builder AS production
 
-WORKDIR ${PYTHONPATH}
+COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
 
-COPY --chown=app-user:app-user uv.lock pyproject.toml .
-
+WORKDIR ${PYTHONPATH}/backend
 RUN uv sync --frozen --no-install-project --no-dev
 
 # Copy application files
