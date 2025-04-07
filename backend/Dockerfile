@@ -6,12 +6,15 @@ ARG DATASET_DIR=/application_root/data/nba_tracking_data
 ENV UV_COMPILE_BYTECODE=0 UV_LINK_MODE=copy
 ENV UV_PYTHON_INSTALL_DIR=/python
 ENV UV_PYTHON_PREFERENCE=only-managed
+ENV UV_CACHE_DIR="/application_root/.cache"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/application_root
 ENV DATASET_DIR=$DATASET_DIR
 ENV PORT=$PORT
-ENV PATH="/application_root/.venv/bin:$PATH"
+ENV VIRTUAL_ENVIRONMENT_PATH="/application_root/.venv"
+ENV PATH="$VIRTUAL_ENVIRONMENT_PATH/bin:$PATH"
+
 
 RUN uv python install 3.12
 
@@ -32,30 +35,13 @@ EXPOSE ${PORT}
 
 FROM builder AS development
 
-# Add dev tools and grant sudo access to app-user
-USER root
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    sudo \
-    git \
-    curl \
-    procps \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR ${PYTHONPATH}
+COPY --chown=app-user:app-user uv.lock pyproject.toml .
 
-RUN echo "app-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/app-user && \
-    chmod 0440 /etc/sudoers.d/app-user
+RUN uv sync --frozen --no-install-project
 
-WORKDIR /application_root
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
-COPY --chown=app-user:app-user . /application_root
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
-
-USER app-user
+# Copy application files
+COPY --chown=app-user:app-user src/server ${PYTHONPATH}/server/
 
 CMD ["python", "-m", "server.router.app"]
 
@@ -64,13 +50,12 @@ FROM builder AS production
 
 WORKDIR ${PYTHONPATH}
 
-# Copy only necessary artifacts from development stage
-COPY --from=development --chown=app-user:app-user /application_root/.venv /application_root/.venv
-COPY --from=development --chown=app-user:app-user /application_root /application_root
+COPY --chown=app-user:app-user uv.lock pyproject.toml .
 
-# Ensure app-user owns the WORKDIR in production as well
-RUN chown app-user:app-user ${PYTHONPATH}
-USER app-user
+RUN uv sync --frozen --no-install-project --no-dev
+
+# Copy application files
+COPY --chown=app-user:app-user src/server ${PYTHONPATH}/server/
 
 # Activate entrypoint for running the Gunicorn application server
 # For environments with multiple CPU cores, increase the number of workers
