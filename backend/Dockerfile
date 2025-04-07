@@ -41,9 +41,9 @@ COPY --chown=app-user:app-user uv.lock pyproject.toml .
 RUN uv sync --frozen --no-install-project
 
 # Copy application files
-COPY --chown=app-user:app-user src/server ${PYTHONPATH}/server/
+COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
 
-CMD ["python", "-m", "server.router.app"]
+CMD ["python", "-m", "backend.router.app"]
 
 # Start production stage from builder to avoid inheriting dev tools
 FROM builder AS production
@@ -55,9 +55,9 @@ COPY --chown=app-user:app-user uv.lock pyproject.toml .
 RUN uv sync --frozen --no-install-project --no-dev
 
 # Copy application files
-COPY --chown=app-user:app-user src/server ${PYTHONPATH}/server/
+COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
 
 # Activate entrypoint for running the Gunicorn application server
 # For environments with multiple CPU cores, increase the number of workers
 # to be equal to the cores available in Cloud.
-CMD ["gunicorn", "--config", "gunicorn.conf.py", "server.router.app:start_server"]
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "backend.router.app:start_server"]

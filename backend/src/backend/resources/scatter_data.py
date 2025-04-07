@@ -7,8 +7,8 @@ import pandas as pd
 from flask_restful import Resource
 from sklearn.cluster import KMeans
 
-from server.resources.dataset_manager import DatasetManager
-from server.settings import DATASET_DIR
+from backend.resources.dataset_manager import DatasetManager
+from backend.settings import DATASET_DIR
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
