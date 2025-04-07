@@ -3,6 +3,7 @@
 # dependencies = [
 #     "datasets",
 #     "polars",
+#     "py7zr",
 # ]
 # ///
 import argparse
