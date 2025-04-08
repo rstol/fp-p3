@@ -1,7 +1,7 @@
-import { Pencil, Check } from 'lucide-react';
+import { Check, Edit } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
@@ -42,8 +42,8 @@ function EditableField({
           <div className="text-gray-700">
             {value ? value : <span className="text-gray-400">{placeholder}</span>}
           </div>
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-            <Pencil size={6} />
+          <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
+            <Edit size={6} />
           </Button>
         </div>
       ) : (

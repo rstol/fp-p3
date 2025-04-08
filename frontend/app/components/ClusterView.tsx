@@ -8,7 +8,7 @@ export default function ClusterView() {
         <CardTitle>Cluster XY Statistics</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="divide-y divide-solid text-sm">
+        <div className="divide-y divide-solid">
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Points per Position:</span>
             <span className="flex-1 text-right">2.3</span>

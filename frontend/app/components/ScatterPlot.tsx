@@ -1,7 +1,9 @@
 import * as d3 from 'd3';
+import { Info, InfoIcon, MousePointer, Move, ZoomIn } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { getPanelElement } from 'react-resizable-panels';
 import { useDashboardStore } from '~/lib/stateStore';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 
 type Point = {
   x: number;
@@ -49,7 +51,7 @@ const ScatterPlot = () => {
       setData(playData);
       setIsLoading(false);
     } catch (err) {
-      console.error("Error fetching play data:", err);
+      console.error('Error fetching play data:', err);
       setError('Failed to fetch play data: ' + (err instanceof Error ? err.message : String(err)));
       setIsLoading(false);
       setData([]);
@@ -106,7 +108,7 @@ const ScatterPlot = () => {
       .scaleLinear()
       .domain([0, 500])
       .range([margin, dimensions.width - margin]);
-    
+
     const yScale = d3
       .scaleLinear()
       .domain([0, 400])
@@ -118,15 +120,15 @@ const ScatterPlot = () => {
     svg.selectAll('*').remove();
 
     // Add background rect for zooming/panning
-    const background = svg.append('rect')
+    const background = svg
+      .append('rect')
       .attr('width', dimensions.width)
       .attr('height', dimensions.height)
       .attr('fill', '#f0f9ff') // Light blue background
       .attr('cursor', 'move');
 
     // Create a group for all visualization content
-    const container = svg.append('g')
-      .attr('class', 'zoom-container');
+    const container = svg.append('g').attr('class', 'zoom-container');
 
     // Function to apply current transform to the container
     const applyTransform = (transform: d3.ZoomTransform) => {
@@ -135,16 +137,16 @@ const ScatterPlot = () => {
     };
 
     // Set up zoom behavior
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
+    const zoom = d3
+      .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.5, 10])
       .on('zoom', (event) => {
         applyTransform(event.transform);
       });
 
     // Apply zoom behavior to svg but filter so it only works on background or when using mousewheel
-    svg.call(zoom as any)
-      .on('dblclick.zoom', null); // Disable double-click zoom which can be confusing
-      
+    svg.call(zoom as any).on('dblclick.zoom', null); // Disable double-click zoom which can be confusing
+
     // Draw all elements first
     // Create contours for each cluster
     const grouped = d3.groups(data, (d) => d.cluster);
@@ -171,14 +173,15 @@ const ScatterPlot = () => {
             .attr('stroke-width', 2)
             .attr('opacity', 0.8);
         } catch (error) {
-          console.error("Error creating contour for cluster", clusterId, error);
+          console.error('Error creating contour for cluster', clusterId, error);
         }
       }
     }
-    
+
     // Function to handle point dragging
     const handlePointDrag = (selection: d3.Selection<any, Point, any, any>) => {
-      const drag = d3.drag<SVGCircleElement, Point>()
+      const drag = d3
+        .drag<SVGCircleElement, Point>()
         .on('start', function (event, d) {
           // Prevent zoom during drag
           event.sourceEvent.stopPropagation();
@@ -200,17 +203,12 @@ const ScatterPlot = () => {
           d.y = yScale.invert(y);
 
           // Update circle position
-          d3.select(this)
-            .attr('cx', xScale(d.x))
-            .attr('cy', yScale(d.y));
+          d3.select(this).attr('cx', xScale(d.x)).attr('cy', yScale(d.y));
         })
         .on('end', function (event, d) {
           event.sourceEvent.stopPropagation();
 
-          d3.select(this)
-            .attr('stroke-width', 1)
-            .attr('stroke', 'white')
-            .attr('cursor', 'grab');
+          d3.select(this).attr('stroke-width', 1).attr('stroke', 'white').attr('cursor', 'grab');
 
           // Update cluster assignment
           const clusters = d3.groups(data, (d) => d.cluster);
@@ -257,15 +255,15 @@ const ScatterPlot = () => {
       .call(handlePointDrag)
       .on('mouseover', function (event, d) {
         // Show tooltip on hover
-        d3.select(this)
-          .attr('r', 7)
-          .attr('stroke-width', 2);
+        d3.select(this).attr('r', 7).attr('stroke-width', 2);
 
-        const tooltip = container.append('g')
+        const tooltip = container
+          .append('g')
           .attr('class', 'tooltip')
           .attr('transform', `translate(${xScale(d.x) + 10},${yScale(d.y) - 10})`);
 
-        tooltip.append('rect')
+        tooltip
+          .append('rect')
           .attr('rx', 4)
           .attr('ry', 4)
           .attr('width', 160)
@@ -275,19 +273,22 @@ const ScatterPlot = () => {
           .attr('stroke-width', 1)
           .attr('opacity', 0.9);
 
-        tooltip.append('text')
+        tooltip
+          .append('text')
           .attr('x', 5)
           .attr('y', 15)
           .text(`Type: ${d.play_type || 'Unknown'}`)
           .attr('font-size', '10px');
 
-        tooltip.append('text')
+        tooltip
+          .append('text')
           .attr('x', 5)
           .attr('y', 30)
           .text(`Description: ${d.description || 'N/A'}`)
           .attr('font-size', '10px');
 
-        tooltip.append('text')
+        tooltip
+          .append('text')
           .attr('x', 5)
           .attr('y', 45)
           .text(`Cluster: ${d.cluster}`)
@@ -295,87 +296,88 @@ const ScatterPlot = () => {
       })
       .on('mouseout', function () {
         container.selectAll('.tooltip').remove();
-        d3.select(this)
-          .attr('r', 5)
-          .attr('stroke-width', 1);
+        d3.select(this).attr('r', 5).attr('stroke-width', 1);
       });
 
     // Add zoom controls
-    const controls = svg.append('g')
+    const controls = svg
+      .append('g')
       .attr('class', 'zoom-controls')
       .attr('transform', `translate(${dimensions.width - 70}, 20)`);
 
     // Zoom in button
     const zoomInBtn = controls.append('g').attr('class', 'zoom-btn');
-    zoomInBtn.append('circle')
-      .attr('r', 12)
-      .attr('fill', 'white')
-      .attr('stroke', '#ccc');
-    zoomInBtn.append('text')
+    zoomInBtn.append('circle').attr('r', 12).attr('fill', 'white').attr('stroke', '#ccc');
+    zoomInBtn
+      .append('text')
       .attr('text-anchor', 'middle')
       .attr('alignment-baseline', 'middle')
       .attr('font-size', '16px')
       .text('+');
-    zoomInBtn.style('cursor', 'pointer')
-      .on('click', (event) => {
-        event.stopPropagation();
-        svg.transition().duration(300).call(zoom.scaleBy as any, 1.3);
-      });
+    zoomInBtn.style('cursor', 'pointer').on('click', (event) => {
+      event.stopPropagation();
+      svg
+        .transition()
+        .duration(300)
+        .call(zoom.scaleBy as any, 1.3);
+    });
 
     // Zoom out button
-    const zoomOutBtn = controls.append('g')
+    const zoomOutBtn = controls
+      .append('g')
       .attr('class', 'zoom-btn')
       .attr('transform', 'translate(0, 30)');
-    zoomOutBtn.append('circle')
-      .attr('r', 12)
-      .attr('fill', 'white')
-      .attr('stroke', '#ccc');
-    zoomOutBtn.append('text')
+    zoomOutBtn.append('circle').attr('r', 12).attr('fill', 'white').attr('stroke', '#ccc');
+    zoomOutBtn
+      .append('text')
       .attr('text-anchor', 'middle')
       .attr('alignment-baseline', 'middle')
       .attr('font-size', '16px')
       .text('−');
-    zoomOutBtn.style('cursor', 'pointer')
-      .on('click', (event) => {
-        event.stopPropagation();
-        svg.transition().duration(300).call(zoom.scaleBy as any, 0.7);
-      });
+    zoomOutBtn.style('cursor', 'pointer').on('click', (event) => {
+      event.stopPropagation();
+      svg
+        .transition()
+        .duration(300)
+        .call(zoom.scaleBy as any, 0.7);
+    });
 
     // Reset zoom button
-    const resetBtn = controls.append('g')
+    const resetBtn = controls
+      .append('g')
       .attr('class', 'zoom-btn')
       .attr('transform', 'translate(0, 60)');
-    resetBtn.append('circle')
-      .attr('r', 12)
-      .attr('fill', 'white')
-      .attr('stroke', '#ccc');
-    resetBtn.append('text')
+    resetBtn.append('circle').attr('r', 12).attr('fill', 'white').attr('stroke', '#ccc');
+    resetBtn
+      .append('text')
       .attr('text-anchor', 'middle')
       .attr('alignment-baseline', 'middle')
       .attr('font-size', '14px')
       .text('R');
-    resetBtn.style('cursor', 'pointer')
-      .on('click', (event) => {
-        event.stopPropagation();
-        svg.transition().duration(300).call(zoom.transform as any, d3.zoomIdentity);
-      });
-      
+    resetBtn.style('cursor', 'pointer').on('click', (event) => {
+      event.stopPropagation();
+      svg
+        .transition()
+        .duration(300)
+        .call(zoom.transform as any, d3.zoomIdentity);
+    });
+
     // Center view on data after everything is rendered
     if (data.length > 0) {
       // Use requestAnimationFrame to ensure DOM is fully updated
       requestAnimationFrame(() => {
         // Find data extents
-        const xExtent = d3.extent(data, d => d.x) as [number, number];
-        const yExtent = d3.extent(data, d => d.y) as [number, number];
-        
+        const xExtent = d3.extent(data, (d) => d.x) as [number, number];
+        const yExtent = d3.extent(data, (d) => d.y) as [number, number];
+
         // Calculate center point of the data
         const centerX = (xExtent[0] + xExtent[1]) / 2;
         const centerY = (yExtent[0] + yExtent[1]) / 2;
-        
+
         // Calculate translation to center this point
         const tx = dimensions.width / 2 - xScale(centerX);
         const ty = dimensions.height / 2 - yScale(centerY);
-        
+
         // Apply centering transform
         const centerTransform = d3.zoomIdentity.translate(tx, ty);
         svg.call(zoom.transform as any, centerTransform);
@@ -390,25 +392,86 @@ const ScatterPlot = () => {
 
   return (
     <div className="flex flex-col">
-      {isLoading && <div className="text-center py-4">Loading play data...</div>}
+      {isLoading && <div className="py-4 text-center">Loading play data...</div>}
 
-      {error && <div className="text-red-500 py-2">{error}</div>}
+      {error && <div className="py-2 text-red-500">{error}</div>}
 
       {!homeTeamId && !isLoading && !error && (
-        <div className="text-center py-4">Please select a team in the header to view play data.</div>
+        <div className="py-4 text-center">
+          Please select a team in the header to view play data.
+        </div>
       )}
 
       {homeTeamId && data.length === 0 && !isLoading && !error && (
-        <div className="text-center py-4">No play data available for this team.</div>
+        <div className="py-4 text-center">No play data available for this team.</div>
       )}
 
       <div className="">
         <svg ref={svgRef} viewBox="0 0 600 500" className="w-full border bg-blue-50" />
       </div>
 
-      <div className="mt-2 text-sm text-gray-600">
-        <p>Basketball play positions clustered by similarity. Drag points to reassign clusters.</p>
-        <p>Colors represent different types of plays. Use mouse wheel to zoom, drag the background to pan.</p>
+      {/* Info bar with interactive elements */}
+      <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 p-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium">Basketball play positions clustered by similarity</h3>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="rounded-full p-1 hover:bg-gray-200">
+                  <Info className="h-4 w-4 text-gray-500" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p>Different colors represent different types of plays.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
+        {/* Control hints */}
+        <div className="flex items-center gap-3">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <MousePointer className="h-3 w-3" />
+                  <span>Drag points</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Drag points to reassign clusters</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <Move className="h-3 w-3" />
+                  <span>Pan</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Drag the background to pan</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <ZoomIn className="h-3 w-3" />
+                  <span>Zoom</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Use mouse wheel to zoom</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
     </div>
   );
