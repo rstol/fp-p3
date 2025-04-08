@@ -14,7 +14,7 @@ export default function Header({
   console.log(defaultTab);
   return (
     <div className="space-y-4">
-      <h1 className="text-center font-medium">Basketball Play Analyzer</h1>
+      {/* <h1 className="text-center font-medium">Basketball Play Analyzer</h1> */}
       <Tabs defaultValue={getTabValue(defaultTab)} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           {tabs.map((tab) => (

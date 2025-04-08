@@ -8,6 +8,8 @@ import type { Route } from './+types/home';
 import GamesTable from '~/components/GamesTable';
 import Header from '~/components/Header';
 import Filters from '~/components/Filters';
+import PlayView from '~/components/PlayView';
+import ClusterView from '~/components/ClusterView';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -44,10 +46,8 @@ function MainView() {
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={30}>
-          <div className="flex h-full items-center justify-center p-6">
-            <span className="font-semibold">Basketball Court Play view</span>
-            {/* TODO render play  */}
-          </div>
+          <PlayView />
+          <ClusterView />
         </ResizablePanel>
         <ResizableHandle />
       </ResizablePanelGroup>
@@ -55,18 +55,18 @@ function MainView() {
   );
 }
 
-function TaggedPlayView() {
+function TaggedPlaysView() {
   return <div>Tagged Plays</div>;
 }
 
 export default function Home() {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-[1440px] px-4 py-6">
       <div className="space-y-2">
         <Header
           tabs={[
-            { title: 'Play Exploration', children: <MainView /> },
-            { title: 'Tagged Plays', children: <TaggedPlayView /> },
+            { title: 'Play Analyzer', children: <MainView /> },
+            { title: 'Tagged Plays', children: <TaggedPlaysView /> },
           ]}
         />
       </div>
