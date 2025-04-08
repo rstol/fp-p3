@@ -11,6 +11,7 @@ import Filters from '~/components/Filters';
 import PlayView from '~/components/PlayView';
 import ClusterView from '~/components/ClusterView';
 import { PlaysTable } from '~/components/PlaysTable';
+import { Separator } from '~/components/ui/separator';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -49,6 +50,7 @@ function MainView() {
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={30}>
             <PlayView />
+            <Separator orientation="horizontal" />
             <ClusterView />
           </ResizablePanel>
           <ResizableHandle />

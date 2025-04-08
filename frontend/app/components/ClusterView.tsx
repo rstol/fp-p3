@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card'
 export default function ClusterView() {
   // TODO get this info for the currently selected cluster
   return (
-    <Card className="border-none shadow-none">
+    <Card className="gap-4 border-none shadow-none">
       <CardHeader>
         <CardTitle>Cluster XY Statistics</CardTitle>
       </CardHeader>
@@ -19,7 +19,6 @@ export default function ClusterView() {
           </div>
         </div>
       </CardContent>
-      <CardFooter className="flex flex-col gap-4"></CardFooter>
     </Card>
   );
 }

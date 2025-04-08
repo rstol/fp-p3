@@ -81,7 +81,7 @@ function EditableField({
 export default function PlayView() {
   // TODO get this info for the currently selected play
   return (
-    <Card className="border-none shadow-none">
+    <Card className="gap-4 border-none shadow-none">
       <CardHeader>
         <CardTitle>Selected Play Details</CardTitle>
       </CardHeader>
