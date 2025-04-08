@@ -19,18 +19,20 @@ class DatasetManager:
     def get_games(self):
         return self.games.to_dicts()
 
-    def get_games_for_team(self, team_id: str) -> list[dict[str, str]]:
+    def get_games_for_team(self, team_id: str, as_dicts: bool = True) -> list[dict[str, str]]:
         team_id = int(team_id)
-        return self.games.filter(
+        games = self.games.filter(
             (pl.col("home_team_id") == team_id) | (pl.col("visitor_team_id") == team_id)
-        ).to_dicts()
+        )
+        return games.to_dicts() if as_dicts else games
 
     def get_game_details(self, game_id: str) -> dict[str, str] | None:
         game_dicts = self.games.filter(pl.col("game_id") == game_id).head(1).to_dicts()
         return game_dicts[0] if len(game_dicts) > 0 else None
 
-    def get_plays_for_game(self, game_id: str) -> list[dict[str, str]]:
-        return self._load_game_plays(game_id).to_dicts()
+    def get_plays_for_game(self, game_id: str, as_dicts: bool = True) -> list[dict[str, str]]:
+        plays = self._load_game_plays(game_id)
+        return plays.to_dicts() if as_dicts else plays
 
     def get_play_id(self, game_id: str, play_id: str) -> dict[str, str] | None:
         plays = self._load_game_plays(game_id)
