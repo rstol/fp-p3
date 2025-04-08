@@ -2,20 +2,16 @@ import * as d3 from 'd3';
 import { Info, MousePointer, Move, ZoomIn } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { getPanelElement } from 'react-resizable-panels';
-import { useLoaderData, useNavigation } from 'react-router';
+import { useLoaderData } from 'react-router';
 import type { clientLoader } from '~/routes/_index';
-import { ScatterPlotSkeleton } from './LoaderSkeletons';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { Point } from '~/types/data';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 500, height: 400 });
   const loaderData = useLoaderData<typeof clientLoader>();
   const data = loaderData?.scatterData ?? [];
-
-  const navigation = useNavigation();
-  const isLoading = Boolean(navigation.location);
 
   // Keep a reference to the current transform for zooming
   const transformRef = useRef(d3.zoomIdentity);
@@ -342,13 +338,9 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     };
   }, [data, dimensions]);
 
-  if (isLoading) {
-    return <ScatterPlotSkeleton />;
-  }
-
   return (
     <div className="flex flex-col">
-      {teamID && data.length === 0 && !isLoading && (
+      {teamID && data.length === 0 && (
         <div className="py-4 text-center">No play data available for this team.</div>
       )}
 

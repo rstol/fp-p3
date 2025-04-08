@@ -1,21 +1,16 @@
-import {
-  useLocation,
-  useNavigation,
-  useParams,
-  useSearchParams,
-  type ClientLoaderFunctionArgs,
-} from 'react-router';
-import { BASE_URL } from '~/lib/const';
-import type { Game, Point, Team } from '~/types/data';
-import type { Route } from './+types/_index';
-import { Separator } from '~/components/ui/separator';
+import { useNavigation, useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
 import ClusterView from '~/components/ClusterView';
+import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import Filters from '~/components/Filters';
+import { ScatterPlotSkeleton } from '~/components/LoaderSkeletons';
 import { PlaysTable } from '~/components/PlaysTable';
 import PlayView from '~/components/PlayView';
 import ScatterPlot from '~/components/ScatterPlot';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '~/components/ui/resizable';
-import EmptyScatterGuide from '~/components/EmptyScatterGuide';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
+import { Separator } from '~/components/ui/separator';
+import { BASE_URL } from '~/lib/const';
+import type { Game, Point, Team } from '~/types/data';
+import type { Route } from './+types/_index';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -56,6 +51,8 @@ clientLoader.hydrate = true;
 export default function Home() {
   const [searchParams] = useSearchParams();
   const teamID = searchParams.get('teamid');
+  const navigation = useNavigation();
+  const isLoading = Boolean(navigation.location);
 
   return (
     <>
@@ -63,7 +60,13 @@ export default function Home() {
         <Filters teamID={teamID} />
         <ResizablePanelGroup direction="horizontal" className="min-h-[500px]">
           <ResizablePanel id="left-panel" defaultSize={70}>
-            {teamID ? <ScatterPlot teamID={teamID} /> : <EmptyScatterGuide />}
+            {isLoading ? (
+              <ScatterPlotSkeleton />
+            ) : teamID ? (
+              <ScatterPlot teamID={teamID} />
+            ) : (
+              <EmptyScatterGuide />
+            )}
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={30}>

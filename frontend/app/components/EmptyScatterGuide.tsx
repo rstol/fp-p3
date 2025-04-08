@@ -7,8 +7,8 @@ export default function EmptyScatterGuide() {
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center p-8">
-      <h2 className="mb-2 text-2xl font-bold">Select a Team to View Play Data</h2>
+    <div className="flex h-full w-full flex-col items-center justify-center p-6">
+      <h2 className="mb-2 text-xl font-medium">Select a Team to View Play Data</h2>
       <p className="mb-8 max-w-md text-center text-gray-500">
         View basketball play positions clustered by similarity. Compare patterns across games and
         identify strategic trends.
