@@ -68,15 +68,16 @@ class TeamPlaysScatterResource(Resource):
             logger.error(f"Invalid team_id format: {team_id}")
             return {"error": "Invalid team ID format"}, 400
 
-        # Get games for the specified team
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
         logger.info(f"Found {len(games)} games for team {team_id}")
 
-        if games is None or len(games) == 0:
+        # limit to 2 for now
+        games = games.limit(2)
+
+        if games.is_empty():
             logger.warning(f"No games found for team {team_id}")
             return {"error": "No games found for this team"}, 404
 
-        # Collect plays from games
         plays = self._concat_plays_from_games(games)
         logger.info(f"Collected {len(plays)} plays for generating scatter points")
         if plays.is_empty():
@@ -84,20 +85,39 @@ class TeamPlaysScatterResource(Resource):
 
         scatter_data = self._generate_scatter_data(plays)
 
-        return self._apply_clustering(scatter_data)
+        scatter_data = self._apply_clustering(scatter_data)
+
+        scatter_data = scatter_data.select(
+            [
+                "x",
+                "y",
+                "cluster",
+                "play_type",
+                "description",
+            ]
+        )
+
+        return scatter_data.to_dicts()
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
         all_plays = []
-        # Convert games to a list of dictionaries we can work with
-        for game in games.limit(3).rows(named=True):
+        for game in games.rows(named=True):
             game_id = game["game_id"]
             logger.info(f"Processing game {game_id}")
 
             plays = self.dataset_manager.get_plays_for_game(game_id, as_dicts=False)
-            if plays is not None and len(plays) > 0:
+            if not plays.is_empty():
                 all_plays.append(plays)
 
-        return pl.concat(all_plays)
+        plays = pl.concat(all_plays)
+        return plays.with_columns(
+            pl.when(pl.col("event_desc_home") == "nan")
+            .then(pl.col("event_desc_away"))
+            .otherwise(pl.col("event_desc_home"))
+            .str.head(15)
+            .alias("description"),
+            pl.col("event_type").alias("play_type"),
+        )
 
     def _generate_scatter_data(self, plays):
         x_centroids = {k: v[0] for k, v in self.play_centroids.items()}
@@ -132,4 +152,4 @@ class TeamPlaysScatterResource(Resource):
             for i, point in enumerate(data_points):
                 point["cluster"] = i % n_clusters
 
-        return data_points.to_dicts()
+        return data_points
