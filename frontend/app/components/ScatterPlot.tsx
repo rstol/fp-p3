@@ -1,72 +1,24 @@
 import * as d3 from 'd3';
-import { Info, InfoIcon, MousePointer, Move, ZoomIn } from 'lucide-react';
+import { Info, MousePointer, Move, ZoomIn } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { getPanelElement } from 'react-resizable-panels';
-import { useDashboardStore } from '~/lib/stateStore';
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
+import { useLoaderData, useNavigation } from 'react-router';
+import type { clientLoader } from '~/routes/_index';
+import { ScatterPlotSkeleton } from './LoaderSkeletons';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import type { Point } from '~/types/data';
 
-type Point = {
-  x: number;
-  y: number;
-  cluster: number;
-  event_id?: string;
-  play_type?: string;
-  description?: string;
-  period?: number;
-  game_id?: string;
-};
-
-const ScatterPlot = () => {
+const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [data, setData] = useState<Point[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 500, height: 400 });
+  const loaderData = useLoaderData<typeof clientLoader>();
+  const data = loaderData?.scatterData ?? [];
+
+  const navigation = useNavigation();
+  const isLoading = Boolean(navigation.location);
+
   // Keep a reference to the current transform for zooming
   const transformRef = useRef(d3.zoomIdentity);
-
-  const homeTeamId = useDashboardStore((state) => state.homeTeamId);
-
-  const fetchPlayData = async (teamId: string) => {
-    if (!teamId) {
-      setData([]);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const scatterUrl = `/api/v1/teams/${teamId}/plays/scatter`;
-      console.log(`Fetching scatter data from: ${scatterUrl}`);
-
-      const response = await fetch(scatterUrl);
-      console.log(`Scatter API response status: ${response.status}`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data: ${response.status}`);
-      }
-
-      const playData = await response.json();
-      console.log(`Retrieved ${playData.length} play data points`);
-      setData(playData);
-      setIsLoading(false);
-    } catch (err) {
-      console.error('Error fetching play data:', err);
-      setError('Failed to fetch play data: ' + (err instanceof Error ? err.message : String(err)));
-      setIsLoading(false);
-      setData([]);
-    }
-  };
-
-  useEffect(() => {
-    if (homeTeamId) {
-      fetchPlayData(homeTeamId);
-    } else {
-      setData([]);
-      setError(null);
-      setIsLoading(false);
-    }
-  }, [homeTeamId]);
 
   useEffect(() => {
     const panel = getPanelElement('left-panel');
@@ -390,19 +342,13 @@ const ScatterPlot = () => {
     };
   }, [data, dimensions]);
 
+  if (isLoading) {
+    return <ScatterPlotSkeleton />;
+  }
+
   return (
     <div className="flex flex-col">
-      {isLoading && <div className="py-4 text-center">Loading play data...</div>}
-
-      {error && <div className="py-2 text-red-500">{error}</div>}
-
-      {!homeTeamId && !isLoading && !error && (
-        <div className="py-4 text-center">
-          Please select a team in the header to view play data.
-        </div>
-      )}
-
-      {homeTeamId && data.length === 0 && !isLoading && !error && (
+      {teamID && data.length === 0 && !isLoading && (
         <div className="py-4 text-center">No play data available for this team.</div>
       )}
 

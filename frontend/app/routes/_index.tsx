@@ -1,17 +1,21 @@
-import { type ClientLoaderFunctionArgs } from 'react-router';
-import ScatterPlot from '~/components/ScatterPlot';
-import TeamsTable from '~/components/TeamsTable';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
+import {
+  useLocation,
+  useNavigation,
+  useParams,
+  useSearchParams,
+  type ClientLoaderFunctionArgs,
+} from 'react-router';
 import { BASE_URL } from '~/lib/const';
-import type { Team, Game } from '~/types/data';
-import type { Route } from './+types/home';
-import GamesTable from '~/components/GamesTable';
-import Header from '~/components/Header';
-import Filters from '~/components/Filters';
-import PlayView from '~/components/PlayView';
-import ClusterView from '~/components/ClusterView';
-import { PlaysTable } from '~/components/PlaysTable';
+import type { Game, Point, Team } from '~/types/data';
+import type { Route } from './+types/_index';
 import { Separator } from '~/components/ui/separator';
+import ClusterView from '~/components/ClusterView';
+import Filters from '~/components/Filters';
+import { PlaysTable } from '~/components/PlaysTable';
+import PlayView from '~/components/PlayView';
+import ScatterPlot from '~/components/ScatterPlot';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '~/components/ui/resizable';
+import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -21,6 +25,16 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const teamid = url.searchParams.get('teamid');
+  // invariant(typeof teamid === 'string', 'teamid is required');
+  let scatterData: null | Point[] = null;
+  if (teamid) {
+    const playScatterRes = await fetch(`${BASE_URL}/teams/${teamid}/plays/scatter`);
+    if (!playScatterRes.ok) throw new Error('Failed to fetch scatter data');
+    scatterData = await playScatterRes.json();
+  }
+
   const [teamRes, gameRes] = await Promise.all([
     fetch(`${BASE_URL}/teams`),
     fetch(`${BASE_URL}/games`),
@@ -33,19 +47,23 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   return {
     teams,
     games,
+    scatterData,
   };
 }
 
 clientLoader.hydrate = true;
 
-function MainView() {
+export default function Home() {
+  const [searchParams] = useSearchParams();
+  const teamID = searchParams.get('teamid');
+
   return (
     <>
       <div className="space-y-4">
-        <Filters />
+        <Filters teamID={teamID} />
         <ResizablePanelGroup direction="horizontal" className="min-h-[500px]">
           <ResizablePanel id="left-panel" defaultSize={70}>
-            <ScatterPlot />
+            {teamID ? <ScatterPlot teamID={teamID} /> : <EmptyScatterGuide />}
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={30}>
@@ -62,28 +80,5 @@ function MainView() {
         <GamesTable /> */}
       </div>
     </>
-  );
-}
-
-function TaggedPlaysView() {
-  return (
-    <div className="mt-6">
-      <PlaysTable title="Tagged plays" />
-    </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <div className="mx-auto max-w-[1440px] px-4 py-6">
-      <div className="space-y-2">
-        <Header
-          tabs={[
-            { title: 'Play Analyzer', children: <MainView /> },
-            { title: 'Tagged Plays', children: <TaggedPlaysView /> },
-          ]}
-        />
-      </div>
-    </div>
   );
 }

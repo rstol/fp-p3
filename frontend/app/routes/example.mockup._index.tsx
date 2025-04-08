@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import type { Route } from './+types/home';
+import type { Route } from './+types/example.mockup._index';
 import { Button } from '~/components/ui/button';
 import { useState } from 'react';
 import {

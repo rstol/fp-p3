@@ -27,3 +27,14 @@ export type Game = {
   home_team_id: number;
   visitor_team_id: number;
 };
+
+export type Point = {
+  x: number;
+  y: number;
+  cluster: number;
+  event_id?: string;
+  play_type?: string;
+  description?: string;
+  period?: number;
+  game_id?: string;
+};

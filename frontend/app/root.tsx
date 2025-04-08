@@ -9,6 +9,8 @@ import {
 
 import type { Route } from './+types/root';
 import './app.css';
+import Header from './components/Header';
+import { BasketballUISkeleton } from './components/LoaderSkeletons';
 
 export const links: Route.LinksFunction = () => [
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
@@ -33,7 +35,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        {children}
+        <main className="mx-auto max-w-[1440px] px-4 py-6">
+          <Header />
+          {children}
+        </main>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -42,7 +47,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export function HydrateFallback() {
-  return <div>Loading...</div>;
+  return (
+    <main className="mx-auto p-4">
+      <BasketballUISkeleton />
+    </main>
+  );
 }
 
 export default function App() {

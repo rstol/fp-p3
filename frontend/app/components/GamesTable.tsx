@@ -1,5 +1,5 @@
 import { useLoaderData } from 'react-router';
-import type { clientLoader } from '~/routes/home';
+import type { clientLoader } from '~/routes/_index';
 import {
   TableCaption,
   Table,

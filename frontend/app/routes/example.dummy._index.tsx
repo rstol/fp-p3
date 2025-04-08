@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BASE_URL } from '~/lib/const';
 import type { DataArray } from '~/types/data';
-import type { Route } from './+types/home';
+import type { Route } from './+types/example.dummy._index';
 import DataChoiceComponent from '~/components/dummy/DataChoice';
 import ScatterPlot from '~/components/dummy/ScatterPlot';
 

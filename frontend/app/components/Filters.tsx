@@ -6,9 +6,9 @@ import {
   SelectGroup,
   SelectItem,
 } from '~/components/ui/select';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { useLoaderData } from 'react-router';
+import { useLoaderData, useNavigate, useNavigation } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
   Command,
@@ -21,7 +21,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { GameFilter, useDashboardStore } from '~/lib/stateStore';
 import { cn } from '~/lib/utils';
-import type { clientLoader } from '~/routes/home';
+import type { clientLoader } from '~/routes/_index';
+import { Label } from '~/components/ui/label';
 
 const lastGamesFilter = [
   { value: GameFilter.LAST5, label: 'Last 5 Games' },
@@ -29,18 +30,19 @@ const lastGamesFilter = [
   { value: GameFilter.LAST3, label: 'Last 3 Games' },
 ];
 
-export default function Filters() {
+export default function Filters({ teamID }: { teamID: string | null }) {
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
   const [open, setOpen] = useState(false);
-  const homeTeamId = useDashboardStore((state) => state.homeTeamId);
-  const updateHomeTeamId = useDashboardStore((state) => state.updateHomeTeamId);
   const gameFilter = useDashboardStore((state) => state.gameFilter);
   const updateGameFilter = useDashboardStore((state) => state.updateGameFilter);
+  let navigate = useNavigate();
+  const navigation = useNavigation();
+  const isNavigating = Boolean(navigation.location);
 
   const commandItems = teams.map((team) => ({
     value: String(team.teamid),
-    label: `${team.name} (${team.abbreviation})`,
+    label: team.name,
     abbreviation: team.abbreviation,
   }));
 
@@ -48,17 +50,19 @@ export default function Filters() {
     <div className="mt-5 flex gap-4">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            role="combobox"
-            aria-expanded={open}
-            className="h-auto flex-col items-center gap-0 p-0 text-2xl"
-          >
-            {homeTeamId
-              ? commandItems.find((team) => team.value === homeTeamId)?.abbreviation
-              : 'Select team'}
-            <ChevronDown size={28} className="shrink-0" />
-          </Button>
+          <div className="grid gap-1.5">
+            <Label>All Teams</Label>
+            <Button
+              role="combobox"
+              aria-expanded={open}
+              className="items-center"
+              disabled={isNavigating}
+            >
+              {isNavigating && <Loader2 className="animate-spin" />}
+              {teamID ? commandItems.find((team) => team.value === teamID)?.label : 'Select Team'}
+              <ChevronDown size={7} className="shrink-0" />
+            </Button>
+          </div>
         </PopoverTrigger>
         <PopoverContent className="w-[250px] p-0" align="start">
           <Command>
@@ -72,14 +76,14 @@ export default function Filters() {
                     value={team.value}
                     keywords={[team.label]}
                     onSelect={(currentTeamId) => {
-                      updateHomeTeamId(currentTeamId === homeTeamId ? '' : currentTeamId);
                       setOpen(false);
+                      navigate(currentTeamId === teamID ? '/' : `/?teamid=${currentTeamId}`);
                     }}
                   >
                     <Check
                       className={cn(
                         'mr-1 h-4 w-4',
-                        homeTeamId === team.value ? 'opacity-100' : 'opacity-0',
+                        teamID === team.value ? 'opacity-100' : 'opacity-0',
                       )}
                     />
                     {team.label}
@@ -90,20 +94,23 @@ export default function Filters() {
           </Command>
         </PopoverContent>
       </Popover>
-      <Select value={gameFilter} onValueChange={updateGameFilter}>
-        <SelectTrigger className="">
-          <SelectValue placeholder="Last N Games" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {lastGamesFilter.map((filter) => (
-              <SelectItem key={filter.value} value={filter.value}>
-                {filter.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+      <div className="grid gap-1.5">
+        <Label htmlFor="timeframe">Timeframe</Label>
+        <Select value={gameFilter} onValueChange={updateGameFilter}>
+          <SelectTrigger className="">
+            <SelectValue placeholder="Timeframe" />
+          </SelectTrigger>
+          <SelectContent id="timeframe">
+            <SelectGroup>
+              {lastGamesFilter.map((filter) => (
+                <SelectItem key={filter.value} value={filter.value}>
+                  {filter.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card'
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
+import { PlayDetailsSkeleton } from './LoaderSkeletons';
+import { useNavigation } from 'react-router';
 
 function EditableField({
   id,
@@ -38,14 +40,15 @@ function EditableField({
         {label}
       </Label>
       {!isEditing ? (
-        <div className="flex items-center justify-between rounded-md border bg-gray-50 py-1 pr-0.5 pl-3 text-sm">
-          <div className="text-gray-700">
-            {value ? value : <span className="text-gray-400">{placeholder}</span>}
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
-            <Edit size={6} />
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-between border bg-gray-50 px-3! py-1! text-gray-700"
+          onClick={() => setIsEditing(true)}
+        >
+          {value ? value : <span className="text-gray-400">{placeholder}</span>}
+          <Edit size={6} />
+        </Button>
       ) : (
         <form className="flex gap-2" onSubmit={handleSave}>
           {isTextarea ? (
@@ -80,6 +83,13 @@ function EditableField({
 
 export default function PlayView() {
   // TODO get this info for the currently selected play
+
+  const navigation = useNavigation();
+  const isLoading = Boolean(navigation.location);
+
+  if (isLoading) {
+    return <PlayDetailsSkeleton />;
+  }
   return (
     <Card className="gap-4 border-none shadow-none">
       <CardHeader>
