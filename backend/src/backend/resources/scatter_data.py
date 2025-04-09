@@ -2,6 +2,7 @@ import logging
 import os
 import random
 from collections import defaultdict
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -100,14 +101,26 @@ class TeamPlaysScatterResource(Resource):
         return scatter_data.to_dicts()
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
-        all_plays = []
+        all_plays: List[pl.DataFrame] = []
+        schema = None
         for game in games.rows(named=True):
             game_id = game["game_id"]
             logger.info(f"Processing game {game_id}")
 
             plays = self.dataset_manager.get_plays_for_game(game_id, as_dicts=False)
-            if not plays.is_empty():
-                all_plays.append(plays)
+            if isinstance(plays, pl.DataFrame) and not plays.is_empty():
+                # Store first schema or cast subsequent DataFrames to match it
+                if schema is None:
+                    schema = plays.schema 
+                    all_plays.append(plays)
+                else:
+                    # Cast to consistent schema before appending
+                    try:
+                        all_plays.append(plays.cast(schema))
+                    except Exception as e:
+                        logger.warning(f"Skipping game {game_id} due to schema issue: {e}")
+        if not all_plays:
+            return pl.DataFrame()
 
         plays = pl.concat(all_plays)
         return plays.with_columns(
