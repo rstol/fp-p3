@@ -1,3 +1,4 @@
+import localforage from 'localforage';
 import { useNavigation, useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
@@ -8,8 +9,8 @@ import PlayView from '~/components/PlayView';
 import ScatterPlot from '~/components/ScatterPlot';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
 import { Separator } from '~/components/ui/separator';
-import { BASE_URL } from '~/lib/const';
-import type { Game, Point, Team } from '~/types/data';
+import { BASE_URL, GameFilter } from '~/lib/const';
+import type { Point, Team } from '~/types/data';
 import type { Route } from './+types/_index';
 
 export function meta({}: Route.MetaArgs) {
@@ -21,27 +22,47 @@ export function meta({}: Route.MetaArgs) {
 
 export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const url = new URL(request.url);
+  console.log(url.pathname);
   const teamid = url.searchParams.get('teamid');
-  // invariant(typeof teamid === 'string', 'teamid is required');
+  const timeframe = url.searchParams.get('timeframe') ?? GameFilter.LAST3;
+  // invariant(typeof teamid === 'strin g', 'teamid is required');
   let scatterData: null | Point[] = null;
-  if (teamid) {
-    const playScatterRes = await fetch(`${BASE_URL}/teams/${teamid}/plays/scatter`);
-    if (!playScatterRes.ok) throw new Error('Failed to fetch scatter data');
-    scatterData = await playScatterRes.json();
+
+  function createCacheKey(fullUrl: string, includeSearch: boolean = false): string {
+    const urlObj = new URL(fullUrl);
+    return includeSearch ? urlObj.pathname + urlObj.search : urlObj.pathname;
   }
 
-  const [teamRes, gameRes] = await Promise.all([
-    fetch(`${BASE_URL}/teams`),
-    fetch(`${BASE_URL}/games`),
-  ]);
+  // Helper function for caching fetches
+  async function fetchWithCache<T>(url: string, includeSearch: boolean = false): Promise<T> {
+    const key = createCacheKey(url, includeSearch);
+    const cached = await localforage.getItem<T>(key);
+    if (cached) return cached;
 
-  if (!teamRes.ok) throw new Error('Failed to fetch team');
-  if (!gameRes.ok) throw new Error('Failed to fetch games');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch from ${url}`);
 
-  const [teams, games]: [Team[], Game[]] = await Promise.all([teamRes.json(), gameRes.json()]);
+    const data: T = await res.json();
+    await localforage.setItem(key, data);
+    return data;
+  }
+
+  const fetchPromises: [Promise<Team[]>, Promise<Point[] | null>] = [
+    fetchWithCache<Team[]>(`${BASE_URL}/teams`),
+    teamid
+      ? fetchWithCache<Point[]>(
+          `${BASE_URL}/teams/${teamid}/plays/scatter${timeframe ? `?timeframe=${timeframe}` : ''}`,
+          true,
+        )
+      : Promise.resolve(null),
+  ];
+
+  const [teams, scatterDataResult] = await Promise.all(fetchPromises);
+  scatterData = scatterDataResult;
+
   return {
     teams,
-    games,
+    games: [], // unused
     scatterData,
   };
 }

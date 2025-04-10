@@ -1,14 +1,6 @@
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-} from '~/components/ui/select';
 import { Check, ChevronDown, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { useLoaderData, useNavigate, useNavigation } from 'react-router';
+import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
   Command,
@@ -18,11 +10,19 @@ import {
   CommandItem,
   CommandList,
 } from '~/components/ui/command';
+import { Label } from '~/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
-import { GameFilter, useDashboardStore } from '~/lib/stateStore';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
+import { GameFilter } from '~/lib/const';
 import { cn } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
-import { Label } from '~/components/ui/label';
 
 const lastGamesFilter = [
   { value: GameFilter.LAST5, label: 'Last 5 Games' },
@@ -34,9 +34,7 @@ export default function Filters({ teamID }: { teamID: string | null }) {
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
   const [open, setOpen] = useState(false);
-  const gameFilter = useDashboardStore((state) => state.gameFilter);
-  const updateGameFilter = useDashboardStore((state) => state.updateGameFilter);
-  let navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
   const isNavigating = Boolean(navigation.location);
 
@@ -45,6 +43,8 @@ export default function Filters({ teamID }: { teamID: string | null }) {
     label: team.name,
     abbreviation: team.abbreviation,
   }));
+
+  const timeframe = searchParams.get('timeframe') ?? GameFilter.LAST3;
 
   return (
     <div className="mt-5 flex gap-4">
@@ -77,7 +77,10 @@ export default function Filters({ teamID }: { teamID: string | null }) {
                     keywords={[team.label]}
                     onSelect={(currentTeamId) => {
                       setOpen(false);
-                      navigate(currentTeamId === teamID ? '/' : `/?teamid=${currentTeamId}`);
+                      setSearchParams((prev) => {
+                        prev.set('teamid', currentTeamId);
+                        return prev;
+                      });
                     }}
                   >
                     <Check
@@ -96,7 +99,15 @@ export default function Filters({ teamID }: { teamID: string | null }) {
       </Popover>
       <div className="grid gap-1.5">
         <Label htmlFor="timeframe">Timeframe</Label>
-        <Select value={gameFilter} onValueChange={updateGameFilter}>
+        <Select
+          value={timeframe}
+          onValueChange={(value: GameFilter) => {
+            setSearchParams((prev) => {
+              prev.set('timeframe', value);
+              return prev;
+            });
+          }}
+        >
           <SelectTrigger className="">
             <SelectValue placeholder="Timeframe" />
           </SelectTrigger>

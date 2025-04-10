@@ -9,10 +9,11 @@ import {
   TableBody,
   TableCell,
 } from './ui/table';
+import type { Game } from '~/types/data';
 
 export default function GamesTable() {
   const data = useLoaderData<typeof clientLoader>();
-  const games = data?.games ?? [];
+  const games: Game[] = data?.games ?? [];
 
   return (
     <div>
@@ -29,7 +30,7 @@ export default function GamesTable() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {games.map((game) => (
+          {games?.map((game) => (
             <TableRow key={game.game_id}>
               <TableCell>{game.game_id}</TableCell>
               <TableCell>{game.game_date}</TableCell>
