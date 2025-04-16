@@ -19,11 +19,7 @@ export function ClusterViewSkeleton() {
 export function ScatterPlotSkeleton() {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center p-8">
-      <div className="mb-4 flex w-full justify-between">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-8 w-32" />
-      </div>
-      <div className="relative h-96 w-full rounded-md border p-4">
+      <div className="relative h-[500px] w-full p-4 pt-16">
         <Skeleton className="h-full w-full" />
         {/* Fake dots */}
         {Array(20)
@@ -38,10 +34,6 @@ export function ScatterPlotSkeleton() {
               }}
             />
           ))}
-      </div>
-      <div className="mt-4 flex w-full justify-between">
-        <Skeleton className="h-6 w-24" />
-        <Skeleton className="h-6 w-24" />
       </div>
     </div>
   );
@@ -88,8 +80,13 @@ export function PlayDetailsSkeleton() {
           <Skeleton className="ml-2 h-6 w-6" />
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Statistics */}
+export function ClusterDetailsSkeleton() {
+  return (
+    <>
       <Skeleton className="mb-4 h-8 w-48" />
       <div className="space-y-4">
         <div className="flex justify-between">
@@ -101,7 +98,7 @@ export function PlayDetailsSkeleton() {
           <Skeleton className="h-5 w-16" />
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -123,6 +120,7 @@ export function BasketballUISkeleton() {
 
         {/* Right panel (details) */}
         <PlayDetailsSkeleton />
+        <ClusterDetailsSkeleton />
       </div>
     </div>
   );

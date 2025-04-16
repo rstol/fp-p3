@@ -1,12 +1,12 @@
 import { Check, Edit } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useDashboardStore } from '~/lib/stateStore';
+import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { PlayDetailsSkeleton } from './LoaderSkeletons';
-import { useNavigation } from 'react-router';
 
 function EditableField({
   id,
@@ -50,7 +50,7 @@ function EditableField({
           <Edit size={6} />
         </Button>
       ) : (
-        <form className="flex gap-2" onSubmit={handleSave}>
+        <form className="flex gap-2" onSubmit={handleSave} onBlur={handleSave}>
           {isTextarea ? (
             <Textarea
               id={id}
@@ -83,15 +83,25 @@ function EditableField({
 
 export default function PlayView() {
   // TODO get this info for the currently selected play
-
-  const navigation = useNavigation();
-  const isLoading = Boolean(navigation.location);
+  const selectedPlay = useDashboardStore((state) => state.selectedPlay);
+  const isLoading = false; // TODO fetching data
 
   if (isLoading) {
     return <PlayDetailsSkeleton />;
+  } else if (!selectedPlay) {
+    return (
+      <Card className="gap-4 border-none pt-1 shadow-none">
+        <CardHeader>
+          <CardTitle>Selected Play Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-sm">No play selected.</div>
+        </CardContent>
+      </Card>
+    );
   }
   return (
-    <Card className="gap-4 border-none shadow-none">
+    <Card className="gap-4 border-none pt-1 shadow-none">
       <CardHeader>
         <CardTitle>Selected Play Details</CardTitle>
       </CardHeader>

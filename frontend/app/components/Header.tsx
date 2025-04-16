@@ -14,26 +14,28 @@ const headerLinks = [
 export default function Header() {
   const location = useLocation();
   return (
-    <NavigationMenu className="max-w-none justify-start border-b">
-      <NavigationMenuList className="gap-0">
-        {headerLinks.map((link) => {
-          return (
-            <NavLink
-              key={link.to}
-              to={`${link.to}${location.search}`}
-              className={({ isActive }) =>
-                cn(
-                  navigationMenuTriggerStyle(),
-                  'rounded-none px-6 py-3',
-                  isActive ? 'border-primary border-b-2' : 'text-muted-foreground',
-                )
-              }
-            >
-              {link.title}
-            </NavLink>
-          );
-        })}
-      </NavigationMenuList>
-    </NavigationMenu>
+    <div className="max-w-none border-b pt-6">
+      <NavigationMenu className="mx-auto max-w-[1440px] justify-start px-4">
+        <NavigationMenuList className="gap-0">
+          {headerLinks.map((link) => {
+            return (
+              <NavLink
+                key={link.to}
+                to={`${link.to}${location.search}`}
+                className={({ isActive }) =>
+                  cn(
+                    navigationMenuTriggerStyle(),
+                    'rounded-none px-6 py-3',
+                    isActive ? 'border-primary border-b-2' : 'text-muted-foreground',
+                  )
+                }
+              >
+                {link.title}
+              </NavLink>
+            );
+          })}
+        </NavigationMenuList>
+      </NavigationMenu>
+    </div>
   );
 }

@@ -1,9 +1,7 @@
 import localforage from 'localforage';
-import { useNavigation, useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
+import { useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
-import Filters from '~/components/Filters';
-import { ScatterPlotSkeleton } from '~/components/LoaderSkeletons';
 import { PlaysTable } from '~/components/PlaysTable';
 import PlayView from '~/components/PlayView';
 import ScatterPlot from '~/components/ScatterPlot';
@@ -37,7 +35,11 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   async function fetchWithCache<T>(url: string, includeSearch: boolean = false): Promise<T> {
     const key = createCacheKey(url, includeSearch);
     const cached = await localforage.getItem<T>(key);
-    if (cached) return cached;
+    if (cached) {
+      console.log(`Cache hit for ${key}`);
+      return cached;
+    }
+    console.log(`Cache miss for ${key}`);
 
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to fetch from ${url}`);
@@ -72,22 +74,13 @@ clientLoader.hydrate = true;
 export default function Home() {
   const [searchParams] = useSearchParams();
   const teamID = searchParams.get('teamid');
-  const navigation = useNavigation();
-  const isLoading = Boolean(navigation.location);
 
   return (
     <>
       <div className="space-y-4">
-        <Filters teamID={teamID} />
         <ResizablePanelGroup direction="horizontal" className="min-h-[500px]">
           <ResizablePanel id="left-panel" defaultSize={70}>
-            {isLoading ? (
-              <ScatterPlotSkeleton />
-            ) : teamID ? (
-              <ScatterPlot teamID={teamID} />
-            ) : (
-              <EmptyScatterGuide />
-            )}
+            {teamID ? <ScatterPlot teamID={teamID} /> : <EmptyScatterGuide />}
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={30}>

@@ -1,11 +1,28 @@
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
+import { useDashboardStore } from '~/lib/stateStore';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { ClusterDetailsSkeleton } from './LoaderSkeletons';
 
 export default function ClusterView() {
   // TODO get this info for the currently selected cluster
+  const selectedPlay = useDashboardStore((state) => state.selectedPlay);
+  const isLoading = false; // TODO fetching data
+  if (isLoading) return <ClusterDetailsSkeleton />;
+  if (!selectedPlay?.cluster) {
+    return (
+      <Card className="gap-4 border-none pt-1 shadow-none">
+        <CardHeader>
+          <CardTitle>Cluster Statistics</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-sm">No cluster selected.</div>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
-    <Card className="gap-4 border-none shadow-none">
+    <Card className="gap-4 border-none pb-1 shadow-none">
       <CardHeader>
-        <CardTitle>Cluster XY Statistics</CardTitle>
+        <CardTitle>Cluster {selectedPlay?.cluster} Statistics</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="divide-y divide-solid">

@@ -87,7 +87,7 @@ class TeamPlaysScatterResource(Resource):
         scatter_data = self._generate_scatter_data(plays)
 
         scatter_data = self._apply_clustering(scatter_data)
-
+        print(scatter_data.columns)
         scatter_data = scatter_data.select(
             [
                 "x",
@@ -95,6 +95,8 @@ class TeamPlaysScatterResource(Resource):
                 "cluster",
                 "play_type",
                 "description",
+                "event_id",
+                "game_id",
             ]
         )
 

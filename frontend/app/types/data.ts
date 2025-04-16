@@ -32,9 +32,14 @@ export type Point = {
   x: number;
   y: number;
   cluster: number;
-  event_id?: string;
+  event_id: string;
   play_type?: string;
   description?: string;
   period?: number;
-  game_id?: string;
+  game_id: string;
 };
+
+export type Play = Pick<
+  Point,
+  'game_id' | 'event_id' | 'cluster' | 'play_type' | 'description' | 'period'
+>;
