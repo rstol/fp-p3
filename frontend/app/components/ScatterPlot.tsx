@@ -207,31 +207,24 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     },
     [selectedPlay],
   );
+  const zoom = d3.zoom().scaleExtent([1, 50]).on('zoom', zoomed);
 
   const zoomIntoCluster = useCallback(
     (cluster: string) => {
-      if (!svgRef.current || !data.length) return;
+      if (!svgRef.current) return;
       const svg = d3.select(svgRef.current);
-      const zoom = d3.zoom().scaleExtent([1, 50]).on('zoom', zoomed);
 
-      const clusterPoints = data.filter((d) => String(d.cluster) === cluster);
-      if (!clusterPoints.length) return;
+      const circles = svg.selectAll(`circle.cluster-${cluster}`).nodes() as SVGCircleElement[];
 
-      const xScale = d3
-        .scaleLinear()
-        .domain(d3.extent(data, (d) => d.x) as [number, number])
-        .range([margin.left + margin.right, defaultDimensions.width - margin.left - margin.right]);
+      const cxValues = circles.map((c) => c.cx.baseVal.value);
+      const cyValues = circles.map((c) => c.cy.baseVal.value);
 
-      const yScale = d3
-        .scaleLinear()
-        .domain(d3.extent(data, (d) => d.y) as [number, number])
-        .range([defaultDimensions.height - margin.bottom - margin.top, margin.top + margin.bottom]);
+      if (!cxValues.length || !cyValues.length) return;
 
-      const xExtend = d3.extent(clusterPoints, (d) => d.x);
-      const yExtent = d3.extent(clusterPoints, (d) => d.y);
-      if (!xExtend[0] || !yExtent[0]) return;
-      const [x0, x1] = xExtend.map(xScale);
-      const [y1, y0] = yExtent.map(yScale);
+      const x0 = d3.min(cxValues)!;
+      const x1 = d3.max(cxValues)!;
+      const y0 = d3.min(cyValues)!;
+      const y1 = d3.max(cyValues)!;
 
       const k =
         0.9 * Math.min(defaultDimensions.width / (x1 - x0), defaultDimensions.height / (y1 - y0));
@@ -247,7 +240,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
       setZoomedCluster(cluster);
     },
-    [data, zoomed],
+    [zoom],
   );
 
   // Main rendering effect when data or dimensions change
@@ -284,10 +277,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     // Create a group for all visualization content
     const container = svg.append('g');
 
-    // Set up zoom behavior
-    const zoom = d3.zoom().scaleExtent([1, 50]).on('zoom', zoomed);
     svg.call(zoom as any).on('dblclick.zoom', null);
-
     // Apply zoom behavior to svg but filter so it only works on background or when using mousewheel
     function reset() {
       setZoomedCluster(null);
@@ -303,33 +293,8 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       zoomReset: reset,
     });
 
-    function zoomIntoCluster(cluster: string) {
-      setZoomedCluster(cluster);
-      const clusterPoints = data.filter((d) => String(d.cluster) === cluster);
-
-      // Get extent of cluster points in x and y dimensions
-      const xExtend = d3.extent(clusterPoints, (d) => d.x);
-      const yExtent = d3.extent(clusterPoints, (d) => d.y);
-      if (!xExtend[0] || !yExtent[0]) return;
-      const [x0, x1] = xExtend.map(xScale);
-      const [y1, y0] = yExtent.map(yScale);
-
-      // Calculate the zoom parameters (scale and translate)
-      const k =
-        0.9 * Math.min(defaultDimensions.width / (x1 - x0), defaultDimensions.height / (y1 - y0));
-      const tx = (defaultDimensions.width - k * (x0 + x1)) / 2;
-      const ty = (defaultDimensions.height - k * (y0 + y1)) / 2;
-
-      // Create the transform and animate to it
-      const transform = d3.zoomIdentity.translate(tx, ty).scale(k);
-
-      svg
-        .transition()
-        .duration(750)
-        .call(zoom.transform as any, transform);
-    }
-
     // Function to handle point dragging
+    const clusters = d3.groups(data, (d) => d.cluster);
     const handlePointDrag = (selection: d3.Selection<any, Point, any, any>) => {
       const drag = d3
         .drag<SVGCircleElement, Point>()
@@ -363,7 +328,6 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           d3.select(this).attr('stroke-width', 1).attr('stroke', 'white').attr('cursor', 'grab');
 
           // Update cluster assignment
-          const clusters = d3.groups(data, (d) => d.cluster);
           let minDist = Infinity;
           let closest = d.cluster;
 
@@ -392,8 +356,8 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     };
 
     // Create contours for each cluster first to be drawn below the points
-    const grouped = d3.groups(data, (d) => d.cluster);
-    for (const [clusterId, points] of grouped) {
+
+    for (const [clusterId, points] of clusters) {
       if (points.length >= 3) {
         const density = d3
           .contourDensity<Point>()
@@ -431,6 +395,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       })
       .attr('cx', (d) => xScale(d.x))
       .attr('cy', (d) => yScale(d.y))
+      .attr('class', (d) => `cluster-${d.cluster}`)
       .attr('fill', (d) => color(String(d.cluster)))
       .attr('stroke', (d) => {
         const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
@@ -452,6 +417,9 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       // .attr('cursor', 'grab')
       // .call(handlePointDrag)
       .on('mouseover', (event, d) => {
+        const clusterClass = `.cluster-${d.cluster}`;
+        container.selectAll('circle').attr('opacity', 0.4);
+        container.selectAll(clusterClass).attr('opacity', 1);
         tooltip?.html(`
       <div>
         <p>Type: ${d.play_type || 'Unknown'}</p>
@@ -467,6 +435,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           .style('left', event.clientX + 10 + 'px');
       })
       .on('mouseout', () => {
+        container.selectAll('circle').attr('opacity', 1);
         return tooltip?.style('visibility', 'hidden');
       });
   }, [data, selectedPlay, svgRef.current]);
