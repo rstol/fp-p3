@@ -35,6 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
+        <div className="tooltip pointer-events-none invisible absolute z-100 max-w-[300px] rounded-sm border bg-white p-2.5 break-words" />
         <main>
           <Header />
           <div className="mx-auto max-w-[1440px] px-4 py-6">{children}</div>

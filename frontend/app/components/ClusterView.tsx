@@ -7,7 +7,7 @@ export default function ClusterView() {
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
   const isLoading = false; // TODO fetching data
   if (isLoading) return <ClusterDetailsSkeleton />;
-  if (!selectedPlay?.cluster) {
+  if (!selectedPlay) {
     return (
       <Card className="gap-4 border-none pt-1 shadow-none">
         <CardHeader>

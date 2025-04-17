@@ -47,7 +47,7 @@ export default function Filters({ teamID }: { teamID: string | null }) {
   const timeframe = searchParams.get('timeframe') ?? GameFilter.LAST3;
 
   return (
-    <div className="absolute top-3 left-3 z-10 flex gap-3">
+    <div className="absolute top-2 left-2 z-10 flex gap-3">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div className="grid gap-1.5">
@@ -58,8 +58,13 @@ export default function Filters({ teamID }: { teamID: string | null }) {
               disabled={isNavigating}
             >
               <Label className="text-xs">Team:</Label>
-              {isNavigating && <Loader2 className="animate-spin" />}
-              {teamID ? commandItems.find((team) => team.value === teamID)?.label : 'Select Team'}
+              {isNavigating ? (
+                <Loader2 className="animate-spin" />
+              ) : teamID ? (
+                commandItems.find((team) => team.value === teamID)?.label
+              ) : (
+                'Select Team'
+              )}
               <ChevronDown size={7} className="shrink-0" />
             </Button>
           </div>
@@ -107,11 +112,15 @@ export default function Filters({ teamID }: { teamID: string | null }) {
             });
           }}
         >
-          <SelectTrigger className="gap-1.5 bg-white">
+          <SelectTrigger className="gap-1.5 border border-gray-400 bg-white">
             <Label htmlFor="timeframe" className="text-xs">
               Timeframe:
             </Label>
-            <SelectValue placeholder="Timeframe" />
+            {isNavigating ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <SelectValue placeholder="Timeframe" />
+            )}
           </SelectTrigger>
           <SelectContent id="timeframe">
             <SelectGroup>

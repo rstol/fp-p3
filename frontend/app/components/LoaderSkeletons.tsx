@@ -41,7 +41,7 @@ export function ScatterPlotSkeleton() {
 
 export function PlayDetailsSkeleton() {
   return (
-    <div className="w-96 p-4">
+    <>
       <Skeleton className="mb-4 h-10 w-full" />
 
       {/* Court diagram */}
@@ -80,7 +80,7 @@ export function PlayDetailsSkeleton() {
           <Skeleton className="ml-2 h-6 w-6" />
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -119,8 +119,10 @@ export function BasketballUISkeleton() {
         <ClusterViewSkeleton />
 
         {/* Right panel (details) */}
-        <PlayDetailsSkeleton />
-        <ClusterDetailsSkeleton />
+        <div className="w-96 p-4">
+          <PlayDetailsSkeleton />
+          <ClusterDetailsSkeleton />
+        </div>
       </div>
     </div>
   );
