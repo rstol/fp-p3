@@ -99,7 +99,6 @@ class TeamPlaysScatterResource(Resource):
         scatter_data = self._generate_scatter_data(plays)
 
         scatter_data = self._apply_clustering(scatter_data)
-        print(scatter_data.columns)
         scatter_data = scatter_data.select(
             [
                 "x",
@@ -112,10 +111,7 @@ class TeamPlaysScatterResource(Resource):
             ]
         )
 
-        return {
-            "total_games": total_games,
-            "points": scatter_data.to_dicts()
-        }
+        return {"total_games": total_games, "points": scatter_data.to_dicts()}
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
         all_plays: list[pl.DataFrame] = []
@@ -177,7 +173,11 @@ class TeamPlaysScatterResource(Resource):
         except (AttributeError, TypeError, ValueError) as e:
             logger.error(f"Error during clustering: {e}")
             # Default to assigning alternating clusters
-            for i, point in enumerate(data_points):
-                point["cluster"] = i % n_clusters
+            clusters = []
+            for i in range(len(data_points)):
+                clusters.append(i % n_clusters)
+            data_points = data_points.with_columns(
+                pl.Series(clusters, dtype=pl.Int32).alias("cluster")
+            )
 
         return data_points

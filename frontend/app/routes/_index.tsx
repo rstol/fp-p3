@@ -5,6 +5,7 @@ import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import { PlaysTable } from '~/components/PlaysTable';
 import PlayView from '~/components/PlayView';
 import ScatterPlot from '~/components/ScatterPlot';
+import { Button } from '~/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
 import { Separator } from '~/components/ui/separator';
 import { BASE_URL, GameFilter } from '~/lib/const';
@@ -28,6 +29,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   console.log(url.pathname);
   const teamid = url.searchParams.get('teamid');
   const timeframe = url.searchParams.get('timeframe') ?? GameFilter.LAST3;
+  const forceRefresh = url.searchParams.get('refresh') === 'true';
   // invariant(typeof teamid === 'strin g', 'teamid is required');
   let scatterData: null | ScatterDataResponse = null;
 
@@ -37,13 +39,18 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   }
 
   // Helper function for caching fetches
-  async function fetchWithCache<T>(url: string, includeSearch: boolean = false): Promise<T> {
+  async function fetchWithCache<T>(url: string, includeSearch: boolean = false, skipCache: boolean = false): Promise<T> {
     const key = createCacheKey(url, includeSearch);
-    const cached = await localforage.getItem<T>(key);
-    if (cached) {
-      console.log(`Cache hit for ${key}`);
-      return cached;
+    
+    // Check if we should skip cache due to force refresh
+    if (!skipCache) {
+      const cached = await localforage.getItem<T>(key);
+      if (cached) {
+        console.log(`Cache hit for ${key}`);
+        return cached;
+      }
     }
+    
     console.log(`Cache miss for ${key}`);
 
     const res = await fetch(url);
@@ -60,6 +67,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
       ? fetchWithCache<ScatterDataResponse>(
           `${BASE_URL}/teams/${teamid}/plays/scatter${timeframe ? `?timeframe=${timeframe}` : ''}`,
           true,
+          forceRefresh // Skip cache if forceRefresh is true
         )
       : Promise.resolve(null),
   ];
@@ -76,6 +84,13 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 
 clientLoader.hydrate = true;
 
+// Function to clear cache and refresh data
+async function clearDataCache() {
+  await localforage.clear();
+  window.location.href = window.location.pathname + '?refresh=true&' + 
+    window.location.search.substring(1).replace(/&?refresh=true/g, '');
+}
+
 export default function Home() {
   const [searchParams] = useSearchParams();
   const teamID = searchParams.get('teamid');
@@ -83,6 +98,16 @@ export default function Home() {
   return (
     <>
       <div className="space-y-4">
+        <div className="flex justify-end px-4 py-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={clearDataCache}
+            className="text-xs"
+          >
+            Refresh Data
+          </Button>
+        </div>
         <ResizablePanelGroup direction="horizontal" className="min-h-[500px]">
           <ResizablePanel id="left-panel" defaultSize={70}>
             {teamID ? <ScatterPlot teamID={teamID} /> : <EmptyScatterGuide />}

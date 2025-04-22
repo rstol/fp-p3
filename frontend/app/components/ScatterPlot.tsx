@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Circle, GrabIcon, Info, Minus, Move, Plus, RefreshCcw, ZoomIn } from 'lucide-react';
+import { Circle, GrabIcon, Info, Minus, Move, Plus, RefreshCcw, Tag, ZoomIn } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import type { clientLoader } from '~/routes/_index';
@@ -10,6 +10,7 @@ import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDashboardStore } from '~/lib/stateStore';
 import { getPlayId } from '~/lib/utils';
+import { applyTagsToData } from '~/lib/tag-store';
 import {
   Select,
   SelectTrigger,
@@ -32,15 +33,15 @@ const getZoomMethod =
   };
 
 function Legend({
-  clusters,
+  tags,
   color,
-  zoomedCluster,
-  onSelectCluster,
+  zoomedTag,
+  onSelectTag,
 }: {
-  clusters: string[];
+  tags: string[];
   color: d3.ScaleOrdinal<string, string>;
-  zoomedCluster: string | null;
-  onSelectCluster: (cluster: string) => void;
+  zoomedTag: string | null;
+  onSelectTag: (tag: string) => void;
 }) {
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
@@ -48,21 +49,21 @@ function Legend({
 
   return (
     <div className="absolute top-2 right-2 z-10">
-      <Select onValueChange={onSelectCluster} value={zoomedCluster ?? undefined}>
+      <Select onValueChange={onSelectTag} value={zoomedTag ?? undefined}>
         <SelectTrigger className="gap-1 border border-gray-400 bg-white">
           <Label htmlFor="timeframe" className="text-xs">
             Legend:
           </Label>
-          <SelectValue placeholder="View Cluster" />
+          <SelectValue placeholder="View Tag" />
         </SelectTrigger>
         <SelectContent>
-          {clusters.map((cluster, index) => {
-            const c = color(String(cluster));
+          {tags.map((tag, index) => {
+            const c = color(tag);
             return (
-              <SelectItem key={index} value={cluster}>
+              <SelectItem key={index} value={tag}>
                 <span className="flex items-center gap-1">
                   <Circle fill={c} stroke={c} width={10} height={10} />
-                  Cluster {cluster}
+                  {tag}
                 </span>
               </SelectItem>
             );
@@ -174,10 +175,13 @@ function InfoBar() {
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const loaderData = useLoaderData<typeof clientLoader>();
-  const data = loaderData?.scatterData?.points ?? [];
+  // Apply client-side tags to the scatter plot data
+  const data = applyTagsToData(loaderData?.scatterData?.points ?? []);
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
   const updatePlay = useDashboardStore((state) => state.updatePlay);
-  const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
+  // Listen for tag updates to refresh the visualization
+  const tagUpdateCounter = useDashboardStore((state) => state.tagUpdateCounter);
+  const [zoomedTag, setZoomedTag] = useState<string | null>(null);
   const color = d3.scaleOrdinal(d3.schemeCategory10);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
 
@@ -209,12 +213,15 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   );
   const zoom = d3.zoom().scaleExtent([1, 50]).on('zoom', zoomed);
 
-  const zoomIntoCluster = useCallback(
-    (cluster: string) => {
+  const zoomIntoTag = useCallback(
+    (tag: string) => {
       if (!svgRef.current) return;
       const svg = d3.select(svgRef.current);
 
-      const circles = svg.selectAll(`circle.cluster-${cluster}`).nodes() as SVGCircleElement[];
+      // The class is based on the tag - we need to make sure it's a valid CSS class
+      // Replace any non-alphanumeric characters with hyphens
+      const tagClass = tag.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      const circles = svg.selectAll(`circle.tag-${tagClass}`).nodes() as SVGCircleElement[];
 
       const cxValues = circles.map((c) => c.cx.baseVal.value);
       const cyValues = circles.map((c) => c.cy.baseVal.value);
@@ -238,7 +245,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         .duration(750)
         .call(zoom.transform as any, transform);
 
-      setZoomedCluster(cluster);
+      setZoomedTag(tag);
     },
     [zoom],
   );
@@ -280,7 +287,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     svg.call(zoom as any).on('dblclick.zoom', null);
     // Apply zoom behavior to svg but filter so it only works on background or when using mousewheel
     function reset() {
-      setZoomedCluster(null);
+      setZoomedTag(null);
       svg
         .transition()
         .duration(750)
@@ -293,71 +300,13 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       zoomReset: reset,
     });
 
-    // Function to handle point dragging
-    const clusters = d3.groups(data, (d) => d.cluster);
-    const handlePointDrag = (selection: d3.Selection<any, Point, any, any>) => {
-      const drag = d3
-        .drag<SVGCircleElement, Point>()
-        .on('start', function (event, d) {
-          // Prevent zoom during drag
-          event.sourceEvent.stopPropagation();
-          d3.select(this)
-            .raise()
-            .attr('r', 7)
-            .attr('stroke-width', 2)
-            .attr('stroke', 'black')
-            .attr('cursor', 'grabbing');
-        })
-        .on('drag', function (event, d) {
-          // Prevent zoom during drag
-          event.sourceEvent.stopPropagation();
+    // Group data by tag for drawing contours
+    // If a point doesn't have a tag, use its cluster value as fallback
+    const pointTags = data.map(d => d.tag || `${d.cluster}`);
+    const tagGroups = d3.groups(data, (d) => d.tag || `${d.cluster}`);
 
-          // Get mouse position relative to the container
-          const [x, y] = d3.pointer(event, container.node());
-
-          // Update data coordinates
-          d.x = xScale.invert(x);
-          d.y = yScale.invert(y);
-
-          // Update circle position
-          d3.select(this).attr('cx', xScale(d.x)).attr('cy', yScale(d.y));
-        })
-        .on('end', function (event, d) {
-          event.sourceEvent.stopPropagation();
-
-          d3.select(this).attr('stroke-width', 1).attr('stroke', 'white').attr('cursor', 'grab');
-
-          // Update cluster assignment
-          let minDist = Infinity;
-          let closest = d.cluster;
-
-          for (const [id, points] of clusters) {
-            const cx = d3.mean(points, (p) => p.x)!;
-            const cy = d3.mean(points, (p) => p.y)!;
-            const dist = (cx - d.x) ** 2 + (cy - d.y) ** 2;
-            if (dist < minDist) {
-              minDist = dist;
-              closest = +id;
-            }
-          }
-
-          // Update the cluster if it changed
-          if (d.cluster !== closest) {
-            d.cluster = closest;
-
-            // Instead of redrawing everything, update just this point's fill color
-            d3.select(this).attr('fill', color(String(d.cluster)) as string);
-          }
-        });
-
-      // Apply drag behavior to the selection
-      selection.call(drag as any);
-      return selection;
-    };
-
-    // Create contours for each cluster first to be drawn below the points
-
-    for (const [clusterId, points] of clusters) {
+    // Create contours for each tag group first to be drawn below the points
+    for (const [tag, points] of tagGroups) {
       if (points.length >= 3) {
         const density = d3
           .contourDensity<Point>()
@@ -375,8 +324,8 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           .join('path')
           .attr('d', d3.geoPath())
           .attr('fill-opacity', 0.05)
-          .attr('fill', color(String(clusterId)))
-          .attr('stroke', color(String(clusterId)))
+          .attr('fill', color(tag))
+          .attr('stroke', color(tag))
           .attr('stroke-width', 0.8)
           .attr('opacity', 0.7)
           .attr('cursor', 'move');
@@ -395,8 +344,12 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       })
       .attr('cx', (d) => xScale(d.x))
       .attr('cy', (d) => yScale(d.y))
-      .attr('class', (d) => `cluster-${d.cluster}`)
-      .attr('fill', (d) => color(String(d.cluster)))
+      .attr('class', (d) => {
+        // Create a CSS-safe class name from the tag
+        const tagClass = (d.tag || `${d.cluster}`).replace(/[^a-z0-9]/gi, '-').toLowerCase();
+        return `tag-${tagClass}`;
+      })
+      .attr('fill', (d) => color(d.tag || `${d.cluster}`))
       .attr('stroke', (d) => {
         const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
         return isSelected ? 'black' : 'white';
@@ -413,18 +366,16 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           updatePlay(play);
         }
       })
-      // TODO the handlePointDrag is not thought out and needs to be reworked (reassign in backend etc.)
-      // .attr('cursor', 'grab')
-      // .call(handlePointDrag)
       .on('mouseover', (event, d) => {
-        const clusterClass = `.cluster-${d.cluster}`;
+        const tag = d.tag || `${d.cluster}`;
+        const tagClass = `.tag-${tag.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
         container.selectAll('circle').attr('opacity', 0.4);
-        container.selectAll(clusterClass).attr('opacity', 1);
+        container.selectAll(tagClass).attr('opacity', 1);
         tooltip?.html(`
       <div>
         <p>Type: ${d.play_type || 'Unknown'}</p>
         <p>Description: ${d.description || 'N/A'}</p>
-        <p>Cluster: ${d.cluster}</p>
+        <p><span style="display:inline-flex;align-items:center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tag:</span> ${tag}</p>
       </div>
     `);
         return tooltip.style('visibility', 'visible');
@@ -438,7 +389,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         container.selectAll('circle').attr('opacity', 1);
         return tooltip?.style('visibility', 'hidden');
       });
-  }, [data, selectedPlay, svgRef.current]);
+  }, [data, selectedPlay, svgRef.current, tagUpdateCounter]);
 
   useEffect(() => {
     zoomed({ transform: currentTransform });
@@ -446,7 +397,10 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
-  const clusters = Array.from(new Set(data.map((d) => String(d.cluster)))).sort();
+  
+  // Extract unique tags from data points, falling back to clusters if tag is not available
+  const tags = Array.from(new Set(data.map((d) => d.tag || `${d.cluster}`))).sort();
+  
   return (
     <div className="flex flex-col">
       {teamID && data.length === 0 ? (
@@ -455,10 +409,10 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         <div className="relative">
           <Filters teamID={teamID} />
           <Legend
-            clusters={clusters}
+            tags={tags}
             color={color}
-            zoomedCluster={zoomedCluster}
-            onSelectCluster={zoomIntoCluster}
+            zoomedTag={zoomedTag}
+            onSelectTag={zoomIntoTag}
           />
           <ZoomControls svgRef={svgRef} />
           {isLoading ? (

@@ -28,20 +28,20 @@ export type Game = {
   visitor_team_id: number;
 };
 
-export type Point = {
+export interface Point {
   x: number;
   y: number;
-  cluster: number;
-  event_id: string;
-  play_type?: string;
-  description?: string;
-  period?: number;
   game_id: string;
-};
+  event_id: string;
+  cluster: number;
+  description?: string;
+  play_type?: string;
+  tag?: string;
+}
 
 export type Play = Pick<
   Point,
-  'game_id' | 'event_id' | 'cluster' | 'play_type' | 'description' | 'period'
+  'game_id' | 'event_id' | 'cluster' | 'play_type' | 'description'
 >;
 
 export type DetailedPlay = {
@@ -56,4 +56,5 @@ export type DetailedPlay = {
   player1_name?: string;
   player2_id?: number;
   player2_name?: string;
+  tags?: string[];
 };
