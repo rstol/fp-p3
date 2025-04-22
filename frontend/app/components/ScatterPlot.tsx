@@ -119,6 +119,7 @@ function InfoBar() {
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">
               <p>Different colors represent different types of plays.</p>
+              <p>Color brightness indicates recency - brighter points are from more recent games.</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -349,7 +350,19 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         const tagClass = (d.tag || `${d.cluster}`).replace(/[^a-z0-9]/gi, '-').toLowerCase();
         return `tag-${tagClass}`;
       })
-      .attr('fill', (d) => color(d.tag || `${d.cluster}`))
+      .attr('fill', (d) => {
+        const baseColor = color(d.tag || `${d.cluster}`);
+        // If recency is provided, use it to adjust color brightness
+        if (d.recency !== undefined) {
+          // Convert to HSL for easier brightness adjustment
+          const hsl = d3.hsl(baseColor);
+          // Adjust lightness based on recency (higher recency = less lightness adjustment)
+          // This ensures newer plays are more vibrant
+          hsl.l = Math.min(0.9, hsl.l + 0.5 * (1 - d.recency));
+          return hsl.toString();
+        }
+        return baseColor;
+      })
       .attr('stroke', (d) => {
         const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
         return isSelected ? 'black' : 'white';
@@ -376,6 +389,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         <p>Type: ${d.play_type || 'Unknown'}</p>
         <p>Description: ${d.description || 'N/A'}</p>
         <p><span style="display:inline-flex;align-items:center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tag:</span> ${tag}</p>
+        ${d.recency !== undefined ? `<p>Recency: ${Math.round(d.recency * 100)}%</p>` : ''}
       </div>
     `);
         return tooltip.style('visibility', 'visible');

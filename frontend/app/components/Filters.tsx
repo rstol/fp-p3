@@ -65,17 +65,18 @@ export default function Filters({ teamID }: { teamID: string | null }) {
 
       try {
         setIsLoadingGames(true);
-        // Make a request to the scatter endpoint with a large timeframe to get total games
-        const response = await fetch(`${BASE_URL}/teams/${teamID}/plays/scatter?timeframe=last_100`);
+        // Use the proper teams/games endpoint to get the total number of games
+        const response = await fetch(`${BASE_URL}/teams/${teamID}/games`);
         
         if (response.ok) {
-          const data = await response.json();
-          setAvailableGames(data.total_games);
+          const games = await response.json();
+          const totalGames = games.length;
+          setAvailableGames(totalGames);
           
           // If current filter exceeds available games, reset to max available
           const currentGames = parseInt(timeframe.split('_')[1]);
-          if (currentGames > data.total_games) {
-            const newTimeframe = `last_${data.total_games}`;
+          if (currentGames > totalGames) {
+            const newTimeframe = `last_${totalGames}`;
             setSearchParams((prev) => {
               prev.set('timeframe', newTimeframe);
               return prev;

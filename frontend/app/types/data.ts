@@ -37,6 +37,7 @@ export interface Point {
   description?: string;
   play_type?: string;
   tag?: string;
+  recency?: number;
 }
 
 export type Play = Pick<
