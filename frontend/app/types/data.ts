@@ -43,3 +43,17 @@ export type Play = Pick<
   Point,
   'game_id' | 'event_id' | 'cluster' | 'play_type' | 'description' | 'period'
 >;
+
+export type DetailedPlay = {
+  game_id: string;
+  event_id: string;
+  event_type?: number;
+  event_desc_home?: string;
+  event_desc_away?: string;
+  period?: number;
+  time_remaining?: string;
+  player1_id?: number;
+  player1_name?: string;
+  player2_id?: number;
+  player2_name?: string;
+};
