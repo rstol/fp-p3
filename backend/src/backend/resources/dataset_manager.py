@@ -1,6 +1,7 @@
 import polars as pl
 from polars import DataFrame
 
+
 class DatasetManager:
     def __init__(self, data_dir: str) -> None:
         self.data_dir = data_dir
@@ -19,7 +20,9 @@ class DatasetManager:
     def get_games(self):
         return self.games.to_dicts()
 
-    def get_games_for_team(self, team_id: str, as_dicts: bool = True) -> list[dict[str, str]] | DataFrame:
+    def get_games_for_team(
+        self, team_id: str, as_dicts: bool = True
+    ) -> list[dict[str, str]] | DataFrame:
         team_id = int(team_id)
         games = self.games.filter(
             (pl.col("home_team_id") == team_id) | (pl.col("visitor_team_id") == team_id)
@@ -30,7 +33,9 @@ class DatasetManager:
         game_dicts = self.games.filter(pl.col("game_id") == game_id).head(1).to_dicts()
         return game_dicts[0] if len(game_dicts) > 0 else None
 
-    def get_plays_for_game(self, game_id: str, as_dicts: bool = True) -> list[dict[str, str]] | DataFrame:
+    def get_plays_for_game(
+        self, game_id: str, as_dicts: bool = True
+    ) -> list[dict[str, str]] | DataFrame:
         plays = self._load_game_plays(game_id)
         return plays.to_dicts() if as_dicts else plays
 

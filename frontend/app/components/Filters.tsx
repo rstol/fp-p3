@@ -73,7 +73,7 @@ export default function Filters({ teamID }: { teamID: string | null }) {
           <Command>
             <CommandInput placeholder="Search team" />
             <CommandList>
-              <CommandEmpty>No teans found.</CommandEmpty>
+              <CommandEmpty>No teams found.</CommandEmpty>
               <CommandGroup>
                 {commandItems.map((team) => (
                   <CommandItem
