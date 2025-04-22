@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
@@ -20,14 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
-import { GameFilter } from '~/lib/const';
+import { GameFilter, BASE_URL } from '~/lib/const';
 import { cn } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
 
-const lastGamesFilter = [
-  { value: GameFilter.LAST5, label: 'Last 5 Games' },
-  { value: GameFilter.LAST4, label: 'Last 4 Games' },
+const allGameFilters = [
+  { value: GameFilter.LAST1, label: 'Last Game' },
+  { value: GameFilter.LAST2, label: 'Last 2 Games' },
   { value: GameFilter.LAST3, label: 'Last 3 Games' },
+  { value: GameFilter.LAST4, label: 'Last 4 Games' },
+  { value: GameFilter.LAST5, label: 'Last 5 Games' },
 ];
 
 export default function Filters({ teamID }: { teamID: string | null }) {
@@ -37,6 +39,8 @@ export default function Filters({ teamID }: { teamID: string | null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
   const isNavigating = Boolean(navigation.location);
+  const [availableGames, setAvailableGames] = useState<number>(5); // Default to 5
+  const [isLoadingGames, setIsLoadingGames] = useState(false);
 
   const commandItems = teams.map((team) => ({
     value: String(team.teamid),
@@ -45,6 +49,52 @@ export default function Filters({ teamID }: { teamID: string | null }) {
   }));
 
   const timeframe = searchParams.get('timeframe') ?? GameFilter.LAST3;
+
+  // Filter the game options based on available games
+  const availableGameFilters = allGameFilters.filter(
+    (filter) => parseInt(filter.value.split('_')[1]) <= availableGames
+  );
+
+  // Fetch the number of available games when team ID changes
+  useEffect(() => {
+    const fetchAvailableGames = async () => {
+      if (!teamID) {
+        setAvailableGames(5); // Reset to default when no team selected
+        return;
+      }
+
+      try {
+        setIsLoadingGames(true);
+        // Make a request to the scatter endpoint with a large timeframe to get total games
+        const response = await fetch(`${BASE_URL}/teams/${teamID}/plays/scatter?timeframe=last_100`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableGames(data.total_games);
+          
+          // If current filter exceeds available games, reset to max available
+          const currentGames = parseInt(timeframe.split('_')[1]);
+          if (currentGames > data.total_games) {
+            const newTimeframe = `last_${data.total_games}`;
+            setSearchParams((prev) => {
+              prev.set('timeframe', newTimeframe);
+              return prev;
+            });
+          }
+        } else {
+          console.error('Error fetching game data:', await response.text());
+          setAvailableGames(5); // Fallback to default
+        }
+      } catch (error) {
+        console.error('Failed to fetch game data:', error);
+        setAvailableGames(5); // Fallback to default
+      } finally {
+        setIsLoadingGames(false);
+      }
+    };
+
+    fetchAvailableGames();
+  }, [teamID, setSearchParams, timeframe]);
 
   return (
     <div className="absolute top-2 left-2 z-10 flex gap-3">
@@ -111,12 +161,13 @@ export default function Filters({ teamID }: { teamID: string | null }) {
               return prev;
             });
           }}
+          disabled={isLoadingGames || isNavigating}
         >
           <SelectTrigger className="gap-1.5 border border-gray-400 bg-white">
             <Label htmlFor="timeframe" className="text-xs">
               Timeframe:
             </Label>
-            {isNavigating ? (
+            {isNavigating || isLoadingGames ? (
               <Loader2 className="animate-spin" />
             ) : (
               <SelectValue placeholder="Timeframe" />
@@ -124,11 +175,15 @@ export default function Filters({ teamID }: { teamID: string | null }) {
           </SelectTrigger>
           <SelectContent id="timeframe">
             <SelectGroup>
-              {lastGamesFilter.map((filter) => (
-                <SelectItem key={filter.value} value={filter.value}>
-                  {filter.label}
-                </SelectItem>
-              ))}
+              {availableGameFilters.length > 0 ? (
+                availableGameFilters.map((filter) => (
+                  <SelectItem key={filter.value} value={filter.value}>
+                    {filter.label}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value={GameFilter.LAST1}>Last Game</SelectItem>
+              )}
             </SelectGroup>
           </SelectContent>
         </Select>

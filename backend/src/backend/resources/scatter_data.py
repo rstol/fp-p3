@@ -77,6 +77,7 @@ class TeamPlaysScatterResource(Resource):
 
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
         logger.info(f"Found {len(games)} games for team {team_id}")
+        total_games = len(games)
 
         # Sort games by date (if available) and limit to the requested number
         if not games.is_empty() and "game_date" in games.columns:
@@ -111,7 +112,10 @@ class TeamPlaysScatterResource(Resource):
             ]
         )
 
-        return scatter_data.to_dicts()
+        return {
+            "total_games": total_games,
+            "points": scatter_data.to_dicts()
+        }
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
         all_plays: list[pl.DataFrame] = []
