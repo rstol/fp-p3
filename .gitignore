@@ -138,3 +138,5 @@ cache/
 
 # Data 
 nba_tracking_data
+raw
+games_preprocessed
