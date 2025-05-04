@@ -4,7 +4,7 @@
 
 - Python 3.13 (install with `pyenv install 3.13`)
 - Docker and Docker Compose
-- Poetry (Python package manager)
+- UV (Python package manager)
 
 ## Installation
 
@@ -14,30 +14,56 @@
    cd backend
    ```
 
-2. Install dependencies using Poetry:
+2. Activate the virtual environment:
 
    ```
-   poetry install
+   uv venv
    ```
+  Then run the generated `source ...` command that uv provides.
 
-3. Activate the virtual environment:
+3. Install dependencies using uv:
 
    ```
-   poetry env activate
+   uv sync
    ```
-
-   Then run the generated `source ...` command that Poetry provides.
 
 4. Verify the installation:
 
    ```
-   which python3  # Should return a path to poetry virtualenvs
+   which python3  # Should return a path to uv virtualenvs
    ```
 
 5. Install pre-commit hooks for code quality:
    ```
    pre-commit install
    ```
+
+### Setting up `.basketball_profile`
+
+Create a file called `.basketball_profile` in your home directory:
+
+```bash
+nano ~/.basketball_profile
+```
+
+and copy and paste in the contents of [`.basketball_profile`](.basketball_profile), replacing each of the variable values with paths relevant to your environment.
+Next, add the following line to the end of your `~/.bashrc` or `./.zshrc`:
+
+```bash
+source ~/.basketball_profile
+```
+
+run:
+
+```bash
+source ~/.bashrc
+```
+You should now be able to copy and paste all of the commands in the various instructions sections.
+For example:
+
+```bash
+echo ${PROJECT_DIR}
+```
 
 ## Running the Application
 
@@ -46,7 +72,7 @@
 1. First, prepare the required data:
 
    ```
-   python scripts/prepare_data.py
+   uv run python scripts/prepare_data.py
    ```
 
 2. Start the backend service:

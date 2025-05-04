@@ -92,7 +92,7 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
     _PBP_URL = _PBP_URL
 
     BUILDER_CONFIG_CLASS = NbaTrackingConfig
-    print(f"Items: {items, len(items)}")
+
     BUILDER_CONFIGS = [
         NbaTrackingConfig(name="tiny", samples=5),
         NbaTrackingConfig(name="small", samples=25),

@@ -40,6 +40,7 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
     """
     return load_dataset(
         "./scripts/load_nba_tracking_data_15_16.py",
+        trust_remote_code=True,
         name=name,
         split=split,
         num_proc=NUM_PROCESSES,
