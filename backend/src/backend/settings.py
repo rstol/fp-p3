@@ -1,5 +1,12 @@
 import os
 
-DATASET_DIR = os.getenv("DATASET_DIR", "data/nba_tracking_data")
-SAMPLING_RATE = 3  # 25 Hz -> 25/3 Hz ≈ 8.33 Hz
+SAMPLING_RATE = 3  # RAW_DATA_HZ / SAMPLING_RATE ≈ 8.33 Hz
+
 (COURT_WIDTH, COURT_LENGTH) = (50, 94)
+RAW_DATA_HZ = 25
+
+EVENTS_DIR = os.environ["EVENTS_DIR"]
+TRACKING_DIR = os.environ["TRACKING_DIR"]
+GAMES_DIR = os.environ["GAMES_DIR"]
+DATA_DIR = os.environ["DATA_DIR"]
+EXPERIMENTS_DIR = os.environ["EXPERIMENTS_DIR"]

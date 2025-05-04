@@ -15,6 +15,8 @@ from typing import Any
 import polars as pl
 from datasets import Dataset, load_dataset
 
+from backend.settings import TRACKING_DIR
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +33,7 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         name (str): Dataset size to load ('tiny', 'small', 'medium', or 'full')
     """
     return load_dataset(
-        "dcayton/nba_tracking_data_15_16",
+        "./scripts/load_nba_tracking_data_15_16.py",
         trust_remote_code=True,
         name=name,
         split=split,
@@ -185,9 +187,7 @@ if __name__ == "__main__":
         default=3,
         help="Rate at which to downsample moments (e.g., 3 means keep every 3rd moment)",
     )
-
-    target_path = Path(os.getenv("DATASET_DIR", "data/nba_tracking_data")).resolve()
-
+    target_path = Path(TRACKING_DIR).resolve()
     args = parser.parse_args()
     dataset = load_nba_dataset(split=args.split, name=args.name)
     process_dataset(dataset, target_path, args.sampling_rate)

@@ -1,5 +1,6 @@
 import argparse
 import os
+import pickle
 import typing as t
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import numpy as np
 import polars as pl
 from datasets import load_dataset
 
-from backend.settings import COURT_LENGTH, COURT_WIDTH
+from backend.settings import COURT_LENGTH, COURT_WIDTH, EVENTS_DIR, GAMES_DIR
 
 # Event type to event name mapping
 event_type_to_name = {
@@ -27,7 +28,6 @@ event_type_to_name = {
 }
 
 NUM_PROCESSES = os.cpu_count()
-EVENTS_DIR = "data/raw/events"  # os.getenv("EVENTS_DIR", "data/raw/events")
 
 
 def load_nba_dataset(split: str | None = None, name: str = "full"):
@@ -39,8 +39,7 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         name (str): Dataset size to load ('tiny', 'small', 'medium', or 'full')
     """
     return load_dataset(
-        "dcayton/nba_tracking_data_15_16",
-        trust_remote_code=True,
+        "./scripts/load_nba_tracking_data_15_16.py",
         name=name,
         split=split,
         num_proc=NUM_PROCESSES,
@@ -574,11 +573,26 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
     Creates feature vector for a single game in the DataFrame.
 
     Each feature vector includes:
-    - Player x,y coordinates sorted by team_id and player_id
-    - Ball x,y,z coordinates
-    - Player velocities
-    - Ball velocity
-    - Game time
+      0:11 in feature Vector:
+        - Game time
+        - Game clock
+        - Shot clock
+        - Quarter
+        - Score difference
+        - Ball coordinates (x, y, z)
+        - Ball velocity (dx, dy, dz)
+      11:21 in feature Vector:
+        - Player indices for each player on the court
+      21:31 in feature Vector:
+        - Player coordinates x for each player on the court
+      31:41 in feature Vector:
+        - Player coordinates y for each player on the court
+      41:51 in feature Vector:
+        - Team IDs for each player on the court
+      51:61 in feature Vector:
+        - Player velocities dx for each player on the court
+      61:71 in feature Vector:
+        - Player velocities dy for each player on the court
 
     Args:
         df: Polars DataFrame with one game data schema
@@ -588,6 +602,7 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
         List of feature vectors for consecutive moments
     """
     features = []
+    play_identifiers = []  # Store (game_id, event_id) pairs
     prev_moment = None
     prev_time = -1
     game_over = False
@@ -596,7 +611,11 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
     # print(game_df.head())
 
     moments_df = (
-        game_df.select(pl.col("moments"), pl.col("score_diff"))
+        game_df.select(
+            pl.col("moments"),
+            pl.col("event_info").struct.field("id").alias("event_id"),
+            pl.col("score_diff"),
+        )
         .explode("moments")
         .rename({"moments": "moment"})
     )
@@ -624,8 +643,10 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
         # if game_over:
         #     break
 
-        player_velocities = np.zeros(len(playerid_to_idx))
-        ball_velocity = 0.0
+        player_x_velocities = np.zeros(len(playerid_to_idx))
+        player_y_velocities = np.zeros(len(playerid_to_idx))
+
+        ball_x_velocity, ball_y_velocity, ball_z_velocity = 0.0, 0.0, 0.0
 
         if prev_moment is not None:
             time_delta = prev_moment["game_clock"] - current["game_clock"]
@@ -639,12 +660,9 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
             cb = current["ball_coordinates"]
             pb = prev_moment["ball_coordinates"]
 
-            ball_velocity = (
-                np.sqrt(
-                    (cb["x"] - pb["x"]) ** 2 + (cb["y"] - pb["y"]) ** 2 + (cb["z"] - pb["z"]) ** 2
-                )
-                / time_delta
-            )
+            ball_x_velocity = (cb["x"] - pb["x"]) / time_delta
+            ball_y_velocity = (cb["y"] - pb["y"]) / time_delta
+            ball_z_velocity = (cb["z"] - pb["z"]) / time_delta
 
             # Map current players with previous players
             cur_players = {(p["teamid"], p["playerid"]): p for p in current["player_coordinates"]}
@@ -659,26 +677,23 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
 
                     if key[1] in playerid_to_idx:
                         idx = playerid_to_idx[key[1]]
-                        distance = np.sqrt((cp["x"] - pp["x"]) ** 2 + (cp["y"] - pp["y"]) ** 2)
-                        player_velocities[idx] = distance / time_delta
+                        player_x_velocities[idx] = (cp["x"] - pp["x"]) / time_delta
+                        player_y_velocities[idx] = (cp["y"] - pp["y"]) / time_delta
 
+        ball = current["ball_coordinates"]
         feature_vector = [
-            game_time,  # 0: Continuous game time
+            game_time,  # Continuous game time
             game_clock,
             shot_clock,
             quarter,
             row["score_diff"],
+            ball["x"],
+            ball["y"],
+            ball["z"],
+            ball_x_velocity,
+            ball_y_velocity,
+            ball_z_velocity,
         ]
-
-        ball = current["ball_coordinates"]
-        feature_vector.extend(
-            [
-                ball["x"],
-                ball["y"],
-                ball["z"],
-                ball_velocity,
-            ]
-        )
 
         player_ids = {
             player["playerid"]
@@ -705,23 +720,31 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
             team_ids.append(player["teamid"])
 
         order = np.argsort(player_indices)
-
         # Add player indices (who is on court)
         for i in order:
-            feature_vector.append(player_indices[i])
-            feature_vector.append(player_xs[i])
-            feature_vector.append(player_ys[i])
-            feature_vector.append(team_ids[i])
-            feature_vector.append(player_velocities[player_indices[i]])
+            feature_vector.extend(
+                [
+                    player_indices[i],
+                    player_xs[i],
+                    player_ys[i],
+                    team_ids[i],
+                    player_x_velocities[player_indices[i]],
+                    player_y_velocities[player_indices[i]],
+                ]
+            )
 
-        assert len(feature_vector) == 59
+        if len(feature_vector) != 71:
+            raise ValueError(
+                f"Feature vector length mismatch: {len(feature_vector)} != 71 for game {game_id}, event {row['event_id']}"
+            )
 
         features.append(np.array(feature_vector))
+        play_identifiers.append((game_id, row["event_id"]))
 
         prev_moment = current
         prev_time = game_time
 
-    return features
+    return features, play_identifiers
 
 
 def save_feature_arrays(
@@ -745,19 +768,24 @@ def save_feature_arrays(
         print(f"Processing game {game_id}")
         game_df = df.filter(pl.col("gameid") == game_id)
 
-        # Generate feature vectors (modified to not include game_id)
-        features = create_feature_vectors(game_id, game_df, playerid_to_idx)
-
-        # Convert to numpy array and save
+        features, identifiers = create_feature_vectors(game_id, game_df, playerid_to_idx)
         if features:
             features_array = np.stack(features)
+
+            print(f"Feature vector shape: {features_array.shape}")
+            # Save the features and identifiers
+            # Save the features as a numpy array
             np.save(os.path.join(output_dir, f"{game_id}_X.npy"), features_array)
             print(f"Saved {len(features)} feature vectors for game {game_id}")
+            identifiers_array = np.array(identifiers, dtype=object)
+            print(f"Identifiers shape: {identifiers_array.shape}")
+            np.save(os.path.join(output_dir, f"{game_id}_ids.npy"), identifiers_array)
         else:
             print(f"No features generated for game {game_id}")
+        break
 
     # Save the player ID mapping
-    np.save(os.path.join(output_dir, "playerid_to_idx.npy"), playerid_to_idx)
+    pickle.dump(playerid_to_idx, open(f"{output_dir}/playerid_to_idx.pydict", "wb"))
     print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
 
 
@@ -794,10 +822,8 @@ if __name__ == "__main__":
         lambda df: rotate_court(df["gameid"][0], df)
     )
     print(rotated_df.schema)
-    # os.getenv("GAMES_DIR",
-    target_path = Path("data/games_preprocessed").resolve()
 
     # TODO make the following more scalable (memory efficient)
-    save_feature_arrays(rotated_df, target_path)
+    save_feature_arrays(rotated_df, GAMES_DIR)
 
     # TODO compute y soft-labels and store them in _y.parquet
