@@ -54,27 +54,27 @@ class Baller2PlayDataset(Dataset):
             glitch_y_break = np.where(np.abs(player_vys) > 1.2 * self.max_player_move)[0].min()
         except ValueError:
             glitch_y_break = len(seq_data)
-        if glitch_x_break < len(seq_data) or glitch_y_break < len(seq_data):
-            pass
-            # print(
-            #     f"Glitch detected in game {self.game_ids[0]} at frame {start} for player {keep_players}"
-            # )
+        # if glitch_x_break < len(seq_data) or glitch_y_break < len(seq_data):
+        #     print(
+        #         f"Glitch detected in game {self.game_ids[0]} at frame {start} for player {keep_players}"
+        #     )
 
-        # seq_break = min(glitch_x_break, glitch_y_break)
-        # seq_data = seq_data[:seq_break]
+        seq_break = min(glitch_x_break, glitch_y_break)
 
         player_vxs = seq_data[:, 51:61][:, keep_players]
         player_vys = seq_data[:, 61:71][:, keep_players]
         player_xs = seq_data[:, 21:31][:, keep_players]
         player_ys = seq_data[:, 31:41][:, keep_players]
         player_idxs = seq_data[:, 11:21][:, keep_players].astype(int)
+        game_data = seq_data[:, 1:11]
 
         return {
-            "player_idxs": torch.Tensor(player_idxs),
-            "player_xs": torch.Tensor(player_xs),
-            "player_ys": torch.Tensor(player_ys),
-            "player_vxs": torch.Tensor(player_vxs),
-            "player_vys": torch.Tensor(player_vys),
+            "player_idxs": torch.LongTensor(player_idxs[: seq_break - 1]),
+            "player_xs": torch.Tensor(player_xs[: seq_break - 1]),
+            "player_ys": torch.Tensor(player_ys[: seq_break - 1]),
+            "player_vxs": torch.Tensor(player_vxs[: seq_break - 1]),
+            "player_vys": torch.Tensor(player_vys[: seq_break - 1]),
+            "game_data": torch.Tensor(game_data[: seq_break - 1]),
         }
 
     def __getitem__(self, idx):
@@ -112,7 +112,7 @@ if __name__ == "__main__":
         num_samples=100,
         mode="train",
         game_ids=["0021500637", "0021500479"],
-        n_player_ids=10,
+        n_player_ids=15,
         starts=[0, 1, 2],
     )
     sample = dataset[0]
@@ -123,5 +123,5 @@ if __name__ == "__main__":
         sample = dataset[i]
         for key, value in sample.items():
             print(f"{key}: shape={value.shape}, dtype={value.dtype}")
-            print(value)
+            print(len(value))
         assert isinstance(sample["player_idxs"], torch.Tensor)

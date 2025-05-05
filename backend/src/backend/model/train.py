@@ -52,7 +52,7 @@ def init_basketball_datasets(opts):
     train_dataset = Baller2PlayDataset(**dataset_config)
     train_loader = DataLoader(
         dataset=train_dataset,
-        # batch_size=None,
+        batch_size=None,
         num_workers=opts["train"]["workers"],
         worker_init_fn=worker_init_fn,
     )
@@ -156,23 +156,9 @@ def train_model(train_loader, valid_loader, model, device, opts):
             player_feats = torch.cat(
                 [batch["player_xs"], batch["player_ys"], batch["player_vxs"], batch["player_vys"]],
                 dim=-1,
-            )  # [B, T, 40]
-            cls_feats = torch.cat(
-                [
-                    batch["ball_x"],
-                    batch["ball_y"],
-                    batch["ball_z"],
-                    batch["ball_dx"],
-                    batch["ball_dy"],
-                    batch["ball_dz"],
-                    batch["quarter"],
-                    batch["score_diff"],
-                    batch["shot_clock"],
-                    batch["game_time"],
-                ],
-                dim=-1,
-            )  # [B, T, 10]
-            x = torch.cat([cls_feats, player_feats], dim=-1).to(device)  # [B, T, 40 + 10]
+            )  # [T, 40]
+
+            x = torch.cat([batch["game_data"], player_feats], dim=-1).to(device)  # [T, 40 + 10]
 
             optimizer.zero_grad()
             x_hat, mu, logvar = model(x)

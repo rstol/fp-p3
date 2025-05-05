@@ -35,12 +35,12 @@ class Baller2Play(nn.Module):
         return mu + eps * std
 
     def forward(self, x):
-        B, T, H = x.shape
+        T, H = x.shape
 
         x_proj = self.input_proj(x)  # [B, T, H]
 
         # Prepend CLS token
-        cls_tokens = self.cls_token.expand(B, 1, H)  # [B, 1, H]
+        cls_tokens = self.cls_token.expand(1, 1, H)  # [B, 1, H]
         x_with_cls = torch.cat([cls_tokens, x_proj], dim=1)  # [B, T+1, H]
 
         encoded = self.encoder(x_with_cls)  # [B, T+1, H]
