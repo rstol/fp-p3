@@ -50,11 +50,11 @@ def cop_kmeans(
     return clusters_, centers_
 
 
-def tolerance(tol, dataset):
+def tolerance(tol: float, dataset: torch.Tensor) -> float:
     return tol * dataset.var(dim=0).mean()
 
 
-def initialize_centers(dataset, k, method):
+def initialize_centers(dataset: torch.Tensor, k: int, method: str) -> torch.Tensor:
     if method == "random":
         ids = torch.randperm(len(dataset))
         return dataset[ids[:k]]
@@ -72,7 +72,13 @@ def initialize_centers(dataset, k, method):
     return centers
 
 
-def violate_constraints(data_index, cluster_index, clusters, ml, cl):
+def violate_constraints(
+    data_index: int,
+    cluster_index: int,
+    clusters: list[int],
+    ml: dict[int, set[int]],
+    cl: dict[int, set[int]],
+) -> bool:
     for i in ml[data_index]:
         if clusters[i] != -1 and clusters[i] != cluster_index:
             return True
@@ -82,14 +88,17 @@ def violate_constraints(data_index, cluster_index, clusters, ml, cl):
     return False
 
 
-def compute_centers(clusters, dataset, k, ml_info):
+def compute_centers(
+    clusters: list[int],
+    dataset: torch.Tensor,
+    k: int,
+    ml_info: tuple[list[list[int]], list[float], torch.Tensor],
+) -> tuple[torch.Tensor, torch.Tensor]:
     cluster_ids = torch.unique(torch.as_tensor(clusters))
     k_new = len(cluster_ids)
     id_map = {int(cluster_ids[i]): i for i in range(k_new)}
     clusters_tensor = torch.as_tensor([id_map[int(x)] for x in clusters])
-
-    dim = dataset.shape[1]
-    centers = torch.zeros((k, dim), dtype=dataset.dtype)
+    centers = torch.zeros((k, dataset.shape[1]), dtype=dataset.dtype)
 
     for c in range(k_new):
         mask = clusters_tensor == c
@@ -125,7 +134,9 @@ def compute_centers(clusters, dataset, k, ml_info):
     return clusters_tensor, centers
 
 
-def get_ml_info(ml, dataset):
+def get_ml_info(
+    ml: dict[int, set[int]], dataset: torch.Tensor
+) -> tuple[list[list[int]], list[float], torch.Tensor]:
     flags = torch.ones(len(dataset), dtype=torch.bool)
     groups = []
     for i in range(len(dataset)):
@@ -135,9 +146,8 @@ def get_ml_info(ml, dataset):
         groups.append(group)
         flags[group] = False
 
-    dim = dataset.shape[1]
     scores = torch.zeros(len(groups))
-    centroids = torch.zeros((len(groups), dim))
+    centroids = torch.zeros((len(groups), dataset.shape[1]))
 
     for j, group in enumerate(groups):
         centroids[j] = dataset[group].mean(dim=0)
