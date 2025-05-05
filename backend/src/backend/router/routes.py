@@ -8,12 +8,14 @@ API = "/api/v1/"
 def add_routes(app):
     api = Api(app)
 
-    # dummy
-    api.add_resource(res.scatter_data.DatasetResource, API + "data/<string:name>")
-
     # Scatter plot data for team plays
     api.add_resource(
         res.scatter_data.TeamPlaysScatterResource, API + "teams/<string:team_id>/plays/scatter"
+    )
+
+    # Clustering update endpoint
+    api.add_resource(
+        res.scatter_data.UpdateClusteringResource, API + "update-clustering"
     )
 
     # NBA Data endpoints

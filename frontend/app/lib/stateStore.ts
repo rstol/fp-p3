@@ -1,16 +1,46 @@
 import { create } from 'zustand';
-import type { Play } from '~/types/data';
+import type { Point, Play } from '~/types/data';
 
-interface DashboardState {
-  selectedPlay: Play | null;
-  tagUpdateCounter: number; // Track tag updates to trigger re-renders
-  updatePlay: (play: Play) => void;
-  triggerTagUpdate: () => void; // New method to signal tag updates
+// Define and export the PendingEdit interface
+export interface PendingEdit {
+  point_id: string; // Typically event_id
+  game_id: string;
+  new_cluster: string;
+  original_cluster: string;
+}
+
+export interface DashboardState {
+  selectedPlay: Point | null;
+  pendingEdits: PendingEdit[];
+  scatterPoints: Point[];
+  updatePlay: (play: Point | null) => void;
+  addPendingEdit: (edit: PendingEdit) => void;
+  updatePendingEditTag: (pointId: string, newCluster: string) => void;
+  clearPendingEdits: () => void;
+  setScatterPoints: (points: Point[]) => void;
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
   selectedPlay: null,
-  tagUpdateCounter: 0,
+  pendingEdits: [],
+  scatterPoints: [],
   updatePlay: (play) => set({ selectedPlay: play }),
-  triggerTagUpdate: () => set((state) => ({ tagUpdateCounter: state.tagUpdateCounter + 1 })),
+  addPendingEdit: (edit) =>
+    set((state) => ({
+      // Avoid duplicates based on point_id and game_id
+      pendingEdits: [
+        ...state.pendingEdits.filter(
+          (e) => !(e.point_id === edit.point_id && e.game_id === edit.game_id),
+        ),
+        edit,
+      ],
+    })),
+  updatePendingEditTag: (pointId, newCluster) =>
+    set((state) => ({
+      pendingEdits: state.pendingEdits.map((edit) =>
+        edit.point_id === pointId ? { ...edit, new_cluster: newCluster } : edit,
+      ),
+    })),
+  clearPendingEdits: () => set({ pendingEdits: [] }),
+  setScatterPoints: (points) => set({ scatterPoints: points }),
 }));

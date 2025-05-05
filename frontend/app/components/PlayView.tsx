@@ -1,4 +1,4 @@
-import { Check, Edit, Tag } from 'lucide-react';
+import { Check, Edit, Tag, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useDashboardStore } from '~/lib/stateStore';
 import { PlayDetailsSkeleton } from './LoaderSkeletons';
@@ -10,6 +10,9 @@ import { Textarea } from './ui/textarea';
 import type { DetailedPlay } from '~/types/data';
 import { Badge } from '~/components/ui/badge';
 import { getTag, setTag } from '~/lib/tag-store';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
+
+const AVAILABLE_TAGS: string[] = ['0', '1', '2', '3', '4', 'None'];
 
 function EditableField({
   id,
@@ -35,7 +38,7 @@ function EditableField({
   useEffect(() => {
     setValue(initialValue);
   }, [initialValue]);
-  
+
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
@@ -108,19 +111,34 @@ function EditableField({
 
 export default function PlayView() {
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
-  const triggerTagUpdate = useDashboardStore((state) => state.triggerTagUpdate);
+  const pendingEdits = useDashboardStore((state) => state.pendingEdits);
+  const updatePlay = useDashboardStore((state) => state.updatePlay);
+  const setScatterPoints = useDashboardStore((state) => state.setScatterPoints);
+  const updatePendingEditTag = useDashboardStore((state) => state.updatePendingEditTag);
+  const clearPendingEdits = useDashboardStore((state) => state.clearPendingEdits);
+  const addPendingEdit = useDashboardStore((state) => state.addPendingEdit);
   const [playDetails, setPlayDetails] = useState<DetailedPlay | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tag, setTagState] = useState<string>('');
+  const [originalCluster, setOriginalCluster] = useState<string>('');
+  const [isApplying, setIsApplying] = useState(false);
+  const [changeApplied, setChangeApplied] = useState(false);
 
   // Fetch detailed play data when selectedPlay changes
   useEffect(() => {
     if (!selectedPlay) {
       setPlayDetails(null);
       setTagState('');
+      setOriginalCluster('');
+      setChangeApplied(false);
       return;
     }
+
+    // Store the original cluster value when a point is selected
+    setOriginalCluster(`${selectedPlay.cluster}`);
+    // Reset the change applied state when a new point is selected
+    setChangeApplied(false);
 
     async function fetchPlayDetails() {
       setIsLoading(true);
@@ -129,21 +147,21 @@ export default function PlayView() {
         if (!selectedPlay) {
           throw new Error("No play selected");
         }
-        
+
         const gameId = selectedPlay.game_id;
         const eventId = selectedPlay.event_id;
-        
+
         const response = await fetch(
           `/api/v1/games/${gameId}/plays/${eventId}`
         );
-        
+
         if (!response.ok) {
           throw new Error(`Error fetching play details: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         setPlayDetails(data);
-        
+
         // Get tag from local storage instead of backend
         const storedTag = getTag(gameId, eventId) || String(selectedPlay.cluster);
         setTagState(storedTag);
@@ -160,31 +178,109 @@ export default function PlayView() {
 
   async function handleSaveTag(value: string) {
     if (!selectedPlay) return;
-    
+
     try {
-      // Strip any "Cluster " prefix if present to standardize tag format
-      const standardizedValue = value.replace(/^Cluster\s+/i, '');
-      
+      // Standardize the value - numbers for cluster tags
+      let standardizedValue = value.trim();
+      try {
+        // If it's a number, keep it as string but make sure it's valid
+        parseInt(standardizedValue);
+      } catch (e) {
+        // If not a number, use as-is (custom tag)
+        standardizedValue = value.trim();
+      }
+
       const gameId = selectedPlay.game_id;
       const eventId = selectedPlay.event_id;
-      
+
       // Save tag to local storage instead of sending to backend
       setTag(gameId, eventId, standardizedValue);
-      
+
       // Update state with new tag
       setTagState(standardizedValue);
-      
+
+      // Reset change applied flag since we made a new change
+      setChangeApplied(false);
+
       // Notify other components that tags have changed
-      triggerTagUpdate();
     } catch (error) {
       console.error('Error saving tag:', error);
     }
   }
 
-  async function handleRemoveTag(tag: string) {
-    // Tag removal is disabled since plays should always have a tag
-    return;
-  }
+  const handleTagChange = (newTag: string) => {
+    if (selectedPlay) {
+      // If the point isn't in pending edits yet, add it first
+      if (!pendingEdits.find(edit => edit.point_id === String(selectedPlay.event_id))) {
+        const newEdit = {
+          point_id: String(selectedPlay.event_id),
+          game_id: String(selectedPlay.game_id),
+          new_cluster: newTag,
+          original_cluster: selectedPlay.cluster ? String(selectedPlay.cluster) : 'None',
+        };
+        // Directly add using the function from the hook (assuming addPendingEdit exists)
+        addPendingEdit(newEdit);
+      } else {
+        // Otherwise, just update the tag for the existing pending edit
+        updatePendingEditTag(String(selectedPlay.event_id), newTag);
+      }
+    }
+  };
+
+  const handleApplyPendingChanges = async () => {
+    if (pendingEdits.length === 0 || isApplying) return;
+    setIsApplying(true);
+
+    console.log("Applying pending changes:", pendingEdits);
+
+    try {
+      const gameId = pendingEdits[0]?.game_id; // Assuming all edits are for the same game
+      if (!gameId) {
+        console.error('Cannot apply changes: gameId is missing.');
+        return;
+      }
+
+      // Prepare data for the backend
+      const updates = pendingEdits.map((edit) => ({
+        point_id: edit.point_id,
+        game_id: edit.game_id,
+        new_cluster: edit.new_cluster,
+        original_cluster: edit.original_cluster,
+      }));
+
+      const response = await fetch(`/api/v1/update-clustering`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ game_id: gameId, updates: updates }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      // IMPORTANT: Get the updated points from the response
+      const result = await response.json();
+
+      if (result.success && result.points) {
+        // Update the state store with the new points
+        setScatterPoints(result.points);
+        // Clear pending edits
+        clearPendingEdits();
+        // Optionally: Add user feedback (e.g., toast notification)
+        console.log('Cluster changes applied successfully.');
+      } else {
+        throw new Error('Backend indicated success=false or points were missing.');
+      }
+    } catch (error) {
+      console.error('Error applying pending changes:', error);
+      // TODO: Add user feedback (e.g., toast notification)
+    } finally {
+      setIsApplying(false);
+    }
+  };
 
   if (isLoading) {
     return <PlayDetailsSkeleton />;
@@ -211,9 +307,14 @@ export default function PlayView() {
       </Card>
     );
   }
-  
+
   const play = selectedPlay!;
-  
+
+  const currentPendingEdit = pendingEdits.find(edit => edit.point_id === String(selectedPlay.event_id));
+  const displayCluster = currentPendingEdit
+    ? currentPendingEdit.new_cluster
+    : selectedPlay.cluster ? String(selectedPlay.cluster) : 'None';
+
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
       <CardHeader>
@@ -231,7 +332,7 @@ export default function PlayView() {
             <span className="shrink-0">Period:</span>
             <span className="flex-1 text-right">{playDetails?.period || 'N/A'}</span>
           </div>
-          
+
           {/* Play descriptions */}
           <div className="flex gap-4 py-1">
             <span className="shrink-0">Description Home:</span>
@@ -245,7 +346,7 @@ export default function PlayView() {
               {playDetails?.event_desc_away || 'N/A'}
             </span>
           </div>
-          
+
           {/* Play type */}
           <div className="flex gap-4 pt-1">
             <span className="shrink-0">Play Type:</span>
@@ -253,7 +354,7 @@ export default function PlayView() {
               {play.play_type || 'Unknown'}
             </span>
           </div>
-          
+
           {/* Tags display */}
           <div className="flex flex-wrap gap-2 pt-2">
             <span className="shrink-0 flex items-center">
@@ -261,8 +362,8 @@ export default function PlayView() {
             </span>
             <div className="flex flex-wrap gap-1 flex-1 justify-end">
               {tag ? (
-                <Badge 
-                  key={tag} 
+                <Badge
+                  key={tag}
                   className="bg-blue-100 text-blue-800"
                 >
                   {tag}
@@ -275,19 +376,37 @@ export default function PlayView() {
         </div>
       </CardContent>
       <CardFooter className="flex flex-col gap-4">
-        <EditableField 
-          id="play_tag" 
-          label="Play Tag" 
-          placeholder="Tag the play..." 
-          initialValue={tag}
-          onSave={handleSaveTag}
-        />
+        <div className="mt-4">
+          <label htmlFor="tag-select" className="block text-sm font-medium text-gray-700 mb-1">Cluster Tag:</label>
+          <Select
+            value={displayCluster}
+            onValueChange={handleTagChange}
+          >
+            <SelectTrigger id="tag-select">
+              <SelectValue placeholder="Select tag" />
+            </SelectTrigger>
+            <SelectContent>
+              {AVAILABLE_TAGS.map((tag: string) => (
+                <SelectItem key={tag} value={tag}>
+                  {tag}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <EditableField
           id="play_note"
           label="Play Note"
           placeholder="Add a note..."
           isTextarea={true}
         />
+        <Button
+          onClick={handleApplyPendingChanges}
+          disabled={pendingEdits.length === 0 || isApplying}
+          className="w-full"
+        >
+          {isApplying ? 'Applying...' : `Apply ${pendingEdits.length} Pending Change(s)`}
+        </Button>
       </CardFooter>
     </Card>
   );

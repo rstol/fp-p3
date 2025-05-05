@@ -1,5 +1,7 @@
 import localforage from 'localforage';
 import { useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
+import { useEffect } from 'react';
+import { useLoaderData } from 'react-router-dom'; // Use react-router-dom for useLoaderData
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import { PlaysTable } from '~/components/PlaysTable';
@@ -11,13 +13,14 @@ import { Separator } from '~/components/ui/separator';
 import { BASE_URL, GameFilter } from '~/lib/const';
 import type { Point, Team } from '~/types/data';
 import type { Route } from './+types/_index';
+import { useDashboardStore } from '~/lib/stateStore';
 
 interface ScatterDataResponse {
   total_games: number;
   points: Point[];
 }
 
-export function meta({}: Route.MetaArgs) {
+export function meta({ }: Route.MetaArgs) {
   return [
     { title: 'New React Router App' },
     { name: 'description', content: 'Welcome to React Router!' },
@@ -30,19 +33,14 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const teamid = url.searchParams.get('teamid');
   const timeframe = url.searchParams.get('timeframe') ?? GameFilter.LAST3;
   const forceRefresh = url.searchParams.get('refresh') === 'true';
-  // invariant(typeof teamid === 'strin g', 'teamid is required');
-  let scatterData: null | ScatterDataResponse = null;
 
   function createCacheKey(fullUrl: string, includeSearch: boolean = false): string {
     const urlObj = new URL(fullUrl);
     return includeSearch ? urlObj.pathname + urlObj.search : urlObj.pathname;
   }
 
-  // Helper function for caching fetches
   async function fetchWithCache<T>(url: string, includeSearch: boolean = false, skipCache: boolean = false): Promise<T> {
     const key = createCacheKey(url, includeSearch);
-    
-    // Check if we should skip cache due to force refresh
     if (!skipCache) {
       const cached = await localforage.getItem<T>(key);
       if (cached) {
@@ -50,57 +48,86 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
         return cached;
       }
     }
-    
+
     console.log(`Cache miss for ${key}`);
 
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch from ${url}`);
-
-    const data: T = await res.json();
+    if (!res.ok) {
+      // Handle specific errors for debugging
+      if (res.status === 404 && url.includes('/scatter')) {
+        console.error(`Scatter data not found for team ${teamid} and timeframe ${timeframe}`);
+        // Return null or an empty structure instead of throwing for 404 on scatter data
+        // This allows the UI to show "No data" instead of crashing
+        return { total_games: 0, points: [] } as unknown as T;
+      }
+      throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+    }
+    const data = await res.json();
     await localforage.setItem(key, data);
     return data;
   }
 
   const fetchPromises: [Promise<Team[]>, Promise<ScatterDataResponse | null>] = [
-    fetchWithCache<Team[]>(`${BASE_URL}/teams`),
+    fetchWithCache<Team[]>(`${BASE_URL}/teams`, false, forceRefresh),
     teamid
       ? fetchWithCache<ScatterDataResponse>(
-          `${BASE_URL}/teams/${teamid}/plays/scatter${timeframe ? `?timeframe=${timeframe}` : ''}`,
-          true,
-          forceRefresh // Skip cache if forceRefresh is true
-        )
+        `${BASE_URL}/teams/${teamid}/plays/scatter${timeframe ? `?timeframe=${timeframe}` : ''}`,
+        true,
+        forceRefresh
+      )
       : Promise.resolve(null),
   ];
 
   const [teams, scatterDataResult] = await Promise.all(fetchPromises);
-  scatterData = scatterDataResult;
+
+  // Log the fetched data for debugging
+  console.log("Fetched Teams:", teams?.length);
+  console.log("Fetched Scatter Data:", scatterDataResult);
 
   return {
     teams,
-    games: [], // unused
-    scatterData,
+    games: [], // Still unused, but part of the original structure
+    scatterData: scatterDataResult,
   };
 }
 
 clientLoader.hydrate = true;
 
-// Function to clear cache and refresh data
 async function clearDataCache() {
   await localforage.clear();
-  window.location.href = window.location.pathname + '?refresh=true&' + 
-    window.location.search.substring(1).replace(/&?refresh=true/g, '');
+  // Keep existing search params but add refresh=true
+  const currentSearchParams = new URLSearchParams(window.location.search);
+  currentSearchParams.set('refresh', 'true');
+  window.location.search = currentSearchParams.toString();
 }
 
 export default function Home() {
   const [searchParams] = useSearchParams();
   const teamID = searchParams.get('teamid');
+  const { setScatterPoints } = useDashboardStore();
+
+  const { scatterData } = useLoaderData<typeof clientLoader>();
+
+  useEffect(() => {
+    // console.log("Loader data received in component:", scatterData);
+    if (scatterData?.points && scatterData.points.length > 0) {
+      // console.log("Setting scatter points:", scatterData.points.length);
+      setScatterPoints(scatterData.points);
+    } else if (teamID) {
+      // console.log("Clearing scatter points because teamID is set but no points received.");
+      // If a team is selected but no points came back, clear the store
+      setScatterPoints([]);
+    }
+    // No 'else' needed - if no teamID, we don't clear existing points
+    // from a previous selection until a new team is selected and data loads (or fails to load).
+  }, [scatterData, teamID, setScatterPoints]);
 
   return (
     <>
       <div className="space-y-4">
         <div className="flex justify-end px-4 py-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={clearDataCache}
             className="text-xs"

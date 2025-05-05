@@ -1,8 +1,7 @@
 import * as d3 from 'd3';
 import { Circle, GrabIcon, Info, Minus, Move, Plus, RefreshCcw, Tag, ZoomIn } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
-import type { clientLoader } from '~/routes/_index';
+import { useCallback, useRef, useState, useEffect } from 'react';
+import { useNavigation, useSearchParams } from 'react-router';
 import type { Point } from '~/types/data';
 import Filters from './Filters';
 import { ScatterPlotSkeleton } from './LoaderSkeletons';
@@ -25,12 +24,12 @@ const margin = { top: 40, right: 10, bottom: 10, left: 10 };
 
 const getZoomMethod =
   (svgRef: React.RefObject<SVGSVGElement | null>, method: string) =>
-  (...args: any[]) => {
-    const svg = svgRef?.current;
-    if (svg && typeof (svg as any)[method] === 'function') {
-      (svg as any)[method](...args);
-    }
-  };
+    (...args: any[]) => {
+      const svg = svgRef?.current;
+      if (svg && typeof (svg as any)[method] === 'function') {
+        (svg as any)[method](...args);
+      }
+    };
 
 function Legend({
   tags,
@@ -175,13 +174,11 @@ function InfoBar() {
 
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const loaderData = useLoaderData<typeof clientLoader>();
-  // Apply client-side tags to the scatter plot data
-  const data = applyTagsToData(loaderData?.scatterData?.points ?? []);
+  const data = useDashboardStore((state) => state.scatterPoints);
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
   const updatePlay = useDashboardStore((state) => state.updatePlay);
-  // Listen for tag updates to refresh the visualization
-  const tagUpdateCounter = useDashboardStore((state) => state.tagUpdateCounter);
+  const addPendingEdit = useDashboardStore((state) => state.addPendingEdit);
+  const pendingEdits = useDashboardStore((state) => state.pendingEdits);
   const [zoomedTag, setZoomedTag] = useState<string | null>(null);
   const color = d3.scaleOrdinal(d3.schemeCategory10);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
@@ -365,19 +362,18 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       })
       .attr('stroke', (d) => {
         const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
-        return isSelected ? 'black' : 'white';
+        const isPending = pendingEdits.some((edit) => edit.point_id === d.event_id && edit.game_id === d.game_id);
+        return isSelected || isPending ? 'black' : 'white';
       })
       .attr('stroke-width', (d) => {
         const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
-        return isSelected ? 2 : 1;
+        const isPending = pendingEdits.some((edit) => edit.point_id === d.event_id && edit.game_id === d.game_id);
+        return isSelected || isPending ? 2 : 1;
       })
       .attr('cursor', 'pointer')
       .on('click', (event, play) => {
         event.stopPropagation();
-        if (!selectedPlay || getPlayId(selectedPlay) !== getPlayId(play)) {
-          // Update state with event_id and game_id when point is clicked
-          updatePlay(play);
-        }
+        updatePlay(play); // Use the correct action: updatePlay
       })
       .on('mouseover', (event, d) => {
         const tag = d.tag || `${d.cluster}`;
@@ -403,7 +399,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         container.selectAll('circle').attr('opacity', 1);
         return tooltip?.style('visibility', 'hidden');
       });
-  }, [data, selectedPlay, svgRef.current, tagUpdateCounter]);
+  }, [data, selectedPlay, svgRef.current, pendingEdits, updatePlay]);
 
   useEffect(() => {
     zoomed({ transform: currentTransform });
@@ -411,10 +407,10 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
-  
+
   // Extract unique tags from data points, falling back to clusters if tag is not available
   const tags = Array.from(new Set(data.map((d) => d.tag || `${d.cluster}`))).sort();
-  
+
   return (
     <div className="flex flex-col">
       {teamID && data.length === 0 ? (

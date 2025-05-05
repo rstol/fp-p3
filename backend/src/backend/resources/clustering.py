@@ -24,7 +24,7 @@ def cop_kmeans(
     for _ in range(max_iter):
         clusters_ = [-1] * len(dataset)
         indices_dataset = torch.cdist(dataset, centers).argsort(dim=-1)
-        for i, d in enumerate(dataset):
+        for i in range(len(dataset)):
             indices = indices_dataset[i]
             counter = 0
             if clusters_[i] == -1:
