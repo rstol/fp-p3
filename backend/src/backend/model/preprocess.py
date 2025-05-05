@@ -777,7 +777,7 @@ def save_feature_arrays(
 
     features, identifiers = create_feature_vectors(game_id, game_df, playerid_to_idx)
     if features:
-        features_array = np.stack(features)
+        features_array = np.stack(features).astype(np.float32)
 
         # Save the features and identifiers
         # Save the features as a numpy array

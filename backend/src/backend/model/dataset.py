@@ -82,11 +82,10 @@ class Baller2PlayDataset(Dataset):
             game_id = self.game_ids[idx]
 
         X = np.load(f"{GAMES_DIR}/{game_id}_X.npy")
-        identifiers = np.load(
-            f"{GAMES_DIR}/{game_id}_ids.npy", allow_pickle=True
-        )  # Need allow_pickle for object arrays
-        print(X.shape)
-        print(identifiers.shape, identifiers[0])
+
+        # identifiers = np.load(
+        #     f"{GAMES_DIR}/{game_id}_ids.npy", allow_pickle=True
+        # )  # Need allow_pickle for object arrays
 
         if self.mode == "train":
             start = np.random.randint(len(X) - self.chunk_size)
@@ -94,3 +93,22 @@ class Baller2PlayDataset(Dataset):
             start = self.starts[idx]
 
         return self.get_sample(X, start)
+
+
+if __name__ == "__main__":
+    dataset = Baller2PlayDataset(
+        num_samples=100,
+        mode="train",
+        game_ids=["0021500637", "0021500479"],
+        n_player_ids=10,
+        starts=[0, 1, 2],
+    )
+    sample = dataset[0]
+    print(sample)
+
+    for i in range(5):
+        print(f"\n--- Sample {i} ---")
+        sample = dataset[i]
+        for key, value in sample.items():
+            print(f"{key}: shape={value.shape}, dtype={value.dtype}")
+        assert isinstance(sample["player_idxs"], torch.Tensor)

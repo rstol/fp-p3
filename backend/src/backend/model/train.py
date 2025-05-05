@@ -204,7 +204,6 @@ if __name__ == "__main__":
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     opts = yaml.safe_load(open(f"{EXPERIMENTS_DIR}/{JOB}/{JOB}.yaml"))
-    task = opts["train"]["task"]
 
     (
         train_loader,
