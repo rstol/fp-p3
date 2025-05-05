@@ -17,7 +17,7 @@ echo "  beta: 1" >> ${JOB}.yaml
 echo "dataset:" >> ${JOB}.yaml
 echo "  hz: 5" >> ${JOB}.yaml
 echo "  secs: 6" >> ${JOB}.yaml
-echo "  player_traj_n: 10" >> ${JOB}.yaml
+# echo "  player_traj_n: 10" >> ${JOB}.yaml
 echo "  max_player_move: 4.5" >> ${JOB}.yaml
 
 echo "model:" >> ${JOB}.yaml # TODO update the following parameters

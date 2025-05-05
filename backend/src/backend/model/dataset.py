@@ -55,9 +55,11 @@ class Baller2PlayDataset(Dataset):
         except ValueError:
             glitch_y_break = len(seq_data)
         if glitch_x_break < len(seq_data) or glitch_y_break < len(seq_data):
-            print(
-                f"Glitch detected in game {self.game_ids[0]} at frame {start} for player {keep_players}"
-            )
+            pass
+            # print(
+            #     f"Glitch detected in game {self.game_ids[0]} at frame {start} for player {keep_players}"
+            # )
+
         seq_break = min(glitch_x_break, glitch_y_break)
         seq_data = seq_data[:seq_break]
 

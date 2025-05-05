@@ -86,7 +86,7 @@ def init_basketball_datasets(opts):
         starts.append(gaps * np.arange(samps_per_gameid))
 
     dataset_config["game_ids"] = np.repeat(test_gameids, samps_per_gameid)
-    dataset_config["num_samples"] = len(dataset_config["gameids"])
+    dataset_config["num_samples"] = len(dataset_config["game_ids"])
     dataset_config["starts"] = np.concatenate(starts)
     dataset_config["mode"] = "test"
     test_dataset = Baller2PlayDataset(**dataset_config)
@@ -125,8 +125,8 @@ def vae_loss(x_hat, x, mu, logvar, beta=1.0):
 
 def train_model(train_loader, valid_loader, model, device, opts):
     seq_len = model.seq_len
-    n_players = model.n_players
-    print(f"seq_len: {seq_len}, n_players: {n_players}")
+    # n_players = model.n_players
+    print(f"seq_len: {seq_len}")
 
     # Initialize optimizer.
     train_params = [params for params in model.parameters()]
