@@ -5,49 +5,57 @@ import torch.nn as nn
 
 class Baller2Play(nn.Module):
     def __init__(
-        self, input_dim, seq_len, latent_dim=64, n_players=10, d_model=128, nhead=4, num_layers=2
+        self, input_dim=50, latent_dim=64, hidden_dim=128, n_layers=2, n_heads=4, seq_len=30
     ):
         super().__init__()
         self.seq_len = seq_len
-        self.n_players = n_players
+        self.input_proj = nn.Linear(input_dim, hidden_dim)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_dim))
 
-        self.input_proj = nn.Linear(input_dim, d_model)
-        self.encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead), num_layers=num_layers
+        # Transformer Encoder
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim, nhead=n_heads, norm_first=True, batch_first=True
         )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
 
-        self.mu_head = nn.Linear(d_model, latent_dim)
-        self.logvar_head = nn.Linear(d_model, latent_dim)
+        # Bottleneck
+        self.mu = nn.Linear(hidden_dim, latent_dim)
+        self.logvar = nn.Linear(hidden_dim, latent_dim)
 
-        self.decoder_input = nn.Linear(latent_dim, d_model)
+        # Decoder input: sample -> broadcast to seq_len
+        self.latent_to_hidden = nn.Linear(latent_dim, hidden_dim)
         self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model=d_model, nhead=nhead), num_layers=num_layers
+            nn.TransformerDecoderLayer(d_model=hidden_dim, nhead=n_heads), num_layers=n_layers
         )
-        self.output_proj = nn.Linear(d_model, input_dim)
-
-    def encode(self, x):
-        x = self.input_proj(x)  # [B, T, d_model]
-        x = x.permute(1, 0, 2)  # [T, B, d_model]
-        h = self.encoder(x)[0]  # Use only first token (or pool)
-        mu = self.mu_head(h)
-        logvar = self.logvar_head(h)
-        return mu, logvar
+        self.output_proj = nn.Linear(hidden_dim, input_dim)
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def decode(self, z, target_seq_len):
-        z = self.decoder_input(z).unsqueeze(0).repeat(target_seq_len, 1, 1)  # [T, B, d_model]
-        memory = z  # dummy memory (z repeated)
-        tgt = torch.zeros_like(memory)  # start token placeholders
-        out = self.decoder(tgt, memory)
-        out = out.permute(1, 0, 2)  # [B, T, d_model]
-        return self.output_proj(out)
-
     def forward(self, x):
-        mu, logvar = self.encode(x)
-        z = self.reparameterize(mu, logvar)
-        x_hat = self.decode(z, x.size(1))
+        B, T, H = x.shape
+
+        x_proj = self.input_proj(x)  # [B, T, H]
+
+        # Prepend CLS token
+        cls_tokens = self.cls_token.expand(B, 1, H)  # [B, 1, H]
+        x_with_cls = torch.cat([cls_tokens, x_proj], dim=1)  # [B, T+1, H]
+
+        encoded = self.encoder(x_with_cls)  # [B, T+1, H]
+
+        # Use CLS output to compute mu and logvar
+        cls_out = encoded[:, 0, :]  # [B, H]
+        mu = self.mu(cls_out)
+        logvar = self.logvar(cls_out)
+        z = self.reparameterize(mu, logvar)  # [B, latent_dim]
+
+        # Decode from latent
+        z_proj = self.latent_to_hidden(z)  # [B, H]
+        z_proj = z_proj.unsqueeze(1).repeat(1, self.seq_len, 1)  # [T, B, H]
+        memory = encoded[:, 1:, :]  # Exclude CLS for memory: [B, T, H]
+        decoded = self.decoder(tgt=z_proj, memory=memory)  # [B, T, H]
+        x_hat = self.output_proj(decoded)  # [B, T, F]
+
         return x_hat, mu, logvar

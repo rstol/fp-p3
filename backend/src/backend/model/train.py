@@ -61,8 +61,10 @@ def init_basketball_datasets(opts):
     samps_per_gameid = int(np.ceil(num_samples / len(valid_gameids)))
     starts = []
     for game_id in valid_gameids:
-        # starts.append(gaps * np.arange(samps_per_gameid))
-        pass
+        ids = np.load(f"{GAMES_DIR}/{game_id}_ids.npy", allow_pickle=True)
+        max_start = len(ids) - train_dataset.chunk_size
+        gaps = max_start // samps_per_gameid
+        starts.append(gaps * np.arange(samps_per_gameid))
 
     dataset_config["game_ids"] = np.repeat(valid_gameids, samps_per_gameid)
     dataset_config["num_samples"] = len(dataset_config["game_ids"])
@@ -78,8 +80,10 @@ def init_basketball_datasets(opts):
     samps_per_gameid = int(np.ceil(num_samples / len(test_gameids)))
     starts = []
     for game_id in test_gameids:
-        pass
-        # TODO
+        ids = np.load(f"{GAMES_DIR}/{game_id}_ids.npy", allow_pickle=True)
+        max_start = len(ids) - train_dataset.chunk_size
+        gaps = max_start // samps_per_gameid
+        starts.append(gaps * np.arange(samps_per_gameid))
 
     dataset_config["game_ids"] = np.repeat(test_gameids, samps_per_gameid)
     dataset_config["num_samples"] = len(dataset_config["gameids"])
@@ -94,14 +98,16 @@ def init_basketball_datasets(opts):
 
     return (
         train_loader,
+        train_dataset,
         valid_loader,
         test_loader,
     )
 
 
-def init_model(opts):
+def init_model(opts, train_dataset: Baller2PlayDataset):
     model_config = opts["model"]
-
+    model_config["seq_len"] = train_dataset.seq_len - 1
+    model_config["input_dim"] = train_dataset.n_players * 4 + 10
     # TODO: Initialize your model here based on the model_config and maybe on dataset_config?
     model = Baller2Play(**model_config)
     print(model)
@@ -117,8 +123,7 @@ def vae_loss(x_hat, x, mu, logvar, beta=1.0):
     return recon_loss + beta * kl_loss, recon_loss.item(), kl_loss.item()
 
 
-def train_model(train_loader, valid_loader, opts, device):
-    model = init_model(opts).to(device)
+def train_model(train_loader, valid_loader, model, device, opts):
     seq_len = model.seq_len
     n_players = model.n_players
     print(f"seq_len: {seq_len}, n_players: {n_players}")
@@ -147,9 +152,30 @@ def train_model(train_loader, valid_loader, opts, device):
             if len(batch["player_idxs"]) < seq_len:
                 continue
 
-            x = torch.cat([batch["player_xs"], batch["player_ys"]], dim=-1).to(device)  # [B, T, 20]
+            player_feats = torch.cat(
+                [batch["player_xs"], batch["player_ys"], batch["player_vxs"], batch["player_vys"]],
+                dim=-1,
+            )  # [B, T, 40]
+            cls_feats = torch.cat(
+                [
+                    batch["ball_x"],
+                    batch["ball_y"],
+                    batch["ball_z"],
+                    batch["ball_dx"],
+                    batch["ball_dy"],
+                    batch["ball_dz"],
+                    batch["quarter"],
+                    batch["score_diff"],
+                    batch["shot_clock"],
+                    batch["game_time"],
+                ],
+                dim=-1,
+            )  # [B, T, 10]
+            x = torch.cat([cls_feats, player_feats], dim=-1).to(device)  # [B, T, 40 + 10]
+
             optimizer.zero_grad()
             x_hat, mu, logvar = model(x)
+
             loss, recon, kl = vae_loss(x_hat, x, mu, logvar, beta=opts["train"]["beta"])
             loss.backward()
             optimizer.step()
@@ -207,11 +233,14 @@ if __name__ == "__main__":
 
     (
         train_loader,
+        train_dataset,
         valid_loader,
         test_loader,
     ) = init_basketball_datasets(opts)
 
-    # Initialize model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_model(train_loader, valid_loader, opts, device)
+    # Initialize model
+    model = init_model(opts, train_dataset).to(device)
+
+    train_model(train_loader, valid_loader, model, device, opts)

@@ -17,18 +17,15 @@ echo "  beta: 1" >> ${JOB}.yaml
 echo "dataset:" >> ${JOB}.yaml
 echo "  hz: 5" >> ${JOB}.yaml
 echo "  secs: 6" >> ${JOB}.yaml
-echo "  player_traj_n: 11" >> ${JOB}.yaml
+echo "  player_traj_n: 10" >> ${JOB}.yaml
 echo "  max_player_move: 4.5" >> ${JOB}.yaml
 
 echo "model:" >> ${JOB}.yaml # TODO update the following parameters
-echo "  embedding_dim: 20" >> ${JOB}.yaml
-echo "  sigmoid: none" >> ${JOB}.yaml
-echo "  mlp_layers: [128, 256, 512]" >> ${JOB}.yaml
-echo "  nhead: 8" >> ${JOB}.yaml
-echo "  dim_feedforward: 2048" >> ${JOB}.yaml
-echo "  num_layers: 6" >> ${JOB}.yaml
-echo "  dropout: 0.0" >> ${JOB}.yaml
-echo "  b2v: False" >> ${JOB}.yaml
+echo "  input_dim: 50" >> ${JOB}.yaml
+echo "  hidden_dim: 256" >> ${JOB}.yaml
+echo "  latent_dim: 64" >> ${JOB}.yaml
+echo "  n_heads: 8" >> ${JOB}.yaml
+echo "  n_layers: 3" >> ${JOB}.yaml
 
 
 # Save experiment settings.
