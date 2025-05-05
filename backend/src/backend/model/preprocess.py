@@ -838,7 +838,14 @@ if __name__ == "__main__":
 
     playerid_to_idx = build_player_index_map(dataset)
     # Save the player ID mapping
-    pickle.dump(playerid_to_idx, open(f"{GAMES_DIR}/playerid_to_idx.pydict", "wb"))
+
+    playerid_path = f"{GAMES_DIR}/playerid_to_idx.pydict"
+    try:
+        pickle.dump(playerid_to_idx, open(playerid_path, "wb"))
+    except FileNotFoundError:
+        os.makedirs(os.path.dirname(playerid_path), exist_ok=True)
+        pickle.dump(playerid_to_idx, open(playerid_path, "wb"))
+
     print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
 
     def get_games_ranges(dataset: Dataset) -> OrderedDict:
