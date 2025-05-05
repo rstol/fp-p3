@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
 
 from backend.settings import COURT_LENGTH, COURT_WIDTH, EVENTS_DIR, GAMES_DIR
 
@@ -44,6 +44,7 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         name=name,
         split=split,
         num_proc=NUM_PROCESSES,
+        # streaming=True,
     )
 
 
@@ -126,14 +127,11 @@ def rotate_court(game_id: str, game_df: pl.DataFrame):
     Modifies the events to be worked with in a uniform format by rotating the coordinates depending on the direction of play.
     There is a bit of hard-coding in the directionality section, which is necessary due to mistimed events in the raw data.
     """
-    # First pass to determine directions
-    events = game_df.to_dicts()
-
     # First pass to identify first possession team and directions
     first_poss_team_id = None
     first_direction = None
     second_direction = None
-    for event in events:
+    for event in game_df.iter_rows(named=True):
         quarter = event["moments"][0]["quarter"]
 
         if quarter != 1:
@@ -162,7 +160,7 @@ def rotate_court(game_id: str, game_df: pl.DataFrame):
         return game_df
 
     processed_events = []
-    for event in events:
+    for event in game_df.iter_rows(named=True):
         quarter = event["moments"][0]["quarter"]
         direction = "unknown"
 
@@ -187,29 +185,27 @@ def rotate_court(game_id: str, game_df: pl.DataFrame):
     return pl.DataFrame(processed_events, schema=game_df.schema)
 
 
-def build_player_index_map(df: pl.DataFrame) -> dict[int, int]:
+def build_player_index_map(dataset: Dataset) -> dict[int, int]:
     """
     Build a mapping from player_id to a consistent player_idx across the dataset.
     This ensures the same player always has the same position in feature vectors.
 
     Args:
-        df: Polars DataFrame with the game data
+        df: Dataset with the game data
 
     Returns:
         Dictionary mapping player_id to player_idx
     """
     player_ids = set()
 
-    # Extract all player IDs from both home and visitor teams
-    for game in df.iter_rows(named=True):
-        # Get player IDs from home team
-        for player in game["home"]["players"]:
-            player_ids.add(player["playerid"])
+    def extract_with_expressions(df: pl.DataFrame) -> pl.DataFrame:
+        for players_list in df.select(pl.col("home").struct.field("players")).to_series():
+            player_ids.update(player["playerid"] for player in players_list)
+        for players_list in df.select(pl.col("visitor").struct.field("players")).to_series():
+            player_ids.update(player["playerid"] for player in players_list)
+        return df
 
-        # Get player IDs from visitor team
-        for player in game["visitor"]["players"]:
-            player_ids.add(player["playerid"])
-
+    dataset.map(extract_with_expressions, batched=True)
     # Create a mapping from player_id to index
     return {player_id: idx for idx, player_id in enumerate(sorted(player_ids))}
 
@@ -602,6 +598,7 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
     Returns:
         List of feature vectors for consecutive moments
     """
+    print(f"Processing game {game_id}..., {game_df.shape} {len(playerid_to_idx)}")
     features = []
     play_identifiers = []  # Store (game_id, event_id) pairs
     prev_moment = None
@@ -749,7 +746,7 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
 
 
 def save_feature_arrays(
-    df: pl.DataFrame, output_dir: Path | str, playerid_to_idx: dict[int, int] = None
+    game_df: pl.DataFrame, game_id: str, output_dir: Path | str, playerid_to_idx: dict[int, int]
 ) -> None:
     """
     Process games and save feature vectors as numpy arrays (one file per game).
@@ -761,33 +758,20 @@ def save_feature_arrays(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # Build player index mapping if not provided
-    if playerid_to_idx is None:
-        playerid_to_idx = build_player_index_map(df)
+    features, identifiers = create_feature_vectors(game_id, game_df, playerid_to_idx)
+    if features:
+        features_array = np.stack(features)
 
-    for game_id in df["gameid"].unique():
-        print(f"Processing game {game_id}")
-        game_df = df.filter(pl.col("gameid") == game_id)
-
-        features, identifiers = create_feature_vectors(game_id, game_df, playerid_to_idx)
-        if features:
-            features_array = np.stack(features)
-
-            print(f"Feature vector shape: {features_array.shape}")
-            # Save the features and identifiers
-            # Save the features as a numpy array
-            np.save(os.path.join(output_dir, f"{game_id}_X.npy"), features_array)
-            print(f"Saved {len(features)} feature vectors for game {game_id}")
-            identifiers_array = np.array(identifiers, dtype=object)
-            print(f"Identifiers shape: {identifiers_array.shape}")
-            np.save(os.path.join(output_dir, f"{game_id}_ids.npy"), identifiers_array)
-        else:
-            print(f"No features generated for game {game_id}")
-        break
-
-    # Save the player ID mapping
-    pickle.dump(playerid_to_idx, open(f"{output_dir}/playerid_to_idx.pydict", "wb"))
-    print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
+        print(f"Feature vector shape: {features_array.shape}")
+        # Save the features and identifiers
+        # Save the features as a numpy array
+        np.save(os.path.join(output_dir, f"{game_id}_X.npy"), features_array)
+        print(f"Saved {len(features)} feature vectors for game {game_id}")
+        identifiers_array = np.array(identifiers, dtype=object)
+        print(f"Identifiers shape: {identifiers_array.shape}")
+        np.save(os.path.join(output_dir, f"{game_id}_ids.npy"), identifiers_array)
+    else:
+        print(f"No features generated for game {game_id}")
 
 
 if __name__ == "__main__":
@@ -807,24 +791,42 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    dataset = load_nba_dataset(split="train", name=args.name)
+    dataset: Dataset = load_nba_dataset(split="train", name=args.name)
 
-    df_plays = dataset.to_polars()
-    df_filtered = df_plays.filter(
-        (pl.col("moments").list.len() > 0)
-        & (pl.col("event_info").struct.field("possession_team_id").is_not_null())
-        & (~pl.col("event_info").struct.field("possession_team_id").is_nan())
-        & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
-        & pl.col("event_info").struct.field("type").is_in([1, 2, 5, 6])
+    dataset = dataset.with_format("polars")
+    dataset = dataset.map(
+        lambda df: df.filter(
+            (pl.col("moments").list.len() > 0)
+            & (pl.col("event_info").struct.field("possession_team_id").is_not_null())
+            & (~pl.col("event_info").struct.field("possession_team_id").is_nan())
+            & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
+            & pl.col("event_info").struct.field("type").is_in([1, 2, 5, 6])
+        ),
+        batched=True,
     )
 
-    # TODO make the following more scalable (memory efficient)
-    rotated_df = df_filtered.group_by("gameid").map_groups(
-        lambda df: rotate_court(df["gameid"][0], df)
-    )
-    print(rotated_df.schema)
+    # TODO I somehow need to split by gameid (and batch by a few games) df["gameid"].unique()
+    # TODO build the playerid_to_idx mapping for the entire dataset first
+    playerid_to_idx = build_player_index_map(dataset)
 
-    # TODO make the following more scalable (memory efficient)
-    save_feature_arrays(rotated_df, GAMES_DIR)
+    game_ids = dataset.unique("gameid")
+    print(f"Found {len(game_ids)} unique game IDs")
+    batch_size = 10  # Number of games to process in each batch
+    for i in range(0, len(game_ids), batch_size):
+        batch_game_ids = game_ids[i : i + batch_size]
+
+        batch_dataset = dataset.filter(lambda df: df["gameid"].is_in(batch_game_ids), batched=True)
+
+        # Convert to Polars DataFrame. This loads into memory!
+        batch_df = batch_dataset.to_polars()
+
+        for game_id in batch_game_ids:
+            game_df = batch_df.filter(pl.col("gameid") == game_id)
+            rotated_game_df = rotate_court(game_id, game_df)
+            save_feature_arrays(rotated_game_df, game_id, GAMES_DIR, playerid_to_idx)
+
+    # Save the player ID mapping
+    pickle.dump(playerid_to_idx, open(f"{GAMES_DIR}/playerid_to_idx.pydict", "wb"))
+    print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
 
     # TODO compute y soft-labels and store them in _y.parquet

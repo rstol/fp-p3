@@ -188,7 +188,9 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
             citation=_CITATION,
         )
 
-    def _split_generators(self, dl_manager):
+    def _split_generators(
+        self, dl_manager: datasets.DownloadManager
+    ) -> list[datasets.SplitGenerator]:
         random.seed(9)
         items = random.sample(self.items, self.config.samples)
 
@@ -199,35 +201,30 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
 
         urls = _URLS
 
-        data_dir = dl_manager.download_and_extract(urls)
-
-        all_file_paths = {}
-        for key, directory_path in data_dir.items():
-            try:
-                all_file_paths[key] = os.path.join(directory_path, os.listdir(directory_path)[0])
-            except IndexError:
-                print(f"Directory {directory_path} is empty or does not exist.")
-                continue
+        extracted_path = dl_manager.download_and_extract(urls)
+        file_paths = [
+            os.path.join(dir_path, os.listdir(dir_path)[0])
+            for dir_path in extracted_path.values()
+            if os.path.isdir(dir_path) and os.listdir(dir_path)
+        ]
 
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,
-                # These kwargs will be passed to _generate_examples
                 gen_kwargs={
-                    "filepaths": all_file_paths,
-                    "split": "train",
+                    "filepaths": file_paths,
                 },
             )
         ]
 
-    def _generate_examples(self, filepaths, split):
+    def _generate_examples(self, filepaths):
         pbp_out = datasets.DownloadManager().download_and_extract(_PBP_URL)
         pbp = pd.read_csv(pbp_out)
 
         moment_id = 0
 
-        for game_title, link in filepaths.items():
-            with open(link, encoding="utf-8") as fp:
+        for path in filepaths:
+            with open(path, encoding="utf-8") as fp:
                 game = json.load(fp)
                 game_id = game["gameid"]
                 game_date = game["gamedate"]
