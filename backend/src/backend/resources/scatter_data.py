@@ -12,6 +12,8 @@ from sklearn.cluster import KMeans
 from backend.resources.dataset_manager import DatasetManager
 from backend.settings import DATASET_DIR
 
+from .clustering import cop_kmeans
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -225,8 +227,7 @@ class TeamPlaysScatterResource(Resource):
         n_clusters = max(2, n_clusters)  # At least 2 clusters
 
         try:
-            kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
-            clusters = kmeans.fit_predict(coords)
+            clusters, centers = cop_kmeans(dataset=coords, k=n_clusters)
             data_points = data_points.with_columns(
                 pl.Series(clusters, dtype=pl.Int32).alias("cluster")
             )
