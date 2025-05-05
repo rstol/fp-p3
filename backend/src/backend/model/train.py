@@ -150,6 +150,7 @@ def train_model(train_loader, valid_loader, model, device, opts):
                 print(train_idx, flush=True)
             # Skip bad sequences.
             if len(batch["player_idxs"]) < seq_len:
+                print(f"Skipping bad sequence: {len(batch['player_idxs'])}")
                 continue
 
             player_feats = torch.cat(

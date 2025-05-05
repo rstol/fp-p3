@@ -60,8 +60,8 @@ class Baller2PlayDataset(Dataset):
             #     f"Glitch detected in game {self.game_ids[0]} at frame {start} for player {keep_players}"
             # )
 
-        seq_break = min(glitch_x_break, glitch_y_break)
-        seq_data = seq_data[:seq_break]
+        # seq_break = min(glitch_x_break, glitch_y_break)
+        # seq_data = seq_data[:seq_break]
 
         player_vxs = seq_data[:, 51:61][:, keep_players]
         player_vys = seq_data[:, 61:71][:, keep_players]
@@ -70,31 +70,41 @@ class Baller2PlayDataset(Dataset):
         player_idxs = seq_data[:, 11:21][:, keep_players].astype(int)
 
         return {
-            "player_idxs": torch.LongTensor(player_idxs[: seq_break - 1]),
-            "player_xs": torch.Tensor(player_xs[: seq_break - 1]),
-            "player_ys": torch.Tensor(player_ys[: seq_break - 1]),
-            "player_vxs": torch.Tensor(player_vxs[: seq_break - 1]),
-            "player_vys": torch.Tensor(player_vys[: seq_break - 1]),
+            "player_idxs": torch.Tensor(player_idxs),
+            "player_xs": torch.Tensor(player_xs),
+            "player_ys": torch.Tensor(player_ys),
+            "player_vxs": torch.Tensor(player_vxs),
+            "player_vys": torch.Tensor(player_vys),
         }
 
     def __getitem__(self, idx):
         if self.mode == "train":
             game_id = np.random.choice(self.game_ids)
-        elif self.mode in {"valid", "test"}:
+        else:
             game_id = self.game_ids[idx]
 
         X = np.load(f"{GAMES_DIR}/{game_id}_X.npy")
 
-        # identifiers = np.load(
-        #     f"{GAMES_DIR}/{game_id}_ids.npy", allow_pickle=True
-        # )  # Need allow_pickle for object arrays
+        identifiers = np.load(
+            f"{GAMES_DIR}/{game_id}_ids.npy", allow_pickle=True
+        )  # Need allow_pickle for object arrays
+
+        starts_by_play = self.build_play_start_index_map(identifiers)
 
         if self.mode == "train":
-            start = np.random.randint(len(X) - self.chunk_size)
-        elif self.mode in {"valid", "test"}:
+            play_id = np.random.choice(list(starts_by_play.keys()))
+            start = np.random.choice(starts_by_play[play_id])
+        else:
             start = self.starts[idx]
 
         return self.get_sample(X, start)
+
+    def build_play_start_index_map(self, ids):
+        starts_by_play = {}
+        for i in range(len(ids) - self.chunk_size):
+            if all(all(ids[i + j] == ids[i]) for j in range(self.chunk_size)):
+                starts_by_play.setdefault(f"{ids[i]}", []).append(i)
+        return starts_by_play
 
 
 if __name__ == "__main__":
@@ -106,11 +116,12 @@ if __name__ == "__main__":
         starts=[0, 1, 2],
     )
     sample = dataset[0]
-    print(sample)
+    # print(sample)
 
     for i in range(5):
         print(f"\n--- Sample {i} ---")
         sample = dataset[i]
         for key, value in sample.items():
             print(f"{key}: shape={value.shape}, dtype={value.dtype}")
+            print(value)
         assert isinstance(sample["player_idxs"], torch.Tensor)
