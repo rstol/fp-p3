@@ -13,7 +13,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Development Status :: 4 - Beta"
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12, <4.0"
 dependencies = [
     "gunicorn>=21.2.0",
     "flask>=3.1.0",
