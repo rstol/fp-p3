@@ -731,16 +731,17 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
         order = np.argsort(player_indices)
         # Add player indices (who is on court)
         for i in order:
-            feature_vector.extend(
-                [
-                    player_indices[i],
-                    player_xs[i],
-                    player_ys[i],
-                    team_ids[i],
-                    player_x_velocities[player_indices[i]],
-                    player_y_velocities[player_indices[i]],
-                ]
-            )
+            feature_vector.append(player_indices[i])
+        for i in order:
+            feature_vector.append(player_xs[i])
+        for i in order:
+            feature_vector.append(player_ys[i])
+        for i in order:
+            feature_vector.append(team_ids[i])
+        for i in order:
+            feature_vector.append(player_x_velocities[player_indices[i]])
+        for i in order:
+            feature_vector.append(player_y_velocities[player_indices[i]])
 
         if len(feature_vector) != 71:
             raise ValueError(
