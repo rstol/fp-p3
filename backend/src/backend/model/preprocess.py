@@ -2,6 +2,7 @@ import argparse
 import os
 import pickle
 import typing as t
+from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
@@ -27,7 +28,7 @@ event_type_to_name = {
     13: "end_period",
 }
 
-NUM_PROCESSES = os.cpu_count()
+NUM_PROCESSES = os.cpu_count() or 2
 
 
 def load_nba_dataset(split: str | None = None, name: str = "full"):
@@ -196,18 +197,28 @@ def build_player_index_map(dataset: Dataset) -> dict[int, int]:
     Returns:
         Dictionary mapping player_id to player_idx
     """
-    player_ids = set()
 
-    def extract_with_expressions(df: pl.DataFrame) -> pl.DataFrame:
+    def extract_with_expressions(df: pl.DataFrame) -> dict:
+        local_ids = set()
         for players_list in df.select(pl.col("home").struct.field("players")).to_series():
-            player_ids.update(player["playerid"] for player in players_list)
+            local_ids.update(player["playerid"] for player in players_list)
         for players_list in df.select(pl.col("visitor").struct.field("players")).to_series():
-            player_ids.update(player["playerid"] for player in players_list)
-        return df
+            local_ids.update(player["playerid"] for player in players_list)
+        return {"player_ids": list(local_ids)}
 
-    dataset.map(extract_with_expressions, batched=True)
+    results = dataset.map(
+        extract_with_expressions,
+        batched=True,
+        load_from_cache_file=False,  # Disable caching
+        batch_size=4000,
+        desc="Build player_index_map",
+        num_proc=NUM_PROCESSES,
+    )
     # Create a mapping from player_id to index
-    return {player_id: idx for idx, player_id in enumerate(sorted(player_ids))}
+    from itertools import chain
+
+    all_player_ids = set(chain.from_iterable(batch["player_ids"] for batch in results))
+    return {player_id: idx for idx, player_id in enumerate(sorted(all_player_ids))}
 
 
 def add_score_fields(game_id: str, game_df: pl.DataFrame) -> pl.DataFrame:
@@ -257,6 +268,7 @@ def add_score_fields(game_id: str, game_df: pl.DataFrame) -> pl.DataFrame:
 
 
 # def get_event_stream(gameid: str, game_df: pl.DataFrame):
+#     TODO adapt the following to get soft labels?
 #     df_events = pd.read_csv(f"{EVENTS_DIR}/{gameid}.csv")
 #     df_events = df_events.fillna("")
 
@@ -598,7 +610,6 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
     Returns:
         List of feature vectors for consecutive moments
     """
-    print(f"Processing game {game_id}..., {game_df.shape} {len(playerid_to_idx)}")
     features = []
     play_identifiers = []  # Store (game_id, event_id) pairs
     prev_moment = None
@@ -756,22 +767,38 @@ def save_feature_arrays(
         output_dir: Directory to save the output numpy arrays
         playerid_to_idx: Optional player ID to index mapping. If None, a new one will be created.
     """
+    if playerid_to_idx is None:
+        raise ValueError("playerid_to_idx must be provided")
+    if game_df.is_empty():
+        print(f"Game {game_id} is empty, skipping.")
+        return
+
     os.makedirs(output_dir, exist_ok=True)
 
     features, identifiers = create_feature_vectors(game_id, game_df, playerid_to_idx)
     if features:
         features_array = np.stack(features)
 
-        print(f"Feature vector shape: {features_array.shape}")
         # Save the features and identifiers
         # Save the features as a numpy array
         np.save(os.path.join(output_dir, f"{game_id}_X.npy"), features_array)
         print(f"Saved {len(features)} feature vectors for game {game_id}")
         identifiers_array = np.array(identifiers, dtype=object)
-        print(f"Identifiers shape: {identifiers_array.shape}")
         np.save(os.path.join(output_dir, f"{game_id}_ids.npy"), identifiers_array)
     else:
         print(f"No features generated for game {game_id}")
+
+
+from multiprocessing import Pool
+
+
+def process_game(game_id: str, game: Dataset, playerid_to_idx: dict[int, int]):
+    """
+    Process a single game: rotate court and save feature arrays.
+    """
+    game_df = game.to_polars()
+    rotated_game_df = rotate_court(game_id, game_df)
+    save_feature_arrays(rotated_game_df, game_id, GAMES_DIR, playerid_to_idx)
 
 
 if __name__ == "__main__":
@@ -794,6 +821,7 @@ if __name__ == "__main__":
     dataset: Dataset = load_nba_dataset(split="train", name=args.name)
 
     dataset = dataset.with_format("polars")
+    # The following filters out approx 50% of the plays
     dataset = dataset.map(
         lambda df: df.filter(
             (pl.col("moments").list.len() > 0)
@@ -803,30 +831,44 @@ if __name__ == "__main__":
             & pl.col("event_info").struct.field("type").is_in([1, 2, 5, 6])
         ),
         batched=True,
+        num_proc=NUM_PROCESSES,
+        desc="Filtering dataset",
     )
 
-    # TODO I somehow need to split by gameid (and batch by a few games) df["gameid"].unique()
-    # TODO build the playerid_to_idx mapping for the entire dataset first
     playerid_to_idx = build_player_index_map(dataset)
-
-    game_ids = dataset.unique("gameid")
-    print(f"Found {len(game_ids)} unique game IDs")
-    batch_size = 10  # Number of games to process in each batch
-    for i in range(0, len(game_ids), batch_size):
-        batch_game_ids = game_ids[i : i + batch_size]
-
-        batch_dataset = dataset.filter(lambda df: df["gameid"].is_in(batch_game_ids), batched=True)
-
-        # Convert to Polars DataFrame. This loads into memory!
-        batch_df = batch_dataset.to_polars()
-
-        for game_id in batch_game_ids:
-            game_df = batch_df.filter(pl.col("gameid") == game_id)
-            rotated_game_df = rotate_court(game_id, game_df)
-            save_feature_arrays(rotated_game_df, game_id, GAMES_DIR, playerid_to_idx)
-
     # Save the player ID mapping
     pickle.dump(playerid_to_idx, open(f"{GAMES_DIR}/playerid_to_idx.pydict", "wb"))
     print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
 
-    # TODO compute y soft-labels and store them in _y.parquet
+    def get_games_ranges(dataset: Dataset) -> OrderedDict:
+        game_ids_all = dataset["gameid"]
+        game_ranges = OrderedDict()  # Preserves insertion order
+        start_idx = 0
+        current_game = game_ids_all[0]
+
+        for idx, game_id in enumerate(game_ids_all):
+            if game_id != current_game:
+                game_ranges[current_game] = (start_idx, idx)
+                current_game = game_id
+                start_idx = idx
+        # Add the final game
+        game_ranges[current_game] = (start_idx, len(game_ids_all))
+        return game_ranges
+
+    game_ranges = get_games_ranges(dataset)
+    game_datasets = {
+        game_id: dataset.select(range(start, end)) for game_id, (start, end) in game_ranges.items()
+    }
+
+    game_ids = dataset.unique("gameid")
+    BATCH_SIZE = NUM_PROCESSES * 10
+    for i in range(0, len(game_ids), BATCH_SIZE):
+        batch_game_ids = game_ids[i : i + BATCH_SIZE]
+
+        with Pool(processes=NUM_PROCESSES) as pool:
+            pool.starmap(
+                process_game,
+                [(game_id, game_datasets[game_id], playerid_to_idx) for game_id in batch_game_ids],
+            )
+
+    # TODO? compute y soft-labels and store them in _y.parquet

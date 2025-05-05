@@ -82,23 +82,28 @@ def extract_game_and_team_info(play: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def filter_empty_moments(moments_batch: list[list[dict[str, Any]]]) -> list[bool]:
-    return [moments is not None and len(moments) > 0 for moments in moments_batch]
-
-
 def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> None:
     """Process the dataset using datasets library features."""
     logger.info("Start processing data.")
 
-    dataset_filtered = dataset.filter(
-        filter_empty_moments,
+    dataset = dataset.with_format("polars")
+    dataset = dataset.map(
+        lambda df: df.filter(
+            (pl.col("moments").list.len() > 0)  # Exclude empty moments
+            & (pl.col("event_info").struct.field("possession_team_id").is_not_null())
+            & (~pl.col("event_info").struct.field("possession_team_id").is_nan())
+            & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
+            & pl.col("event_info")
+            .struct.field("type")
+            .is_in([1, 2, 5, 6])  # See preprocess.py for description of event types
+        ),
         batched=True,
-        input_columns="moments",
-        batch_size=64,
+        desc="Filtering dataset",
         num_proc=NUM_PROCESSES,
     )
+    dataset = dataset.with_format(None)  # Back to default dict format
 
-    dataset_plays = dataset_filtered.select_columns(
+    dataset_plays = dataset.select_columns(
         [
             "gameid",
             "primary_info",
@@ -112,19 +117,24 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
         fn_kwargs={"sampling_rate": sampling_rate},
         remove_columns=list(set(dataset_plays.column_names)),
         num_proc=NUM_PROCESSES,
+        desc="Processing plays",
     )
     dataset_plays = dataset_plays.rename_column("moments_processed", "moments")
 
     plays_dir = output_path / "plays"
     os.makedirs(plays_dir, exist_ok=True)
 
-    df_plays = dataset_plays.to_polars()
-    for (game_id,), game in df_plays.group_by("game_id", maintain_order=True):
+    game_ids = dataset_plays.unique("game_id")
+    for game_id in game_ids:
+        game = dataset_plays.filter(
+            lambda d: [game_id == curr_id for curr_id in d["game_id"]], batched=True
+        )
         output_file = plays_dir / f"{game_id}.jsonl"
-        game.write_ndjson(output_file)
+        # Load just a single game into memory with to_polars
+        game.to_polars(batched=False).write_ndjson(output_file)
 
     # Extract game and team info
-    dataset_info = dataset_filtered.select_columns(
+    dataset_info = dataset.select_columns(
         [
             "gameid",
             "gamedate",

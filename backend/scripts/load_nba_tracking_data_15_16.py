@@ -202,11 +202,11 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
         urls = _URLS
 
         extracted_path = dl_manager.download_and_extract(urls)
-        file_paths = [
-            os.path.join(dir_path, os.listdir(dir_path)[0])
-            for dir_path in extracted_path.values()
+        file_paths = {
+            key: os.path.join(dir_path, os.listdir(dir_path)[0])
+            for key, dir_path in extracted_path.items()
             if os.path.isdir(dir_path) and os.listdir(dir_path)
-        ]
+        }
 
         return [
             datasets.SplitGenerator(
@@ -223,7 +223,7 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
 
         moment_id = 0
 
-        for path in filepaths:
+        for path in filepaths.values():
             with open(path, encoding="utf-8") as fp:
                 game = json.load(fp)
                 game_id = game["gameid"]
