@@ -129,7 +129,7 @@ def train_model(train_loader, valid_loader, model, device, opts):
     print(f"seq_len: {seq_len}")
 
     # Initialize optimizer.
-    train_params = [params for params in model.parameters()]
+    train_params = list(model.parameters())
     optimizer = torch.optim.Adam(train_params, lr=opts["train"]["learning_rate"])
 
     best_valid_loss = float("inf")
@@ -157,13 +157,13 @@ def train_model(train_loader, valid_loader, model, device, opts):
                 [batch["player_xs"], batch["player_ys"], batch["player_vxs"], batch["player_vys"]],
                 dim=-1,
             )  # [T, 40]
-
             x = torch.cat([batch["game_data"], player_feats], dim=-1).to(device)  # [T, 40 + 10]
 
-            optimizer.zero_grad()
             x_hat, mu, logvar = model(x)
 
             loss, recon, kl = vae_loss(x_hat, x, mu, logvar, beta=opts["train"]["beta"])
+
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
