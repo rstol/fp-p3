@@ -8,7 +8,7 @@ import ScatterPlot from '~/components/ScatterPlot';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
 import { Separator } from '~/components/ui/separator';
 import { BASE_URL, GameFilter } from '~/lib/const';
-import type { Point, Team } from '~/types/data';
+import type { Game, Point, Team } from '~/types/data';
 import type { Route } from './+types/_index';
 import { max } from 'd3';
 
@@ -51,12 +51,11 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   let timeframe = isNaN(Number(url.searchParams.get('timeframe')))
     ? GameFilter.LAST5
     : Number(url.searchParams.get('timeframe'));
-  let totalGames = 0;
 
-  if (teamID) {
-    const response = await fetchWithCache<Team[]>(`${BASE_URL}/teams/${teamID}/games`);
-    totalGames = response.length;
-  }
+  const games = await (teamID
+    ? fetchWithCache<Game[]>(`${BASE_URL}/teams/${teamID}/games`)
+    : Promise.resolve(null));
+  const totalGames = games?.length ?? 0;
   timeframe = Math.min(totalGames, timeframe);
 
   const fetchPromises: [Promise<Team[]>, Promise<ScatterDataResponse | null>] = [
@@ -74,7 +73,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
     timeframe,
     totalGames,
     teams,
-    games: [], // unused
+    games,
     scatterData,
   };
 }
