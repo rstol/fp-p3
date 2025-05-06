@@ -174,7 +174,7 @@ function InfoBar() {
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const loaderData = useLoaderData<typeof clientLoader>();
-  const data = loaderData?.scatterData ?? [];
+  const data = loaderData?.scatterData?.points ?? [];
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
   const updatePlay = useDashboardStore((state) => state.updatePlay);
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);

@@ -11,6 +11,11 @@ import { BASE_URL, GameFilter } from '~/lib/const';
 import type { Point, Team } from '~/types/data';
 import type { Route } from './+types/_index';
 
+interface ScatterDataResponse {
+  total_games: number;
+  points: Point[];
+}
+
 export function meta({}: Route.MetaArgs) {
   return [
     { title: 'New React Router App' },
@@ -24,7 +29,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const teamid = url.searchParams.get('teamid');
   const timeframe = url.searchParams.get('timeframe') ?? GameFilter.LAST3;
   // invariant(typeof teamid === 'strin g', 'teamid is required');
-  let scatterData: null | Point[] = null;
+  let scatterData: null | ScatterDataResponse = null;
 
   function createCacheKey(fullUrl: string, includeSearch: boolean = false): string {
     const urlObj = new URL(fullUrl);
@@ -49,10 +54,10 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
     return data;
   }
 
-  const fetchPromises: [Promise<Team[]>, Promise<Point[] | null>] = [
+  const fetchPromises: [Promise<Team[]>, Promise<ScatterDataResponse | null>] = [
     fetchWithCache<Team[]>(`${BASE_URL}/teams`),
     teamid
-      ? fetchWithCache<Point[]>(
+      ? fetchWithCache<ScatterDataResponse>(
           `${BASE_URL}/teams/${teamid}/plays/scatter${timeframe ? `?timeframe=${timeframe}` : ''}`,
           true,
         )
