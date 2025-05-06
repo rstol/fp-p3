@@ -22,6 +22,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 NUM_PROCESSES = os.cpu_count()
+TEAM_IDS_SAMPLE = {
+    1610612741,
+    1610612748,
+    1610612752,
+    1610612754,
+    1610612755,
+    1610612761,
+    1610612766,
+}
 
 
 def load_nba_dataset(split: str | None = None, name: str = "full"):
@@ -95,7 +104,10 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
             & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
             & pl.col("event_info")
             .struct.field("type")
-            .is_in([1, 2, 5, 6])  # See preprocess.py for description of event types
+            .is_in([1, 2])  # See preprocess.py for description of event types
+            & (
+                pl.col("home").struct.field("teamid").is_in(TEAM_IDS_SAMPLE)
+            )  # Filter for small set of teams
         ),
         batched=True,
         desc="Filtering dataset",
