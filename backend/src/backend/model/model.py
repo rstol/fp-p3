@@ -1,16 +1,28 @@
 # TODO implement Transformer with VAE bottleneck and (contrastive) loss?
+import einops as EO
 import torch
 import torch.nn as nn
 
 
 class Baller2Play(nn.Module):
     def __init__(
-        self, input_dim=50, latent_dim=64, hidden_dim=128, n_layers=2, n_heads=4, seq_len=30
-    ):
+        self,
+        input_dim: int = 50,
+        latent_dim: int = 64,
+        hidden_dim: int = 128,
+        n_layers: int = 2,
+        n_heads: int = 4,
+        seq_len: int = 30,
+    ) -> None:
         super().__init__()
         self.seq_len = seq_len
-        self.input_proj = nn.Linear(input_dim, hidden_dim)
-        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_dim))
+
+        self.input_proj = nn.Linear(in_features=input_dim, out_features=hidden_dim, bias=False)
+        self.cls_token = nn.Parameter(
+            torch.randn(
+                hidden_dim,
+            )
+        )
 
         # Transformer Encoder
         encoder_layer = nn.TransformerEncoderLayer(
@@ -19,43 +31,55 @@ class Baller2Play(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
 
         # Bottleneck
-        self.mu = nn.Linear(hidden_dim, latent_dim)
-        self.logvar = nn.Linear(hidden_dim, latent_dim)
+        self.mu = nn.Linear(in_features=hidden_dim, out_features=latent_dim)
+        self.logvar = nn.Linear(in_features=hidden_dim, out_features=latent_dim)
 
         # Decoder input: sample -> broadcast to seq_len
         self.latent_to_hidden = nn.Linear(latent_dim, hidden_dim)
-        self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model=hidden_dim, nhead=n_heads), num_layers=n_layers
+        decoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim, nhead=n_heads, norm_first=True, batch_first=True
         )
-        self.output_proj = nn.Linear(hidden_dim, input_dim)
+        self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=n_layers)
+        self.output_proj = nn.Linear(in_features=hidden_dim, out_features=input_dim)
 
-    def reparameterize(self, mu, logvar):
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=0.02)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
+
+    def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, x):
-        T, H = x.shape
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _, seq_len, _ = x.shape
 
-        x_proj = self.input_proj(x)  # [B, T, H]
+        tokens = self.input_proj(x)  # [B, T, H]
 
         # Prepend CLS token
-        cls_tokens = self.cls_token.expand(1, 1, H)  # [B, 1, H]
-        x_with_cls = torch.cat([cls_tokens, x_proj], dim=1)  # [B, T+1, H]
+        cls_tokens = EO.repeat(self.cls_token, "H -> 1 1 H")
+        tokens = torch.cat([cls_tokens, tokens], dim=1)  # [B, T+1, H]
 
-        encoded = self.encoder(x_with_cls)  # [B, T+1, H]
+        tokens = self.encoder(tokens)  # [B, T+1, H]
 
         # Use CLS output to compute mu and logvar
-        cls_out = encoded[:, 0, :]  # [B, H]
+        cls_out = tokens[:, 0, :]  # [B, H]
         mu = self.mu(cls_out)
         logvar = self.logvar(cls_out)
         z = self.reparameterize(mu, logvar)  # [B, latent_dim]
 
         # Decode from latent
-        z_proj = self.latent_to_hidden(z)  # [B, H]
-        z_proj = z_proj.unsqueeze(1).repeat(1, self.seq_len, 1)  # [T, B, H]
-        memory = encoded[:, 1:, :]  # Exclude CLS for memory: [B, T, H]
-        decoded = self.decoder(tgt=z_proj, memory=memory)  # [B, T, H]
-        x_hat = self.output_proj(decoded)  # [B, T, F]
+        z = self.latent_to_hidden(z)  # [B, H]
+        z = EO.repeat(z, "b h -> b s h", s=seq_len)
 
-        return x_hat, mu, logvar
+        # TODO: Need to add some kind of position to z (t or xy or something)
+        # z = z + t_proj
+
+        decoded = self.decoder(z)  # [B, T, H]
+        decoded = self.output_proj(decoded)  # [B, T, F]
+
+        return decoded, mu, logvar

@@ -2,7 +2,7 @@ import argparse
 import os
 import pickle
 import typing as t
-from collections import OrderedDict
+from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
@@ -371,26 +371,35 @@ def build_player_index_map(dataset: Dataset) -> dict[int, int]:
     """
 
     def extract_with_expressions(df: pl.DataFrame) -> dict:
-        local_ids = set()
-        for players_list in df.select(pl.col("home").struct.field("players")).to_series():
-            local_ids.update(player["playerid"] for player in players_list)
-        for players_list in df.select(pl.col("visitor").struct.field("players")).to_series():
-            local_ids.update(player["playerid"] for player in players_list)
-        return {"player_ids": list(local_ids)}
+        return {
+            "player_ids": (
+                (
+                    pl.concat(
+                        [
+                            df.select(pl.col("home").struct.field("players")),
+                            df.select(pl.col("visitor").struct.field("players")),
+                        ]
+                    )
+                    .explode("players")
+                    .select(pl.col("players").struct.field("playerid"))
+                )
+                .to_series()
+                .unique()
+                .to_list()
+            )
+        }
 
     results = dataset.map(
         extract_with_expressions,
         batched=True,
-        load_from_cache_file=False,  # Disable caching
         batch_size=4000,
         desc="Build player_index_map",
         num_proc=NUM_PROCESSES,
     )
     # Create a mapping from player_id to index
-    from itertools import chain
 
-    all_player_ids = set(chain.from_iterable(batch["player_ids"] for batch in results))
-    return {player_id: idx for idx, player_id in enumerate(sorted(all_player_ids))}
+    results = results.sort("player_ids").unique("player_ids")
+    return {player_id: idx for idx, player_id in enumerate(results)}
 
 
 def add_score_fields(game_id: str, game_df: pl.DataFrame) -> pl.DataFrame:
@@ -641,9 +650,6 @@ def save_feature_arrays(
         print(f"No features generated for game {game_id}")
 
 
-from multiprocessing import Pool
-
-
 def process_game(game_id: str, game: Dataset, playerid_to_idx: dict[int, int]):
     """
     Process a single game: rotate court and save feature arrays.
@@ -673,15 +679,19 @@ if __name__ == "__main__":
     dataset: Dataset = load_nba_dataset(split="train", name=args.name)
 
     dataset = dataset.with_format("polars")
+
     # The following filters out approx 50% of the plays
-    dataset = dataset.map(
-        lambda df: df.filter(
+    def filter_plays(df):
+        return df.filter(
             (pl.col("moments").list.len() > 0)
             & (pl.col("event_info").struct.field("possession_team_id").is_not_null())
             & (~pl.col("event_info").struct.field("possession_team_id").is_nan())
             & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
             & pl.col("event_info").struct.field("type").is_in([1, 2])  # made or missed shots
-        ),
+        )
+
+    dataset = dataset.map(
+        filter_plays,
         batched=True,
         num_proc=NUM_PROCESSES,
         desc="Filtering dataset",
@@ -689,12 +699,14 @@ if __name__ == "__main__":
 
     playerid_to_idx = build_player_index_map(dataset)
     # Save the player ID mapping
-    pickle.dump(playerid_to_idx, open(f"{GAMES_DIR}/playerid_to_idx.pydict", "wb"))
+    Path(GAMES_DIR).mkdir(parents=True, exist_ok=True)
+    with open(f"{GAMES_DIR}/playerid_to_idx.pkl", "wb") as f:
+        pickle.dump(playerid_to_idx, f)
     print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
 
-    def get_games_ranges(dataset: Dataset) -> OrderedDict:
+    def get_games_ranges(dataset: Dataset) -> dict:
         game_ids_all = dataset["gameid"]
-        game_ranges = OrderedDict()  # Preserves insertion order
+        game_ranges = {}
         start_idx = 0
         current_game = game_ids_all[0]
 
