@@ -40,7 +40,7 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         name (str): Dataset size to load ('tiny', 'small', 'medium', or 'full')
     """
     return load_dataset(
-        f"{os.getenv("SCRIPTS_DIR")}/load_nba_tracking_data_15_16.py",
+        f"{os.getenv('SCRIPTS_DIR')}/load_nba_tracking_data_15_16.py",
         trust_remote_code=True,
         name=name,
         split=split,
@@ -85,6 +85,9 @@ def right_basket(moment):
 
 
 def rotate_coordinates(event: dict[str, t.Any]) -> dict[str, t.Any]:
+    """
+    After rotation the attacking team moves towards increasing y-coordinates.
+    """
     direction = event["event_info"]["direction"]
 
     if direction == "unknown":
@@ -123,12 +126,163 @@ def rotate_coordinates(event: dict[str, t.Any]) -> dict[str, t.Any]:
     return rotated
 
 
-def rotate_court(game_id: str, game_df: pl.DataFrame):
+def trim_to_halfcourt(event: dict[str, t.Any]) -> dict[str, t.Any]:
     """
-    Modifies the events to be worked with in a uniform format by rotating the coordinates depending on the direction of play.
+    Trims the beginning of an event to start when the ball crosses half-court
+    """
+    trimmed = event.copy()
+    half_court_y = COURT_LENGTH / 2
+
+    # Find the first moment where ball crosses half-court or dribbling begins
+    start_index = 0
+    for i, moment in enumerate(trimmed["moments"]):
+        ball_y = moment["ball_coordinates"]["y"]
+
+        if ball_y >= half_court_y:
+            start_index = i
+            break
+
+    trimmed["moments"] = trimmed["moments"][start_index:]
+    return trimmed
+
+
+def detect_unreasonable_trajectories(event: dict[str, t.Any]) -> dict[str, list]:
+    """
+    Analyzes an event to detect unreasonable trajectory sequences.
+
+    Args:
+        event: The event dictionary with moments
+
+    Returns:
+        Dictionary of detected issues with timestamps
+    """
+    issues = {
+        "impossible_speed": [],
+        "teleportation": [],
+        "stuck_coordinates": [],
+        "ball_physics": [],
+    }
+
+    moments = event["moments"]
+    if len(moments) < 2:
+        return issues
+
+    MAX_SPEED_FT_PER_FRAME = 1.2  # ~30 ft/s at 25Hz
+    TELEPORT_THRESHOLD = 10.0  # ft
+
+    prev_ball_pos = None
+    prev_player_pos = {}
+
+    # Track multiple frames for jitter detection
+    player_positions = {}  # player_id -> list of recent positions
+    ball_heights = []
+
+    for moment_idx, moment in enumerate(moments):
+        ball_pos = (moment["ball_coordinates"]["x"], moment["ball_coordinates"]["y"])
+
+        if "z" in moment["ball_coordinates"]:
+            ball_height = moment["ball_coordinates"]["z"]
+            ball_heights.append(ball_height)
+
+            # Check for ball physics - maintain constant height
+            if len(ball_heights) > 10:
+                height_variance = sum(
+                    (h - sum(ball_heights) / len(ball_heights)) ** 2 for h in ball_heights
+                ) / len(ball_heights)
+                if height_variance < 0.01 and ball_height > 1.0:  # Ball hovering
+                    issues["ball_physics"].append(moment_idx)
+                ball_heights.pop(0)
+
+        # Check ball speed/teleportation
+        if prev_ball_pos:
+            distance = (
+                (ball_pos[0] - prev_ball_pos[0]) ** 2 + (ball_pos[1] - prev_ball_pos[1]) ** 2
+            ) ** 0.5
+
+            if distance > TELEPORT_THRESHOLD:
+                issues["teleportation"].append(moment_idx)
+
+        prev_ball_pos = ball_pos
+
+        for player in moment["player_coordinates"]:
+            player_id = player["playerid"]
+            player_pos = (player["x"], player["y"])
+
+            # Initialize tracking for this player if new
+            if player_id not in player_positions:
+                player_positions[player_id] = []
+
+            # Add current position to history
+            player_positions[player_id].append(player_pos)
+            if len(player_positions[player_id]) > 10:
+                player_positions[player_id].pop(0)
+
+            # Check player speed/teleportation
+            if player_id in prev_player_pos:
+                distance = (
+                    (player_pos[0] - prev_player_pos[player_id][0]) ** 2
+                    + (player_pos[1] - prev_player_pos[player_id][1]) ** 2
+                ) ** 0.5
+
+                if distance > MAX_SPEED_FT_PER_FRAME:
+                    issues["impossible_speed"].append(moment_idx)
+                elif distance > TELEPORT_THRESHOLD:
+                    issues["teleportation"].append(moment_idx)
+                elif distance < 0.01:  # Barely moving
+                    # Check if stuck in place for multiple frames
+                    if len(player_positions[player_id]) > 5:
+                        avg_movement = sum(
+                            (
+                                (
+                                    player_positions[player_id][i][0]
+                                    - player_positions[player_id][i - 1][0]
+                                )
+                                ** 2
+                                + (
+                                    player_positions[player_id][i][1]
+                                    - player_positions[player_id][i - 1][1]
+                                )
+                                ** 2
+                            )
+                            ** 0.5
+                            for i in range(1, len(player_positions[player_id]))
+                        ) / (len(player_positions[player_id]) - 1)
+
+                        if avg_movement < 0.05:  # Very little movement over multiple frames
+                            issues["stuck_coordinates"].append(moment_idx)
+
+            prev_player_pos[player_id] = player_pos
+
+    # Remove duplicates and sort
+    for issue_type in issues:
+        issues[issue_type] = sorted(list(set(issues[issue_type])))
+
+    return issues
+
+
+def filter_unreasonable_plays(event: dict[str, t.Any], threshold: int = 10) -> bool:
+    """
+    Determines if a play should be filtered out due to too many trajectory issues.
+
+    Args:
+        event: The event dictionary
+        threshold: Maximum number of issues allowed before filtering
+
+    Returns:
+        True if play should be kept, False if it should be filtered out
+    """
+    issues = detect_unreasonable_trajectories(event)
+
+    total_issues = sum(len(timestamps) for timestamps in issues.values())
+    return total_issues <= threshold
+
+
+def find_direction_possession_team(game_id: str, game_df: pl.DataFrame):
+    """
+    Modifies the events to be worked with in a uniform format by rotating the coordinates depending
+    on the direction of play.
     There is a bit of hard-coding in the directionality section, which is necessary due to mistimed events in the raw data.
     """
-    # First pass to identify first possession team and directions
     first_poss_team_id = None
     first_direction = None
     second_direction = None
@@ -138,7 +292,6 @@ def rotate_court(game_id: str, game_df: pl.DataFrame):
         if quarter != 1:
             continue
         for moment in event["moments"]:
-            moment = event["moments"][0]
             if left_basket(moment):
                 first_poss_team_id = event["event_info"]["possession_team_id"]
                 first_direction = "left"
@@ -157,33 +310,52 @@ def rotate_court(game_id: str, game_df: pl.DataFrame):
                 break
         if first_poss_team_id is not None:
             break
+    return (first_poss_team_id, first_direction, second_direction)
+
+
+def process_events(game_id: str, game_df: pl.DataFrame):
+    # First pass to identify first possession team and directions
+    first_poss_team_id, first_direction, second_direction = find_direction_possession_team(
+        game_id, game_df
+    )
     if first_poss_team_id is None:
         return game_df
 
     processed_events = []
     for event in game_df.iter_rows(named=True):
-        quarter = event["moments"][0]["quarter"]
-        direction = "unknown"
+        if not filter_unreasonable_plays(event):
+            continue
 
-        if quarter == 1:
-            direction = first_direction
-        elif quarter == 2:
-            if event["event_info"]["possession_team_id"] == first_poss_team_id:
-                direction = first_direction
-            else:
-                direction = second_direction
-        elif quarter >= 3:
-            if event["event_info"]["possession_team_id"] == first_poss_team_id:
-                direction = second_direction
-            else:
-                direction = first_direction
-        event["event_info"]["direction"] = direction
-
+        set_direction(first_poss_team_id, first_direction, second_direction, event)
         # Now rotate coordinates
         rotated_event = rotate_coordinates(event)
-        processed_events.append(rotated_event)
+        # Trim to offensive plays
+        trimmed_event = trim_to_halfcourt(rotated_event)
+        if len(trimmed_event["moments"]) < 50:
+            continue
+
+        processed_events.append(trimmed_event)
 
     return pl.DataFrame(processed_events, schema=game_df.schema)
+
+
+def set_direction(first_poss_team_id, first_direction, second_direction, event):
+    quarter = event["moments"][0]["quarter"]
+    direction = "unknown"
+
+    if quarter == 1:
+        direction = first_direction
+    elif quarter == 2:
+        if event["event_info"]["possession_team_id"] == first_poss_team_id:
+            direction = first_direction
+        else:
+            direction = second_direction
+    elif quarter >= 3:
+        if event["event_info"]["possession_team_id"] == first_poss_team_id:
+            direction = second_direction
+        else:
+            direction = first_direction
+    event["event_info"]["direction"] = direction
 
 
 def build_player_index_map(dataset: Dataset) -> dict[int, int]:
@@ -267,316 +439,6 @@ def add_score_fields(game_id: str, game_df: pl.DataFrame) -> pl.DataFrame:
     return game_df
 
 
-# def get_event_stream(gameid: str, game_df: pl.DataFrame):
-#     TODO adapt the following to get soft labels?
-#     df_events = pd.read_csv(f"{EVENTS_DIR}/{gameid}.csv")
-#     df_events = df_events.fillna("")
-
-#     # Posession times.
-#     # EVENTMSGTYPE descriptions can be found at: https://github.com/rd11490/NBA_Tutorials/tree/master/analyze_play_by_play.
-#     event = None
-#     score = "0 - 0"
-#     score_diff = 0
-#     # pos_team is the team that had possession prior to the event.
-#     (pos_team, pos_team_idx) = (df_events["home_team_id"], 0)
-#     jump_ball_team_idx = None
-#     # I think most of these are technical fouls.
-#     skip_fouls = {10, 11, 16, 19}
-
-#     events = set()
-#     pos_stream = []
-#     event_stream = []
-#     for row_idx, row in game_df.iter_rows(named=True):
-#         period = row["period"]
-#         game_clock = row["PCTIMESTRING"].split(":")
-#         game_clock_secs = 60 * int(game_clock[0]) + int(game_clock[1])
-#         game_time = get_game_time(game_clock_secs, period)
-
-#         description = row[description_col].lower().strip()
-
-#         eventmsgtype = row[event_col]
-
-#         # Don't know.
-#         if eventmsgtype == 18:
-#             continue
-
-#         # Blank line.
-#         elif eventmsgtype == 14:
-#             continue
-
-#         # End of a period.
-#         elif eventmsgtype == 13:
-#             if period == 4:
-#                 jump_ball_team_idx = None
-
-#             continue
-
-#         # Start of a period.
-#         elif eventmsgtype == 12:
-#             if 2 <= period <= 4:
-#                 if period == 4:
-#                     pos_team_idx = jump_ball_team_idx
-#                 else:
-#                     pos_team_idx = (jump_ball_team_idx + 1) % 2
-
-#             elif 6 <= period:
-#                 pos_team_idx = (jump_ball_team_idx + (period - 5)) % 2
-
-#             continue
-
-#         # Ejection.
-#         elif eventmsgtype == 11:
-#             continue
-
-#         # Jump ball.
-#         elif eventmsgtype == 10:
-#             pos_team = row["PLAYER3_TEAM_ABBREVIATION"]
-
-#             if pos_team == teams[0]:
-#                 pos_team_idx = 0
-#             else:
-#                 pos_team_idx = 1
-
-#             if (period in {1, 5}) and (jump_ball_team_idx is None):
-#                 jump_ball_team_idx = pos_team_idx
-
-#             continue
-
-#         # Timeout.
-#         elif eventmsgtype == 9:
-#             # TV timeout?
-#             if description == "":
-#                 continue
-
-#             event = "timeout"
-
-#         # Substitution.
-#         elif eventmsgtype == 8:
-#             continue
-
-#         # Violation.
-#         elif eventmsgtype == 7:
-#             # With 35 seconds left in the fourth period, there was a kicked ball
-#             # violation attributed to Wayne Ellington of the Brooklyn Nets, but the
-#             # following event is a shot by the Nets, which means possession never changed.
-#             if (gameid == "0021500414") and (row_idx == 427):
-#                 continue
-
-#             # Goaltending is considered a made shot, so the following event is always the
-#             # made shot event.
-#             if "goaltending" in description:
-#                 score = row["SCORE"] if row["SCORE"] else score
-#                 continue
-#             # Jump ball violations have weird possession rules.
-#             elif "jump ball" in description:
-#                 if row["PLAYER1_TEAM_ABBREVIATION"] == teams[0]:
-#                     pos_team_idx = 1
-#                 else:
-#                     pos_team_idx = 0
-
-#                 pos_team = teams[pos_team_idx]
-#                 if (period == 1) and (game_time == 0):
-#                     jump_ball_team_idx = pos_team_idx
-
-#                 continue
-
-#             else:
-#                 if row[player1_team_col] == teams[pos_team_idx]:
-#                     event = "violation_offense"
-#                     pos_team_idx = (pos_team_idx + 1) % 2
-#                 else:
-#                     event = "violation_defense"
-
-#         # Foul.
-#         elif eventmsgtype == 6:
-#             # Skip weird fouls.
-#             if row["EVENTMSGACTIONTYPE"] in skip_fouls:
-#                 score = row["SCORE"] if row["SCORE"] else score
-#                 continue
-#             else:
-#                 if row[player1_team_col] == teams[pos_team_idx]:
-#                     event = "offensive_foul"
-#                     pos_team_idx = (pos_team_idx + 1) % 2
-#                 else:
-#                     event = "defensive_foul"
-
-#         # Turnover.
-#         elif eventmsgtype == 5:
-#             if "steal" in description:
-#                 event = "steal"
-#             elif "goaltending" in description:
-#                 event = "goaltending_offense"
-#             elif (
-#                 ("violation" in description)
-#                 or ("dribble" in description)
-#                 or ("traveling" in description)
-#             ):
-#                 event = "violation_offense"
-#             else:
-#                 event = "turnover"
-
-#             # Team turnover.
-#             if row[player1_team_col] == "":
-#                 team_id = int(row["PLAYER1_ID"])
-#                 team_abb = TEAM_ID2PROPS[team_id]["abbreviation"]
-#             else:
-#                 team_abb = row[player1_team_col]
-
-#             pos_team_idx = 1 if team_abb == teams[0] else 0
-
-#         # Rebound.
-#         elif eventmsgtype == 4:
-#             # With 17 seconds left in the first period, Spencer Hawes missed a tip in,
-#             # which was rebounded by DeAndre Jordan. The tip in is recorded as a rebound
-#             # and a missed shot for Hawes. All three events have the same timestamp,
-#             # which seems to have caused the order of the events to be slightly shuffled
-#             # with the Jordan rebound occurring before the tip in.
-#             if (gameid == "0021500550") and (row_idx == 97):
-#                 continue
-
-#             # Team rebound.
-#             if row[player1_team_col] == "":
-#                 team_id = int(row["PLAYER1_ID"])
-#                 team_abb = row["PLAYER1_TEAM_ABBREVIATION"]
-#                 if team_abb == teams[pos_team_idx]:
-#                     event = "rebound_offense"
-#                 else:
-#                     event = "rebound_defense"
-#                     pos_team_idx = (pos_team_idx + 1) % 2
-
-#             elif row[player1_team_col] == teams[pos_team_idx]:
-#                 event = "rebound_offense"
-#             else:
-#                 event = "rebound_defense"
-#                 pos_team_idx = (pos_team_idx + 1) % 2
-
-#         # Free throw.
-#         elif eventmsgtype == 3:
-#             # See rules for technical fouls: https://official.nba.com/rule-no-12-fouls-and-penalties/.
-#             # Possession only changes for too mt.Any players, which is extremely rare.
-#             if "technical" not in description:
-#                 pos_team_idx = 0 if row[player1_team_col] == teams[0] else 1
-#                 if (
-#                     ("Clear Path" not in row[description_col])
-#                     and ("Flagrant" not in row[description_col])
-#                     and ("MISS" not in row[description_col])
-#                     and (
-#                         ("1 of 1" in description)
-#                         or ("2 of 2" in description)
-#                         or ("3 of 3" in description)
-#                     )
-#                 ):
-#                     # Hack to handle foul shots for away from play fouls.
-#                     if ((gameid == "0021500274") and (row_idx == 519)) or (
-#                         (gameid == "0021500572") and (row_idx == 428)
-#                     ):
-#                         pass
-#                     # This event is a made foul shot by Thaddeus Young of the Brooklyn
-#                     # Nets following an and-one foul, so possession should have changed
-#                     # to the Milwaukee Bucks. However, the next event is a made shot by
-#                     # Brook Lopez (also of the Brooklyn Nets) with no event indicating a
-#                     # change of possession occurring before it.
-#                     elif (gameid == "0021500047") and (row_idx == 64):
-#                         pass
-#                     else:
-#                         pos_team_idx = (pos_team_idx + 1) % 2
-
-#                 pos_team = teams[pos_team_idx]
-
-#             score = row["SCORE"] if row["SCORE"] else score
-
-#             continue
-
-#         # Missed shot.
-#         elif eventmsgtype == 2:
-#             if "dunk" in description:
-#                 shot_type = "dunk"
-#             elif "layup" in description:
-#                 shot_type = "layup"
-#             else:
-#                 shot_type = "shot"
-
-#             if "BLOCK" in row[description_col]:
-#                 miss_type = "block"
-#             else:
-#                 miss_type = "miss"
-
-#             event = f"{shot_type}_{miss_type}"
-
-#             if row[player1_team_col] != teams[pos_team_idx]:
-#                 print(pos_stream[-5:])
-#                 raise ValueError(f"Incorrect possession team in row {str(row_idx)}.")
-
-#         # Made shot.
-#         elif eventmsgtype == 1:
-#             if "dunk" in description:
-#                 shot_type = "dunk"
-#             elif "layup" in description:
-#                 shot_type = "layup"
-#             else:
-#                 shot_type = "shot"
-
-#             event = f"{shot_type}_made"
-
-#             if row[player1_team_col] != teams[pos_team_idx]:
-#                 print(pos_stream[-5:])
-#                 raise ValueError(f"Incorrect possession team in row {str(row_idx)}.")
-
-#             pos_team_idx = (pos_team_idx + 1) % 2
-
-#         events.add(event)
-#         pos_stream.append(pos_team_idx)
-
-#         if row[player1_team_col] == "":
-#             team_id = int(row["PLAYER1_ID"])
-#             event_team = row["PLAYER1_TEAM_ABBREVIATION"]
-#         else:
-#             event_team = row[player1_team_col]
-
-#         event_stream.append(
-#             {
-#                 "game_time": game_time - 1,
-#                 "pos_team": pos_team,
-#                 "event": event,
-#                 "description": description,
-#                 "event_team": event_team,
-#                 "score": score,
-#                 "score_diff": score_diff,
-#             }
-#         )
-
-#         # With 17 seconds left in the first period, Spencer Hawes missed a tip in,
-#         # which was rebounded by DeAndre Jordan. The tip in is recorded as a rebound
-#         # and a missed shot for Hawes. All three events have the same timestamp,
-#         # which seems to have caused the order of the events to be slightly shuffled
-#         # with the Jordan rebound occurring before the tip in.
-#         if (gameid == "0021500550") and (row_idx == 98):
-#             event_stream.append(
-#                 {
-#                     "game_time": game_time - 1,
-#                     "pos_team": pos_team,
-#                     "event": "rebound_defense",
-#                     "description": "jordan rebound (off:2 def:5)",
-#                     "event_team": "LAC",
-#                     "score": score,
-#                     "score_diff": score_diff,
-#                 }
-#             )
-#             pos_team_idx = (pos_team_idx + 1) % 2
-
-#         # This event is a missed shot by Kawhi Leonard of the San Antonio Spurs. The next
-#         # event is a missed shot by Bradley Beal of the Washington Wizards with no
-#         # event indicating a change of possession occurring before it.
-#         if (gameid == "0021500061") and (row_idx == 240):
-#             pos_team_idx = (pos_team_idx + 1) % 2
-
-#         pos_team = teams[pos_team_idx]
-#         score = row["SCORE"] if row["SCORE"] else score
-#         score_diff = row["SCOREMARGIN"] if row["SCOREMARGIN"] else score_diff
-
-#     return event_stream
-
-
 def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx: dict[int, int]):
     """
     Creates feature vector for a single game in the DataFrame.
@@ -640,17 +502,6 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
         # Skip if time isn't advancing (e.g., clock stoppage or duplicate)
         if game_time <= prev_time:
             continue
-
-        # # Moments can overlap temporally, so previously processed time points are
-        # # skipped along with clock stoppages.
-        # while game_time > event_stream[event_idx]["game_time"]:
-        #     event_idx += 1
-        #     if event_idx >= len(event_stream):
-        #         game_over = True
-        #         break
-
-        # if game_over:
-        #     break
 
         player_x_velocities = np.zeros(len(playerid_to_idx))
         player_y_velocities = np.zeros(len(playerid_to_idx))
@@ -798,8 +649,8 @@ def process_game(game_id: str, game: Dataset, playerid_to_idx: dict[int, int]):
     Process a single game: rotate court and save feature arrays.
     """
     game_df = game.to_polars()
-    rotated_game_df = rotate_court(game_id, game_df)
-    save_feature_arrays(rotated_game_df, game_id, GAMES_DIR, playerid_to_idx)
+    game_df = process_events(game_id, game_df)
+    save_feature_arrays(game_df, game_id, GAMES_DIR, playerid_to_idx)
 
 
 if __name__ == "__main__":
@@ -829,7 +680,7 @@ if __name__ == "__main__":
             & (pl.col("event_info").struct.field("possession_team_id").is_not_null())
             & (~pl.col("event_info").struct.field("possession_team_id").is_nan())
             & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
-            & pl.col("event_info").struct.field("type").is_in([1, 2, 5, 6])
+            & pl.col("event_info").struct.field("type").is_in([1, 2])  # made or missed shots
         ),
         batched=True,
         num_proc=NUM_PROCESSES,
