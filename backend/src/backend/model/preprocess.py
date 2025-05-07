@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 from datasets import Dataset, load_dataset
 
-from backend.settings import COURT_LENGTH, COURT_WIDTH, EVENTS_DIR, GAMES_DIR
+from backend.settings import COURT_LENGTH, COURT_WIDTH, GAMES_DIR
 
 # Event type to event name mapping
 event_type_to_name = {
@@ -40,7 +40,7 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         name (str): Dataset size to load ('tiny', 'small', 'medium', or 'full')
     """
     return load_dataset(
-        f"{os.getenv('SCRIPTS_DIR')}/load_nba_tracking_data_15_16.py",
+        f"{os.getenv('SCRIPTS_DIR', 'backend/scripts')}/load_nba_tracking_data_15_16.py",
         trust_remote_code=True,
         name=name,
         split=split,
@@ -323,8 +323,8 @@ def process_events(game_id: str, game_df: pl.DataFrame):
 
     processed_events = []
     for event in game_df.iter_rows(named=True):
-        if not filter_unreasonable_plays(event):
-            continue
+        # if not filter_unreasonable_plays(event):
+        #     continue
 
         set_direction(first_poss_team_id, first_direction, second_direction, event)
         # Now rotate coordinates
@@ -402,52 +402,6 @@ def build_player_index_map(dataset: Dataset) -> dict[int, int]:
     return {player_id: idx for idx, player_id in enumerate(results)}
 
 
-def add_score_fields(game_id: str, game_df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Adds 'score' and 'score_diff' fields to the game DataFrame.
-
-    Args:
-        game_id: The ID of the game.
-        game_df: Polars DataFrame containing the game events.
-
-    Returns:
-        Polars DataFrame with added 'score' and 'score_diff' fields.
-    """
-    events_df = pl.read_csv(
-        f"{EVENTS_DIR}/{game_id}.csv", schema_overrides={"SCOREMARGIN": pl.Utf8}
-    )
-
-    # Ensure SCOREMARGIN is treated as a string for comparison
-    events_df = events_df.with_columns(
-        [
-            pl.col("SCOREMARGIN")
-            .fill_null(strategy="forward")
-            .fill_null("0")  # beginning of game
-            .alias("score_diff_raw"),
-            pl.col("EVENTNUM").cast(pl.Utf8).alias("EVENTNUM"),
-            pl.col("SCORE").fill_null(strategy="forward").fill_null("0 - 0").alias("score"),
-        ]
-    )
-
-    # Replace "TIE" with "0", then cast to Int64
-    events_df = events_df.with_columns(
-        pl.when(pl.col("score_diff_raw") == "TIE")
-        .then(pl.lit("0"))
-        .otherwise(pl.col("score_diff_raw"))
-        .cast(pl.Int64)
-        .alias("score_diff")
-    )
-
-    game_df = game_df.join(
-        events_df.select(["EVENTNUM", "score", "score_diff"]),
-        left_on=pl.col("event_info").struct.field("id"),
-        right_on="EVENTNUM",
-        how="left",
-    ).drop("EVENTNUM")
-
-    return game_df
-
-
 def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx: dict[int, int]):
     """
     Creates feature vector for a single game in the DataFrame.
@@ -487,7 +441,6 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
     prev_time = -1
     game_over = False
 
-    game_df = add_score_fields(game_id, game_df)
     # print(game_df.head())
 
     moments_df = (
@@ -619,7 +572,7 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
 
 def save_feature_arrays(
     game_df: pl.DataFrame, game_id: str, output_dir: Path | str, playerid_to_idx: dict[int, int]
-) -> None:
+) -> int:
     """
     Process games and save feature vectors as numpy arrays (one file per game).
 
@@ -632,11 +585,15 @@ def save_feature_arrays(
         raise ValueError("playerid_to_idx must be provided")
     if game_df.is_empty():
         print(f"Game {game_id} is empty, skipping.")
-        return
+        return 0
 
     os.makedirs(output_dir, exist_ok=True)
 
     features, identifiers = create_feature_vectors(game_id, game_df, playerid_to_idx)
+
+    # Count the number of unique identifiers
+    num_plays = len(set(identifiers))
+    print(f"Number of plays in game {game_id}: {num_plays}")
     if features:
         features_array = np.stack(features).astype(np.float32)
 
@@ -648,6 +605,7 @@ def save_feature_arrays(
         np.save(os.path.join(output_dir, f"{game_id}_ids.npy"), identifiers_array)
     else:
         print(f"No features generated for game {game_id}")
+    return num_plays
 
 
 def process_game(game_id: str, game: Dataset, playerid_to_idx: dict[int, int]):
@@ -656,7 +614,7 @@ def process_game(game_id: str, game: Dataset, playerid_to_idx: dict[int, int]):
     """
     game_df = game.to_polars()
     game_df = process_events(game_id, game_df)
-    save_feature_arrays(game_df, game_id, GAMES_DIR, playerid_to_idx)
+    return save_feature_arrays(game_df, game_id, GAMES_DIR, playerid_to_idx)
 
 
 if __name__ == "__main__":
@@ -726,13 +684,18 @@ if __name__ == "__main__":
 
     game_ids = dataset.unique("gameid")
     BATCH_SIZE = NUM_PROCESSES * 10
+    total_plays = 0
     for i in range(0, len(game_ids), BATCH_SIZE):
         batch_game_ids = game_ids[i : i + BATCH_SIZE]
 
+        # Collect the return value of process_game
         with Pool(processes=NUM_PROCESSES) as pool:
-            pool.starmap(
+            results = pool.starmap(
                 process_game,
                 [(game_id, game_datasets[game_id], playerid_to_idx) for game_id in batch_game_ids],
             )
+        total_plays += sum(results)
+
+    print(f"Total number of plays processed: {total_plays}")
 
     # TODO? compute y soft-labels and store them in _y.parquet

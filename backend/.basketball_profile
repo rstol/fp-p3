@@ -4,7 +4,6 @@
 export PROJECT_DIR=/Users/romeostoll/Documents/ETH/Master/2.Semester/ExplainableML/fp-p3/backend/src/backend/model
 export DATA_DIR=/Users/romeostoll/Documents/ETH/Master/2.Semester/ExplainableML/fp-p3/backend/data
 export SCRIPTS_DIR=/Users/romeostoll/Documents/ETH/Master/2.Semester/ExplainableML/fp-p3/backend/scripts
-export EVENTS_DIR=${DATA_DIR}/raw/events
 export TRACKING_DIR=${DATA_DIR}/nba_tracking_data
 export GAMES_DIR=${DATA_DIR}/games_preprocessed
 export EXPERIMENTS_DIR=${DATA_DIR}/experiments

@@ -111,6 +111,8 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
                     "possession_team_id": datasets.Value("float64"),
                     "desc_home": datasets.Value("string"),
                     "desc_away": datasets.Value("string"),
+                    "score": datasets.Value("string"),
+                    "score_margin": datasets.Value("string"),
                 },
                 "primary_info": {
                     "team": datasets.Value("string"),
@@ -240,6 +242,9 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
 
                     event_type = event_row["EVENTMSGTYPE"].item()
 
+                    score = event_row["SCORE"].item()
+                    score_margin = event_row["SCOREMARGIN"].item()
+
                     event_home_desc = event_row["HOMEDESCRIPTION"].item()
 
                     event_away_desc = event_row["VISITORDESCRIPTION"].item()
@@ -275,7 +280,13 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
                                 "z": moment[5][0][4],
                             },
                             "player_coordinates": [
-                                {"teamid": i[0], "playerid": i[1], "x": i[2], "y": i[3], "z": i[4]}
+                                {
+                                    "teamid": i[0],
+                                    "playerid": i[1],
+                                    "x": i[2],
+                                    "y": i[3],
+                                    "z": i[4],
+                                }
                                 for i in moment[5][1:]
                             ],
                         }
@@ -295,6 +306,8 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
                                 "possession_team_id": poss_team_id,
                                 "desc_home": event_home_desc,
                                 "desc_away": event_away_desc,
+                                "score": score,
+                                "score_margin": score_margin,
                             },
                             "primary_info": {
                                 "team": primary_home_away,

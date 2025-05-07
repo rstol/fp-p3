@@ -42,7 +42,7 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         name (str): Dataset size to load ('tiny', 'small', 'medium', or 'full')
     """
     return load_dataset(
-        "./scripts/load_nba_tracking_data_15_16.py",
+        f"{os.getenv('SCRIPTS_DIR', 'backend/scripts')}/load_nba_tracking_data_15_16.py",
         trust_remote_code=True,
         name=name,
         split=split,
@@ -67,12 +67,18 @@ def process_play(play: dict[str, Any], sampling_rate: int) -> dict[str, Any]:
     for moment in play["moments"]:
         moment["player_coordinates"] = simplify_player_coords(moment["player_coordinates"])
 
+    score_margin = play["event_info"]["score_margin"]
+    if score_margin == "TIE":
+        score_margin = "0"
+
     return {
         "game_id": play["gameid"],
         "primary_player_info": play["primary_info"],
         "secondary_player_info": play["secondary_info"],
         "event_id": play["event_info"]["id"],
         "event_type": play["event_info"]["type"],
+        "event_score": play["event_info"]["score"],
+        "event_score_margin": score_margin,
         "possession_team_id": play["event_info"]["possession_team_id"],
         "event_desc_home": play["event_info"]["desc_home"],
         "event_desc_away": play["event_info"]["desc_away"],
@@ -136,14 +142,32 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
     plays_dir = output_path / "plays"
     os.makedirs(plays_dir, exist_ok=True)
 
-    game_ids = dataset_plays.unique("game_id")
-    for game_id in game_ids:
-        game = dataset_plays.filter(
-            lambda d: [game_id == curr_id for curr_id in d["game_id"]], batched=True
-        )
+    def get_games_ranges(dataset: Dataset) -> dict:
+        game_ids_all = dataset["gameid"]
+        game_ranges = {}
+        start_idx = 0
+        current_game = game_ids_all[0]
+
+        for idx, game_id in enumerate(game_ids_all):
+            if game_id != current_game:
+                game_ranges[current_game] = (start_idx, idx)
+                current_game = game_id
+                start_idx = idx
+        # Add the final game
+        game_ranges[current_game] = (start_idx, len(game_ids_all))
+        return game_ranges
+
+    game_ranges = get_games_ranges(dataset)
+    play_datasets = {
+        game_id: dataset_plays.select(range(start, end))
+        for game_id, (start, end) in game_ranges.items()
+    }
+
+    for game_id, game_dataset in play_datasets.items():
         output_file = plays_dir / f"{game_id}.jsonl"
         # Load just a single game into memory with to_polars
-        game.to_polars(batched=False).write_ndjson(output_file)
+        print(f"Writing {output_file} for game {game_id}")
+        game_dataset.to_polars(batched=False).write_ndjson(output_file)
 
     # Extract game and team info
     dataset_info = dataset.select_columns(
