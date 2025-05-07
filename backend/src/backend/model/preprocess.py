@@ -6,10 +6,11 @@ from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import polars as pl
 from datasets import Dataset, load_dataset
 
-from backend.settings import COURT_LENGTH, COURT_WIDTH, GAMES_DIR
+from backend.settings import COURT_LENGTH, COURT_WIDTH, GAMES_DIR, TRACKING_DIR
 
 # Event type to event name mapping
 event_type_to_name = {
@@ -45,7 +46,6 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         name=name,
         split=split,
         num_proc=NUM_PROCESSES,
-        # streaming=True,
     )
 
 
@@ -66,21 +66,30 @@ def get_game_time(game_clock: float, quarter: int) -> float:
         return 4 * 720 + (quarter - 5) * 300 + (300 - game_clock)
 
 
-def left_basket(moment):
+def left_court_offense(moment, poss_team_id):
     """
-    This function takes a moment in the game and returns if the ball is in the left basket.
+    This function takes a moment in the game and returns if ball and possession players are
+    in the left court side.
     """
-    return (3.5 <= moment["ball_coordinates"]["x"] <= 6) and (
-        24 <= moment["ball_coordinates"]["y"] <= 26
+    return moment["ball_coordinates"]["x"] < COURT_LENGTH / 2 and (
+        all(
+            player["x"] < COURT_LENGTH / 2
+            for player in moment["player_coordinates"]
+            if player["teamid"] == poss_team_id
+        )
     )
 
 
-def right_basket(moment):
+def right_court_offense(moment, poss_team_id):
     """
     This function takes a moment in the game and returns if the ball is in the right basket.
     """
-    return (88 <= moment["ball_coordinates"]["x"] <= 90.5) and (
-        24 <= moment["ball_coordinates"]["y"] <= 26
+    return moment["ball_coordinates"]["x"] > COURT_LENGTH / 2 and (
+        all(
+            player["x"] > COURT_LENGTH / 2
+            for player in moment["player_coordinates"]
+            if player["teamid"] == poss_team_id
+        )
     )
 
 
@@ -135,19 +144,23 @@ def trim_to_halfcourt(event: dict[str, t.Any]) -> dict[str, t.Any]:
 
     # Find the first moment where ball crosses half-court or dribbling begins
     start_index = 0
+    end_index = len(trimmed["moments"]) - 1
     for i, moment in enumerate(trimmed["moments"]):
         ball_y = moment["ball_coordinates"]["y"]
 
-        if ball_y >= half_court_y:
+        if ball_y >= half_court_y and not start_index:
             start_index = i
+        if ball_y < half_court_y and i > start_index:
+            end_index = i - 1
             break
 
-    trimmed["moments"] = trimmed["moments"][start_index:]
+    trimmed["moments"] = trimmed["moments"][start_index:end_index]
     return trimmed
 
 
 def detect_unreasonable_trajectories(event: dict[str, t.Any]) -> dict[str, list]:
     """
+    ! Currently unused function !
     Analyzes an event to detect unreasonable trajectory sequences.
 
     Args:
@@ -262,6 +275,7 @@ def detect_unreasonable_trajectories(event: dict[str, t.Any]) -> dict[str, list]
 
 def filter_unreasonable_plays(event: dict[str, t.Any], threshold: int = 10) -> bool:
     """
+    ! Currently unused function !
     Determines if a play should be filtered out due to too many trajectory issues.
 
     Args:
@@ -277,56 +291,95 @@ def filter_unreasonable_plays(event: dict[str, t.Any], threshold: int = 10) -> b
     return total_issues <= threshold
 
 
-def find_direction_possession_team(game_id: str, game_df: pl.DataFrame):
+def find_direction_possession_team(game_id: str, game_df: pl.DataFrame, shots_df: pd.DataFrame):
     """
     Modifies the events to be worked with in a uniform format by rotating the coordinates depending
     on the direction of play.
-    There is a bit of hard-coding in the directionality section, which is necessary due to mistimed events in the raw data.
     """
     first_poss_team_id = None
     first_direction = None
-    second_direction = None
     for event in game_df.iter_rows(named=True):
-        quarter = event["moments"][0]["quarter"]
+        moments = event["moments"]
+        poss_team_id = event["event_info"]["possession_team_id"]
+        event_id = event["event_info"]["id"]
 
+        quarter = moments[0]["quarter"]
         if quarter != 1:
             continue
-        for moment in event["moments"]:
-            if left_basket(moment):
-                first_poss_team_id = event["event_info"]["possession_team_id"]
-                first_direction = "left"
-                second_direction = "right"
-                if game_id in ["0021500292", "0021500648"]:  # TODO check these special cases
-                    first_direction = "right"
-                    second_direction = "left"
-                break
-            elif right_basket(moment):
-                first_poss_team_id = event["event_info"]["possession_team_id"]
-                first_direction = "right"
-                second_direction = "left"
-                if game_id == "0021500648":
-                    first_direction = "left"
-                    second_direction = "right"
-                break
+
+        shot_data = shots_df[
+            (shots_df["GAME_EVENT_ID"] == int(event_id)) & (shots_df["GAME_ID"] == int(game_id))
+        ]
+        if not shot_data.empty:
+            shot_time = shot_data["SHOT_TIME"].iloc[0]
+            for moment in moments:
+                if shot_time is None or moment["game_clock"] is None:
+                    continue
+                if shot_time == moment["game_clock"]:
+                    if left_court_offense(moment, poss_team_id):
+                        first_poss_team_id = poss_team_id
+                        first_direction = "left"
+                    elif right_court_offense(moment, poss_team_id):
+                        first_poss_team_id = poss_team_id
+                        first_direction = "right"
+                    break
         if first_poss_team_id is not None:
             break
-    return (first_poss_team_id, first_direction, second_direction)
+
+        # Fall back to heuristic method if no shot data is found
+        resets = []
+        # Find all shot clock resets (where next shot clock > current)
+        for i in range(len(moments) - 1):
+            shot_clock = moments[i]["shot_clock"]
+            next_shot_clock = moments[i + 1]["shot_clock"]
+            if shot_clock and next_shot_clock and next_shot_clock > shot_clock + 3:
+                resets.append(i)
+        # Add the ending as a reset point
+        resets.append(len(moments) - 1)
+        directions = []
+        # Analyze each possession segment separately
+        start_idx = 0
+        for reset_idx in resets:
+            segment = moments[start_idx : reset_idx + 1]
+
+            # Get position at the middle of this segment for stability
+            mid_idx = len(segment) // 2
+            mid_moment = segment[mid_idx]
+
+            if left_court_offense(mid_moment, poss_team_id):
+                directions.append("left")
+            elif right_court_offense(mid_moment, poss_team_id):
+                directions.append("right")
+
+            start_idx = reset_idx + 1
+
+        if len(directions) == 0:
+            continue
+        # Use most common direction
+        directions, counts = np.unique(directions, return_counts=True)
+        ind = np.argmax(counts)
+        first_direction = directions[ind]
+        first_poss_team_id = poss_team_id
+        break
+    return (first_poss_team_id, first_direction)
 
 
-def process_events(game_id: str, game_df: pl.DataFrame):
+def process_events(game_id: str, game_df: pl.DataFrame, shots_df: pd.DataFrame):
     # First pass to identify first possession team and directions
-    first_poss_team_id, first_direction, second_direction = find_direction_possession_team(
-        game_id, game_df
-    )
+    first_poss_team_id, first_direction = find_direction_possession_team(game_id, game_df, shots_df)
     if first_poss_team_id is None:
         return game_df
 
     processed_events = []
     for event in game_df.iter_rows(named=True):
         # if not filter_unreasonable_plays(event):
-        #     continue
+        #     print(f"Filtered out event {event['event_info']['id']} due to unreasonable trajectory")
 
-        set_direction(first_poss_team_id, first_direction, second_direction, event)
+        set_direction(first_poss_team_id, first_direction, event)
+        if event["event_info"]["direction"] not in ["left", "right"]:
+            # Skip events with unknown direction
+            continue
+
         # Now rotate coordinates
         rotated_event = rotate_coordinates(event)
         # Trim to offensive plays
@@ -339,10 +392,10 @@ def process_events(game_id: str, game_df: pl.DataFrame):
     return pl.DataFrame(processed_events, schema=game_df.schema)
 
 
-def set_direction(first_poss_team_id, first_direction, second_direction, event):
+def set_direction(first_poss_team_id, first_direction, event):
     quarter = event["moments"][0]["quarter"]
     direction = "unknown"
-
+    second_direction = "right" if first_direction == "left" else "left"
     if quarter == 1:
         direction = first_direction
     elif quarter == 2:
@@ -435,11 +488,12 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
     Returns:
         List of feature vectors for consecutive moments
     """
-    features = []
-    play_identifiers = []  # Store (game_id, event_id) pairs
+    play_features = []
+    play_identifiers = []
     prev_moment = None
     prev_time = -1
-    game_over = False
+    current_play_id = None
+    current_play = []
 
     # print(game_df.head())
 
@@ -447,7 +501,7 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
         game_df.select(
             pl.col("moments"),
             pl.col("event_info").struct.field("id").alias("event_id"),
-            pl.col("score_diff"),
+            pl.col("event_info").struct.field("score_margin").alias("score_margin"),
         )
         .explode("moments")
         .rename({"moments": "moment"})
@@ -455,7 +509,6 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
 
     for row in moments_df.iter_rows(named=True):
         current = row["moment"]
-
         quarter = current["quarter"]
         game_clock = current["game_clock"]
         shot_clock = current["shot_clock"]
@@ -502,13 +555,14 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
                         player_x_velocities[idx] = (cp["x"] - pp["x"]) / time_delta
                         player_y_velocities[idx] = (cp["y"] - pp["y"]) / time_delta
 
+        score_margin = row["score_margin"] if row["score_margin"] != "TIE" else 0
         ball = current["ball_coordinates"]
         feature_vector = [
             game_time,  # Continuous game time
             game_clock,
             shot_clock,
             quarter,
-            row["score_diff"],
+            score_margin,
             ball["x"],
             ball["y"],
             ball["z"],
@@ -560,61 +614,157 @@ def create_feature_vectors(game_id: str, game_df: pl.DataFrame, playerid_to_idx:
             raise ValueError(
                 f"Feature vector length mismatch: {len(feature_vector)} != 71 for game {game_id}, event {row['event_id']}"
             )
+        event_id = row["event_id"]
+        if current_play_id is not None and event_id != current_play_id:
+            if current_play:
+                play_features.append(np.stack(current_play))
+                play_identifiers.append((game_id, current_play_id))
+            current_play = []
 
-        features.append(np.array(feature_vector))
-        play_identifiers.append((game_id, row["event_id"]))
-
+        current_play.append(np.array(feature_vector, dtype=np.float32))
+        current_play_id = event_id
         prev_moment = current
         prev_time = game_time
 
-    return features, play_identifiers
+    if current_play:
+        play_features.append(np.stack(current_play))
+        play_identifiers.append((game_id, current_play_id))
+
+    return play_features, play_identifiers
 
 
-def save_feature_arrays(
-    game_df: pl.DataFrame, game_id: str, output_dir: Path | str, playerid_to_idx: dict[int, int]
-) -> int:
-    """
-    Process games and save feature vectors as numpy arrays (one file per game).
-
-    Args:
-        df: Polars DataFrame with the game data schema
-        output_dir: Directory to save the output numpy arrays
-        playerid_to_idx: Optional player ID to index mapping. If None, a new one will be created.
-    """
-    if playerid_to_idx is None:
-        raise ValueError("playerid_to_idx must be provided")
-    if game_df.is_empty():
-        print(f"Game {game_id} is empty, skipping.")
-        return 0
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    features, identifiers = create_feature_vectors(game_id, game_df, playerid_to_idx)
-
-    # Count the number of unique identifiers
-    num_plays = len(set(identifiers))
-    print(f"Number of plays in game {game_id}: {num_plays}")
-    if features:
-        features_array = np.stack(features).astype(np.float32)
-
-        # Save the features and identifiers
-        # Save the features as a numpy array
-        np.save(os.path.join(output_dir, f"{game_id}_X.npy"), features_array)
-        print(f"Saved {len(features)} feature vectors for game {game_id}")
-        identifiers_array = np.array(identifiers, dtype=object)
-        np.save(os.path.join(output_dir, f"{game_id}_ids.npy"), identifiers_array)
-    else:
-        print(f"No features generated for game {game_id}")
-    return num_plays
-
-
-def process_game(game_id: str, game: Dataset, playerid_to_idx: dict[int, int]):
+def process_game(
+    game_id: str, game: Dataset, playerid_to_idx: dict[int, int], shots_df: pd.DataFrame
+) -> tuple[list[t.Any], list[t.Any]]:
     """
     Process a single game: rotate court and save feature arrays.
     """
     game_df = game.to_polars()
-    game_df = process_events(game_id, game_df)
-    return save_feature_arrays(game_df, game_id, GAMES_DIR, playerid_to_idx)
+    game_df = process_events(game_id, game_df, shots_df)
+    return create_feature_vectors(game_id, game_df, playerid_to_idx)
+
+
+def get_games_ranges(dataset: Dataset) -> dict:
+    game_ids_all = dataset["gameid"]
+    game_ranges = {}
+    start_idx = 0
+    current_game = game_ids_all[0]
+
+    for idx, game_id in enumerate(game_ids_all):
+        if game_id != current_game:
+            game_ranges[current_game] = (start_idx, idx)
+            current_game = game_id
+            start_idx = idx
+    # Add the final game
+    game_ranges[current_game] = (start_idx, len(game_ids_all))
+    return game_ranges
+
+
+def normalize_play(
+    play: np.ndarray, target_len: int = 50, downsample_factor: int = 4
+) -> None | list[np.ndarray]:
+    """
+    Downsamples and normalizes a single play to fixed-length sequences.
+
+    - Discards plays that are too short after downsampling (< 30 frames)
+    - Pads shorter plays to target_len
+    - Splits longer plays into non-overlapping chunks of target_len
+
+    Args:
+        play: np.ndarray of shape (T, 71)
+        target_len: Desired fixed length (e.g., 50)
+        downsample_factor: Factor to reduce frame rate (e.g., 5 for 25Hz → 5Hz)
+
+    Returns:
+        A list of plays, each with shape (target_len, 71), or None
+    """
+    play = play[::downsample_factor]
+    T = play.shape[0]
+    if T < 30:
+        return None  # Too short after downsampling
+    elif T < target_len:
+        # Pad with last frame
+        pad_len = target_len - T
+        padding = np.repeat(play[-1:, :], pad_len, axis=0)
+        return [np.concatenate([play, padding], axis=0)]
+    elif T == target_len:
+        return [play]
+    else:
+        # Too long → split into chunks of target_len
+        overlap = target_len // 4  # 25% overlap
+        if overlap == 0:
+            overlap = 1
+        return [play[i : i + target_len] for i in range(0, T - target_len + 1, overlap)]
+
+
+def save_batched_features(
+    dataset: Dataset,
+    playerid_to_idx: dict[int, int],
+    output_dir: Path | str,
+    batch_size: int = NUM_PROCESSES * 10,
+):
+    os.makedirs(output_dir, exist_ok=True)
+
+    game_ids = dataset.unique("gameid")
+    total_plays = 0
+
+    game_ranges = get_games_ranges(dataset)
+    game_datasets = {
+        game_id: dataset.select(range(start, end)) for game_id, (start, end) in game_ranges.items()
+    }
+
+    shots_df = pd.read_csv(os.path.join(TRACKING_DIR, "shots_fixed.csv"))
+
+    for batch_idx, i in enumerate(range(0, len(game_ids), batch_size)):
+        batch_game_ids = game_ids[i : i + batch_size]
+
+        with Pool(processes=NUM_PROCESSES) as pool:
+            results = pool.starmap(
+                process_game,
+                [
+                    (game_id, game_datasets[game_id], playerid_to_idx, shots_df)
+                    for game_id in batch_game_ids
+                ],
+            )
+
+        # Flatten the list of results
+        batch_plays = []
+        batch_ids = []
+        for game_plays, play_ids in results:
+            if game_plays:
+                batch_plays.extend(game_plays)  # plays: List[np.ndarray]
+                batch_ids.extend(play_ids)
+
+        if not batch_plays:
+            print(f"Batch {batch_idx} has no valid plays.")
+            continue
+
+        normalized_plays = []
+        normalized_ids = []
+        for play, pid in zip(batch_plays, batch_ids, strict=False):
+            normed_plays = normalize_play(play, target_len=50, downsample_factor=4)
+            if normed_plays is None:
+                continue
+            normalized_plays.extend(normed_plays)
+            normalized_ids.extend([pid] * len(normed_plays))
+
+        # Optionally pad or trim all plays to shape (50, 71) here
+        # For now, assume they are already shaped (50, 71)
+        try:
+            batch_array = np.stack(normalized_plays)
+        except ValueError as e:
+            print(f"Error stacking batch {batch_idx}: {e}")
+            continue
+
+        batch_ids_array = np.array(normalized_ids, dtype=object)
+
+        batch_path = os.path.join(output_dir, f"plays_batch_{batch_idx}.npz")
+        np.savez_compressed(batch_path, X=batch_array, ids=batch_ids_array)
+        print(f"Saved batch {batch_idx} with {len(batch_plays)} fixed length play sequences")
+
+        total_plays += len(batch_plays)
+
+    print(f"Total fixed length play sequences processed and saved: {total_plays}")
 
 
 if __name__ == "__main__":
@@ -658,44 +808,12 @@ if __name__ == "__main__":
     playerid_to_idx = build_player_index_map(dataset)
     # Save the player ID mapping
     Path(GAMES_DIR).mkdir(parents=True, exist_ok=True)
-    with open(f"{GAMES_DIR}/playerid_to_idx.pkl", "wb") as f:
+    with open(f"{GAMES_DIR}/playerid_to_idx.pydict", "wb") as f:
         pickle.dump(playerid_to_idx, f)
-    print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
+        print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
 
-    def get_games_ranges(dataset: Dataset) -> dict:
-        game_ids_all = dataset["gameid"]
-        game_ranges = {}
-        start_idx = 0
-        current_game = game_ids_all[0]
-
-        for idx, game_id in enumerate(game_ids_all):
-            if game_id != current_game:
-                game_ranges[current_game] = (start_idx, idx)
-                current_game = game_id
-                start_idx = idx
-        # Add the final game
-        game_ranges[current_game] = (start_idx, len(game_ids_all))
-        return game_ranges
-
-    game_ranges = get_games_ranges(dataset)
-    game_datasets = {
-        game_id: dataset.select(range(start, end)) for game_id, (start, end) in game_ranges.items()
-    }
-
-    game_ids = dataset.unique("gameid")
-    BATCH_SIZE = NUM_PROCESSES * 10
-    total_plays = 0
-    for i in range(0, len(game_ids), BATCH_SIZE):
-        batch_game_ids = game_ids[i : i + BATCH_SIZE]
-
-        # Collect the return value of process_game
-        with Pool(processes=NUM_PROCESSES) as pool:
-            results = pool.starmap(
-                process_game,
-                [(game_id, game_datasets[game_id], playerid_to_idx) for game_id in batch_game_ids],
-            )
-        total_plays += sum(results)
-
-    print(f"Total number of plays processed: {total_plays}")
-
-    # TODO? compute y soft-labels and store them in _y.parquet
+    save_batched_features(
+        dataset,
+        playerid_to_idx,
+        GAMES_DIR,
+    )
