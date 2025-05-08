@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
@@ -24,17 +24,19 @@ import { GameFilter } from '~/lib/const';
 import { cn } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
 
-const lastGamesFilter = [
-  { value: GameFilter.LAST5, label: 'Last 5 Games' },
-  { value: GameFilter.LAST4, label: 'Last 4 Games' },
+const allGameFilters = [
+  { value: GameFilter.LAST1, label: 'Last Game' },
+  { value: GameFilter.LAST2, label: 'Last 2 Games' },
   { value: GameFilter.LAST3, label: 'Last 3 Games' },
+  { value: GameFilter.LAST4, label: 'Last 4 Games' },
+  { value: GameFilter.LAST5, label: 'Last 5 Games' },
 ];
 
 export default function Filters({ teamID }: { teamID: string | null }) {
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
   const [open, setOpen] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [_, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
   const isNavigating = Boolean(navigation.location);
 
@@ -44,7 +46,8 @@ export default function Filters({ teamID }: { teamID: string | null }) {
     abbreviation: team.abbreviation,
   }));
 
-  const timeframe = searchParams.get('timeframe') ?? GameFilter.LAST3;
+  const timeframe = data.timeframe ?? GameFilter.LAST3;
+  const totalGames = data.totalGames;
 
   return (
     <div className="absolute top-2 left-2 z-10 flex gap-3">
@@ -73,7 +76,7 @@ export default function Filters({ teamID }: { teamID: string | null }) {
           <Command>
             <CommandInput placeholder="Search team" />
             <CommandList>
-              <CommandEmpty>No teans found.</CommandEmpty>
+              <CommandEmpty>No teams found.</CommandEmpty>
               <CommandGroup>
                 {commandItems.map((team) => (
                   <CommandItem
@@ -104,13 +107,14 @@ export default function Filters({ teamID }: { teamID: string | null }) {
       </Popover>
       <div className="grid gap-1">
         <Select
-          value={timeframe}
-          onValueChange={(value: GameFilter) => {
+          value={String(timeframe)}
+          onValueChange={(value: string) => {
             setSearchParams((prev) => {
               prev.set('timeframe', value);
               return prev;
             });
           }}
+          disabled={isNavigating}
         >
           <SelectTrigger className="gap-1.5 border border-gray-400 bg-white">
             <Label htmlFor="timeframe" className="text-xs">
@@ -124,11 +128,13 @@ export default function Filters({ teamID }: { teamID: string | null }) {
           </SelectTrigger>
           <SelectContent id="timeframe">
             <SelectGroup>
-              {lastGamesFilter.map((filter) => (
-                <SelectItem key={filter.value} value={filter.value}>
-                  {filter.label}
-                </SelectItem>
-              ))}
+              {allGameFilters
+                .filter((filter) => filter.value <= totalGames)
+                .map((filter) => (
+                  <SelectItem key={filter.value} value={String(filter.value)}>
+                    {filter.label}
+                  </SelectItem>
+                ))}
             </SelectGroup>
           </SelectContent>
         </Select>

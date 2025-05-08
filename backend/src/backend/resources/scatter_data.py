@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 import polars as pl
+from flask import request
 from flask_restful import Resource
 from sklearn.cluster import KMeans
 
@@ -60,6 +61,14 @@ class TeamPlaysScatterResource(Resource):
         """Get scatter plot data for a team's plays."""
         logger.info(f"Fetching scatter data for team_id: {team_id}")
 
+        timeframe = request.args.get("timeframe", "last_3")
+        try:
+            num_games = int(timeframe.split("_")[1])
+        except (ValueError, AttributeError):
+            logger.error(f"Invalid timeframe format: {timeframe}")
+            return {"error": "Invalid timeframe format"}, 400
+        logger.info(f"Using timeframe: {timeframe} (limiting to {num_games} games)")
+
         try:
             team_id = int(team_id)
         except ValueError:
@@ -68,9 +77,15 @@ class TeamPlaysScatterResource(Resource):
 
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
         logger.info(f"Found {len(games)} games for team {team_id}")
+        total_games = len(games)
 
-        # limit to 2 for now
-        games = games.limit(2)
+        # Sort games by date (if available) and limit to the requested number
+        if not games.is_empty() and "game_date" in games.columns:
+            games = games.sort("game_date", descending=True)
+
+        # Limit to the requested number of games based on timeframe
+        games = games.limit(num_games)
+        logger.info(f"Limited to {len(games)} games based on timeframe {timeframe}")
 
         if games.is_empty():
             logger.warning(f"No games found for team {team_id}")
@@ -97,7 +112,10 @@ class TeamPlaysScatterResource(Resource):
             ]
         )
 
-        return scatter_data.to_dicts()
+        return {
+            "total_games": total_games,
+            "points": scatter_data.to_dicts()
+        }
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
         all_plays: list[pl.DataFrame] = []
@@ -108,15 +126,13 @@ class TeamPlaysScatterResource(Resource):
 
             plays = self.dataset_manager.get_plays_for_game(game_id, as_dicts=False)
             if isinstance(plays, pl.DataFrame) and not plays.is_empty():
-                # Store first schema or cast subsequent DataFrames to match it
                 if schema is None:
                     schema = plays.schema
                     all_plays.append(plays)
                 else:
-                    # Cast to consistent schema before appending
                     try:
                         all_plays.append(plays.cast(schema))
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         logger.warning(f"Skipping game {game_id} due to schema issue: {e}")
         if not all_plays:
             return pl.DataFrame()
