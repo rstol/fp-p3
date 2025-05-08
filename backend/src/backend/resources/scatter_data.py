@@ -1,8 +1,5 @@
 import logging
 import os
-import random
-from collections import defaultdict
-from typing import List
 
 import numpy as np
 import pandas as pd
@@ -11,7 +8,7 @@ from flask_restful import Resource
 from sklearn.cluster import KMeans
 
 from backend.resources.dataset_manager import DatasetManager
-from backend.settings import DATASET_DIR
+from backend.settings import TRACKING_DIR
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -42,7 +39,7 @@ class TeamPlaysScatterResource(Resource):
     """Resource for serving team play data for scatter plot visualization."""
 
     def __init__(self):
-        self.dataset_manager = DatasetManager(DATASET_DIR)
+        self.dataset_manager = DatasetManager(TRACKING_DIR)
 
         self.play_centroids = {
             0: (20, 20),
@@ -103,7 +100,7 @@ class TeamPlaysScatterResource(Resource):
         return scatter_data.to_dicts()
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
-        all_plays: List[pl.DataFrame] = []
+        all_plays: list[pl.DataFrame] = []
         schema = None
         for game in games.rows(named=True):
             game_id = game["game_id"]
@@ -113,7 +110,7 @@ class TeamPlaysScatterResource(Resource):
             if isinstance(plays, pl.DataFrame) and not plays.is_empty():
                 # Store first schema or cast subsequent DataFrames to match it
                 if schema is None:
-                    schema = plays.schema 
+                    schema = plays.schema
                     all_plays.append(plays)
                 else:
                     # Cast to consistent schema before appending

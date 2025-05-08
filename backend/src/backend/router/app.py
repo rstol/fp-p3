@@ -4,7 +4,6 @@ from flask import Flask
 from flask_cors import CORS
 
 from backend.router.routes import add_routes
-from backend.settings import DATASET_DIR
 
 
 def create_app():

@@ -2,9 +2,9 @@ from flask import jsonify
 from flask_restful import Resource
 
 from backend.resources.dataset_manager import DatasetManager
-from backend.settings import DATASET_DIR
+from backend.settings import TRACKING_DIR
 
-dataset_manager = DatasetManager(DATASET_DIR)
+dataset_manager = DatasetManager(TRACKING_DIR)
 
 
 class TeamsResource(Resource):

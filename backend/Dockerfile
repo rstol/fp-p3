@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:bookworm-slim AS builder
 
 ARG PORT=8080
-ARG DATASET_DIR=/application_root/data/nba_tracking_data
+ARG TRACKING_DIR=/application_root/data/nba_tracking_data
 
 ENV UV_COMPILE_BYTECODE=0 UV_LINK_MODE=copy
 ENV UV_PYTHON_INSTALL_DIR=/python
@@ -10,7 +10,7 @@ ENV UV_CACHE_DIR="/application_root/.cache"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/application_root
-ENV DATASET_DIR=$DATASET_DIR
+ENV TRACKING_DIR=$TRACKING_DIR
 ENV PORT=$PORT
 ENV VIRTUAL_ENVIRONMENT_PATH="/application_root/.venv"
 ENV PATH="$VIRTUAL_ENVIRONMENT_PATH/bin:$PATH"

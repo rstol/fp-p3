@@ -209,20 +209,16 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
             for key, dir_path in extracted_path.items()
             if os.path.isdir(dir_path) and os.listdir(dir_path)
         }
-
+        pbp_out = dl_manager.download_and_extract(_PBP_URL)
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,
-                gen_kwargs={
-                    "filepaths": file_paths,
-                },
+                gen_kwargs={"filepaths": file_paths, "pbp_out": pbp_out},
             )
         ]
 
-    def _generate_examples(self, filepaths):
-        pbp_out = datasets.DownloadManager().download_and_extract(_PBP_URL)
+    def _generate_examples(self, filepaths, pbp_out):
         pbp = pd.read_csv(pbp_out)
-
         moment_id = 0
 
         for path in filepaths.values():
@@ -231,12 +227,11 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
                 game_id = game["gameid"]
                 game_date = game["gamedate"]
 
+                game_events = pbp.loc[(pbp.GAME_ID == int(game_id))]
                 for event in game["events"]:
                     event_id = event["eventId"]
 
-                    event_row = pbp.loc[
-                        (pbp.GAME_ID == int(game_id)) & (pbp.EVENTNUM == int(event_id))
-                    ]
+                    event_row = game_events.loc[pbp.EVENTNUM == int(event_id)]
                     if len(event_row) != 1:
                         continue
 

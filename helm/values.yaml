@@ -48,7 +48,7 @@ backend:
 
   # Define extra environment variables for your application
   extraEnv: |
-    - name: DATASET_DIR
+    - name: TRACKING_DIR
       value: "/application_root/data/nba_tracking_data"
     - name: PYTHONUNBUFFERED
       value: "1"
