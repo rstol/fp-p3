@@ -50,7 +50,6 @@ def collate_batch(batch: list[Possession]):
 
     for play in batch:
         play_tensor = None
-        # agent_ids = np.array([])
         for agent in play.agents:  # total of 11 agents
             agent_team = agent.teamid
 
@@ -60,17 +59,16 @@ def collate_batch(batch: list[Possession]):
                         ::sample_freq
                     ]
                 )  # Sampled at sample_freq, i.e. 5 frames/s
-                single_agent_tensor = torch.Tensor(
-                    torch.tensor(np.array([single_agent_array.transpose()]))
+                single_agent_tensor = (
+                    torch.from_numpy(single_agent_array.transpose()).unsqueeze(0).float()
                 )
-                single_agent_tensor = single_agent_tensor.to(torch.float)
 
                 if play_tensor == None:
                     play_tensor = single_agent_tensor
                 else:
                     play_tensor = torch.cat(
                         [play_tensor, single_agent_tensor], dim=0
-                    )  # 获得6个agent的tensor shape=[6,3,time_steps]
+                    )  # shape=[6,3,time_steps]
 
         play_tensor = play_tensor
         # The dimension of tensor A is 6

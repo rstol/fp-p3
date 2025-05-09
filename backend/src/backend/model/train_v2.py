@@ -12,7 +12,7 @@ from backend.model.model_v2 import PlayTransformer
 from backend.settings import COURT_WIDTH, EXPERIMENTS_DIR, GAMES_DIR
 
 
-def main(cfg):
+def main(cfg, job_id):
     pl.seed_everything(2025)
 
     dataset = PlayDataset(GAMES_DIR)
@@ -53,7 +53,7 @@ def main(cfg):
         COURT_WIDTH,
         float(cfg["model"]["lr"]),
     ).to(device)  # input_dim,timestep,out_dim,headnum,k,F,halfwith,lr
-    tb_logger = TensorBoardLogger("logs/", name=cfg["check_point_name"])
+    tb_logger = TensorBoardLogger(f"{EXPERIMENTS_DIR}/{job_id}/logs", name=cfg["check_point_name"])
 
     trainer = pl.Trainer(max_epochs=cfg["max_epochs"], logger=tb_logger)
     trainer.fit(model, train_dataloader, val_dataloader)
@@ -65,5 +65,4 @@ if __name__ == "__main__":
     JOB = sys.argv[1]
 
     cfg = yaml.safe_load(open(f"{EXPERIMENTS_DIR}/{JOB}/{JOB}.yaml"))
-    print(cfg)
-    sys.exit(main(cfg))
+    sys.exit(main(cfg, JOB))
