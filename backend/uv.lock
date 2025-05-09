@@ -105,7 +105,6 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "datasets" },
-    { name = "einops" },
     { name = "flask" },
     { name = "flask-cors" },
     { name = "flask-restful" },
@@ -113,41 +112,49 @@ dependencies = [
     { name = "pandas" },
     { name = "polars" },
     { name = "py7zr" },
-    { name = "pytorch-lightning" },
     { name = "scikit-learn" },
-    { name = "tensorboard" },
-    { name = "torch" },
-    { name = "torchvision" },
     { name = "tqdm" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pre-commit" },
     { name = "ruff" },
+]
+train = [
+    { name = "einops" },
+    { name = "pytorch-lightning" },
+    { name = "tensorboard" },
+    { name = "torch" },
+    { name = "torchvision" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "datasets", specifier = ">=3.4.1" },
-    { name = "einops", specifier = ">=0.8.1" },
     { name = "flask", specifier = ">=3.1.0" },
     { name = "flask-cors", specifier = ">=5.0.1" },
     { name = "flask-restful", specifier = ">=0.3.10" },
     { name = "gunicorn", specifier = ">=21.2.0" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "polars", specifier = ">=1.26.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=2.20.0" },
     { name = "py7zr", specifier = ">=0.22.0" },
-    { name = "pytorch-lightning", specifier = ">=2.5.1.post0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.2.0" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pre-commit", specifier = ">=2.20.0" },
+    { name = "ruff", specifier = ">=0.2.0" },
+]
+train = [
+    { name = "einops", specifier = ">=0.8.1" },
+    { name = "pytorch-lightning", specifier = ">=2.5.1.post0" },
     { name = "tensorboard", specifier = ">=2.19.0" },
     { name = "torch", specifier = ">=2.6.0" },
     { name = "torchvision", specifier = ">=0.21.0" },
-    { name = "tqdm", specifier = ">=4.67.1" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "blinker"
