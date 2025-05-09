@@ -10,6 +10,8 @@ import pandas as pd
 import polars as pl
 from datasets import Dataset, load_dataset
 
+from backend.model.Possesion import Possession
+from backend.model.utils import get_game_time
 from backend.settings import COURT_LENGTH, COURT_WIDTH, GAMES_DIR, TRACKING_DIR
 
 # Event type to event name mapping
@@ -45,25 +47,8 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         trust_remote_code=True,
         name=name,
         split=split,
-        num_proc=NUM_PROCESSES,
+        num_proc=NUM_PROCESSES // 2,
     )
-
-
-def get_game_time(game_clock: float, quarter: int) -> float:
-    """
-    Convert game clock and quarter to continuous game time in seconds.
-
-    Args:
-        game_clock: Seconds remaining in the quarter
-        quarter: Quarter number (1-4 for regulation, 5+ for overtime)
-
-    Returns:
-        Total seconds elapsed since the start of the game
-    """
-    if quarter <= 4:
-        return (quarter - 1) * 720 + (720 - game_clock)
-    else:
-        return 4 * 720 + (quarter - 5) * 300 + (300 - game_clock)
 
 
 def left_court_offense(moment, poss_team_id):
@@ -132,6 +117,29 @@ def rotate_coordinates(event: dict[str, t.Any]) -> dict[str, t.Any]:
                 player_coord["y"] = y
                 del player_coord["z"]
 
+    return rotated
+
+
+def rotate_coordinates_v2(event: dict[str, t.Any]) -> dict[str, t.Any]:
+    """
+    After rotation the attacking team moves towards the left
+    """
+    direction = event["event_info"]["direction"]
+
+    if direction == "unknown":
+        direction = (
+            "right" if event["moments"][0]["ball_coordinates"]["x"] > (COURT_LENGTH / 2) else "left"
+        )
+
+    rotated = event.copy()
+
+    if direction == "right":
+        for moment in rotated["moments"]:
+            moment["ball_coordinates"]["x"] = COURT_LENGTH - moment["ball_coordinates"]["x"]
+            moment["ball_coordinates"]["y"] = COURT_WIDTH - moment["ball_coordinates"]["y"]
+            for player_coord in moment["player_coordinates"]:
+                player_coord["x"] = COURT_LENGTH - player_coord["x"]
+                player_coord["y"] = COURT_WIDTH - player_coord["y"]
     return rotated
 
 
@@ -742,7 +750,7 @@ def save_batched_features(
         normalized_plays = []
         normalized_ids = []
         for play, pid in zip(batch_plays, batch_ids, strict=False):
-            normed_plays = normalize_play(play, target_len=50, downsample_factor=4)
+            normed_plays = normalize_play(play, target_len=50, downsample_factor=5)
             if normed_plays is None:
                 continue
             normalized_plays.extend(normed_plays)
@@ -765,6 +773,42 @@ def save_batched_features(
         total_plays += len(batch_plays)
 
     print(f"Total fixed length play sequences processed and saved: {total_plays}")
+
+
+def convert_game(game_id: str, game_dataset: Dataset, shots_df: pd.DataFrame):
+    game_df = game_dataset.to_polars()
+    first_poss_team_id, first_direction = find_direction_possession_team(game_id, game_df, shots_df)
+    if first_poss_team_id is None:
+        return game_df
+    possesion_ids = []
+    for event in game_df.iter_rows(named=True):
+        set_direction(first_poss_team_id, first_direction, event)
+        event = rotate_coordinates_v2(event)
+        possesion = Possession(event, game_id)
+        possesion_ids.append((possesion.gameid, possesion.eventid))
+        with open(
+            f"{GAMES_DIR}/{possesion.gameid}_{possesion.eventid}_{possesion.off_teamid}.pkl",
+            "wb",
+        ) as f:
+            pickle.dump(possesion, f)
+    return possesion_ids
+
+
+def convert_scene_trajectory(dataset: Dataset):
+    game_ranges = get_games_ranges(dataset)
+    game_datasets = {
+        game_id: dataset.select(range(start, end)) for game_id, (start, end) in game_ranges.items()
+    }
+
+    Path(GAMES_DIR).mkdir(parents=True, exist_ok=True)
+    shots_df = pd.read_csv(os.path.join(TRACKING_DIR, "shots_fixed.csv"))
+    with Pool(processes=NUM_PROCESSES) as pool:
+        results = pool.starmap(
+            convert_game,
+            [(game_id, game_dataset, shots_df) for game_id, game_dataset in game_datasets.items()],
+        )
+
+    print(f"Saved {sum([len(play_ids) for play_ids in results])} number of plays...")
 
 
 if __name__ == "__main__":
@@ -791,7 +835,7 @@ if __name__ == "__main__":
     # The following filters out approx 50% of the plays
     def filter_plays(df):
         return df.filter(
-            (pl.col("moments").list.len() > 0)
+            (pl.col("moments").list.len() >= 100)
             & (pl.col("event_info").struct.field("possession_team_id").is_not_null())
             & (~pl.col("event_info").struct.field("possession_team_id").is_nan())
             & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
@@ -804,8 +848,11 @@ if __name__ == "__main__":
         num_proc=NUM_PROCESSES,
         desc="Filtering dataset",
     )
+    convert_scene_trajectory(dataset)
 
+    """
     playerid_to_idx = build_player_index_map(dataset)
+
     # Save the player ID mapping
     Path(GAMES_DIR).mkdir(parents=True, exist_ok=True)
     with open(f"{GAMES_DIR}/playerid_to_idx.pydict", "wb") as f:
@@ -817,3 +864,4 @@ if __name__ == "__main__":
         playerid_to_idx,
         GAMES_DIR,
     )
+    """

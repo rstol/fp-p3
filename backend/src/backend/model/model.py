@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 
+# TODO @rstol model does not work yet
 class Baller2Play(nn.Module):
     def __init__(
         self,
@@ -26,7 +27,11 @@ class Baller2Play(nn.Module):
 
         # Transformer Encoder
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_dim, nhead=n_heads, norm_first=True, batch_first=True
+            d_model=hidden_dim,
+            nhead=n_heads,
+            dim_feedforward=hidden_dim * 4,
+            norm_first=True,
+            batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
 

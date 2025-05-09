@@ -28,6 +28,8 @@ dependencies = [
     "torchvision>=0.21.0",
     "polars>=1.26.0",
     "einops>=0.8.1",
+    "pytorch-lightning>=2.5.1.post0",
+    "tensorboard>=2.19.0",
 ]
 
 [project.optional-dependencies]

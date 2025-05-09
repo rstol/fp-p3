@@ -9,8 +9,9 @@ echo "train:" >> ${JOB}.yaml
 echo "  train_samples_per_epoch: 20000" >> ${JOB}.yaml
 echo "  valid_samples: 1000" >> ${JOB}.yaml
 echo "  workers: 10" >> ${JOB}.yaml
-echo "  learning_rate: 1.0e-5" >> ${JOB}.yaml
+echo "  learning_rate: 1.0e-4" >> ${JOB}.yaml
 echo "  patience: 20" >> ${JOB}.yaml
+echo "  batch_size: 32" >> ${JOB}.yaml
 echo "  max_epochs: 1000000" >> ${JOB}.yaml
 echo "  beta: 1" >> ${JOB}.yaml
 
