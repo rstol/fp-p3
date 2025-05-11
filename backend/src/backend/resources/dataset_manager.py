@@ -1,6 +1,7 @@
 import polars as pl
-from Event import Event
 from polars import DataFrame
+
+from backend.video.Event import Event
 
 
 class DatasetManager:
