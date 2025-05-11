@@ -100,7 +100,11 @@ function EditableField({
 
 export default function PlayView() {
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
-  const updateSelectedPlayCluster = useDashboardStore((state) => state.updateSelectedPlayCluster);
+  const stageSelectedPlayClusterUpdate = useDashboardStore(
+    (state) => state.stageSelectedPlayClusterUpdate,
+  );
+  const stagedChangesCount = useDashboardStore((state) => state.stagedChangesCount);
+  const pendingClusterUpdates = useDashboardStore((state) => state.pendingClusterUpdates);
 
   if (!selectedPlay) {
     return (
@@ -148,9 +152,8 @@ export default function PlayView() {
           onSave={(newClusterValue) => {
             const newClusterId = parseInt(newClusterValue, 10);
             if (!isNaN(newClusterId)) {
-              updateSelectedPlayCluster(newClusterId);
-              console.log('Play Cluster saved and store updated:', newClusterId);
-              // TODO: Implement API call to persist this change to the backend
+              stageSelectedPlayClusterUpdate(newClusterId);
+              console.log('Play Cluster change staged:', newClusterId);
             } else {
               console.warn('Invalid Play Cluster ID entered, not a number:', newClusterValue);
             }
@@ -168,6 +171,24 @@ export default function PlayView() {
             // Example: if (selectedPlay) { updateSelectedPlayNote(newNote); }
           }}
         />
+
+        {stagedChangesCount > 0 && (
+          <div className="mt-6 w-full flex items-center justify-end border-t pt-4">
+            <Button
+              size="sm"
+              onClick={() => {
+                console.log('Applying pending changes:');
+                pendingClusterUpdates.forEach((clusterId, playId) => {
+                  console.log(`Play ID: ${playId}, New Cluster ID: ${clusterId}`);
+                });
+                // TODO: Implement API call to send changes to the backend
+                // on success: clearPendingClusterUpdates();
+              }}
+            >
+              Apply Changes ({stagedChangesCount})
+            </Button>
+          </div>
+        )}
       </CardFooter>
     </Card>
   );
