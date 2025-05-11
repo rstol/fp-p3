@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Circle, GrabIcon, Info, Minus, Move, Plus, RefreshCcw, ZoomIn } from 'lucide-react';
+import { Circle, Info, Minus, Plus, RefreshCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import type { clientLoader } from '~/routes/_index';
@@ -22,14 +22,14 @@ import { Label } from '~/components/ui/label';
 const defaultDimensions = { width: 500, height: 400 };
 const margin = { top: 40, right: 10, bottom: 10, left: 10 };
 
-const getZoomMethod = 
+const getZoomMethod =
   (svgRef: React.RefObject<SVGSVGElement | null>, method: string) =>
-  (...args: any[]) => {
-    const svg = svgRef?.current;
-    if (svg && typeof (svg as any)[method] === 'function') {
-      (svg as any)[method](...args);
-    }
-  };
+    (...args: any[]) => {
+      const svg = svgRef?.current;
+      if (svg && typeof (svg as any)[method] === 'function') {
+        (svg as any)[method](...args);
+      }
+    };
 
 function Legend({
   clusters,
@@ -37,7 +37,7 @@ function Legend({
   zoomedCluster,
   onSelectCluster,
 }: {
-  clusters: string[]; 
+  clusters: string[];
   color: d3.ScaleOrdinal<string, string>;
   zoomedCluster: string | null;
   onSelectCluster: (cluster: string) => void;
@@ -160,12 +160,12 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       setPlotData((currentPlotData) =>
         currentPlotData.map((p) =>
           getPlayId(p) === getPlayId(selectedPlay)
-            ? { ...p, cluster: selectedPlay.cluster } 
+            ? { ...p, cluster: selectedPlay.cluster }
             : p,
         ),
       );
-    } 
-  }, [selectedPlay]); 
+    }
+  }, [selectedPlay]);
 
   const color = d3.scaleOrdinal(d3.schemeCategory10);
 
@@ -179,18 +179,18 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     (clusterId: string) => {
       const svg = d3.select(svgRef.current);
       const g = svg.select<SVGGElement>('g.all-content');
-      if (g.empty() || !plotData || !plotData.length) return; 
+      if (g.empty() || !plotData || !plotData.length) return;
 
-      const pointsInCluster = plotData.filter((d) => String(d.cluster) === clusterId); 
+      const pointsInCluster = plotData.filter((d) => String(d.cluster) === clusterId);
       if (!pointsInCluster.length) return;
 
       const xScale = d3
         .scaleLinear()
-        .domain(d3.extent(plotData, (d) => d.x) as [number, number]) 
+        .domain(d3.extent(plotData, (d) => d.x) as [number, number])
         .range([0, defaultDimensions.width]);
       const yScale = d3
         .scaleLinear()
-        .domain(d3.extent(plotData, (d) => d.y) as [number, number]) 
+        .domain(d3.extent(plotData, (d) => d.y) as [number, number])
         .range([defaultDimensions.height, 0]);
 
       const xExtent = d3.extent(pointsInCluster, (d) => d.x) as [number, number];
@@ -212,9 +212,9 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         .call(zoomBehavior.transform as any, d3.zoomIdentity.translate(tx, ty).scale(k));
       setZoomedCluster(clusterId);
     },
-    [plotData, zoomBehavior], 
+    [plotData, zoomBehavior],
   );
-  
+
   const reset = useCallback(() => {
     setZoomedCluster(null);
     d3.select(svgRef.current)
@@ -230,7 +230,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     (svg as any).zoomOut = () => zoomBehavior.scaleBy(d3.select(svg), 0.8);
     (svg as any).zoomReset = reset;
   }, [zoomBehavior, reset]);
-  
+
   const handlePointDrag = (selection: d3.Selection<any, Point, any, any>) => {
     function dragstarted(this: SVGCircleElement, event: d3.D3DragEvent<SVGCircleElement, Point, any>, d: Point) {
       d3.select(this).raise().attr('stroke', 'black');
@@ -249,10 +249,10 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   };
 
   useEffect(() => {
-    if (!svgRef.current || !plotData) return; 
+    if (!svgRef.current || !plotData) return;
 
     const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove(); 
+    svg.selectAll('*').remove();
 
     const container = svg.append('g').attr('class', 'all-content');
     svg.call(zoomBehavior as any).on("dblclick.zoom", null);
@@ -270,10 +270,10 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .append('rect')
       .attr('width', defaultDimensions.width)
       .attr('height', defaultDimensions.height)
-      .style('fill', 'none') 
+      .style('fill', 'none')
       .style('pointer-events', 'all')
       .on('click', () => {
-         if (resetPlayStore) resetPlayStore(); 
+        if (resetPlayStore) resetPlayStore();
       });
 
     const uniqueClusters = Array.from(new Set(plotData.map((d) => d.cluster)));
@@ -296,18 +296,18 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           .join('path')
           .attr('d', d3.geoPath())
           .attr('fill-opacity', 0.05)
-          .attr('fill', color(String(clusterId))) 
+          .attr('fill', color(String(clusterId)))
           .attr('stroke', color(String(clusterId)))
           .attr('stroke-width', 0.8)
           .attr('opacity', 0.7)
           .attr('cursor', 'move');
       }
     }
-    const tooltip = d3.select('.tooltip'); 
+    const tooltip = d3.select('.tooltip');
 
     container
       .selectAll('circle')
-      .data(plotData) 
+      .data(plotData)
       .join('circle')
       .attr('r', (d) => {
         const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
@@ -329,7 +329,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .on('click', (event, play) => {
         event.stopPropagation();
         if (!selectedPlay || getPlayId(selectedPlay) !== getPlayId(play)) {
-          updatePlay(play); 
+          updatePlay(play);
         }
       })
       .on('mouseover', (event, d) => {
@@ -355,20 +355,20 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         container.selectAll('circle').attr('opacity', 1);
         return tooltip?.style('visibility', 'hidden');
       });
-      
-      const g = d3.select(svgRef.current).select('g.all-content');
-      if (g.node()) { 
-        g.attr('transform', currentTransform.toString());
-      }
+
+    const g = d3.select(svgRef.current).select('g.all-content');
+    if (g.node()) {
+      g.attr('transform', currentTransform.toString());
+    }
 
   }, [
-    plotData, 
-    selectedPlay, 
-    svgRef, 
-    color, 
-    updatePlay, 
-    zoomBehavior, 
-    currentTransform, 
+    plotData,
+    selectedPlay,
+    svgRef,
+    color,
+    updatePlay,
+    zoomBehavior,
+    currentTransform,
     resetPlayStore
   ]);
 
@@ -376,7 +376,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     if (svgRef.current) {
       const g = d3.select(svgRef.current).select('g.all-content');
       if (g.node()) {
-         g.attr('transform', currentTransform.toString());
+        g.attr('transform', currentTransform.toString());
       }
     }
   }, [currentTransform]);
@@ -384,16 +384,16 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
   const clustersForLegend = Array.from(new Set(plotData.map((d) => String(d.cluster)))).sort();
-  
+
   return (
     <div className="flex flex-col">
       {teamID && plotData.length === 0 && !isLoading ? (
         <div className="py-4 text-center">No play data available for this team or current filters.</div>
       ) : (
         <div className="relative">
-          <Filters teamID={teamID} /> 
+          <Filters teamID={teamID} />
           <Legend
-            clusters={clustersForLegend} 
+            clusters={clustersForLegend}
             color={color}
             zoomedCluster={zoomedCluster}
             onSelectCluster={zoomIntoCluster}
