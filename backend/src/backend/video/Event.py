@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 from Constant import Constant
+from IPython.display import HTML
 from matplotlib import animation
+from matplotlib.animation import FFMpegWriter
 from matplotlib.patches import Arc, Circle, Rectangle
 from Moment import Moment
 from Team import Team
@@ -9,9 +13,14 @@ from Team import Team
 class Event:
     """A class for handling and showing events"""
 
+    # TODO: maybe make Event class that can basically only do a lookup if there is a video already
+    #   and if there isn't, it has an initialize() function where it initializes itself (by getting its event json with the data manager)
+    #   and a generate video function and then the video can be loaded afterwards.
     def __init__(self, event, home, visitor):
         moments = event["moments"]
         self.moments = [Moment(moment) for moment in moments]
+        self.game_id = event["game_id"]
+        self.event_id = event["event_id"]
         home_players = home["players"]
         guest_players = visitor["players"]
         players = home_players + guest_players
@@ -40,7 +49,7 @@ class Event:
         ball_circle.radius = moment.ball.radius / Constant.NORMALIZATION_COEF
         return player_circles, ball_circle
 
-    def show(self):
+    def generate_anim(self):
         # Leave some space for inbound passes
         ax = plt.axes(
             xlim=(Constant.X_MIN, Constant.X_MAX), ylim=(Constant.Y_MIN, Constant.Y_MAX)
@@ -134,6 +143,72 @@ class Event:
                 Constant.Y_MIN,
             ],
         )
-        plt.show()
 
-        return anim
+        return fig, anim
+
+    def generate_jshtml(self):
+        fig, anim = self.generate_anim()
+        plt.close(fig)
+        js_html = anim.to_jshtml(fps=1)
+        return js_html
+
+    def generate_mp4html(self, output=True, save=False, path=None):
+        """
+        Generates an HTML object with the video of the play.
+
+        Warning: this function requires the ffmpeg package.
+        Install with \n
+        ``conda install ffmpeg`` \n
+        Display output with \n
+        ``from IPython.display import HTML`` \n
+        ``HTML(<output>)``
+
+        Parameters
+        ----------
+        self : Event
+        output : Boolean, optional
+            Whether or not to return an html object with the video.
+        save : Boolean, optional
+            Whether or not to save the video as an mp4.
+            The file name is "game<game_id>play<play_id>.mp4".
+        path : str, optional
+            Path to the directory to save the video in.
+            Default is to create an ouput directory and save it there.
+
+        Returns
+        -------
+        str | None
+            The html video or None if ``output`` was set to ``False``.
+
+        Raises
+        ------
+        FileExistsError
+            If the specified path already exists and is not a folder.
+        """
+
+        # 1) build the animation
+        fig, anim = self.generate_anim()
+
+        # 2) if requested, save out an .mp4
+        if save:
+            # determine output filepath
+            if path is not None:
+                outdir = Path(path)
+            else:
+                outdir = Path("output")
+
+            outdir.mkdir(parents=True, exist_ok=True)
+            filepath = outdir / f"game{self.game_id}play{self.event_id}.mp4"
+
+            # use FFMpegWriter (requires ffmpeg installed)
+            # TODO: What would the right fps be to get lifelike speed?
+            writer = FFMpegWriter(fps=12)
+            anim.save(str(filepath), writer=writer)
+            print(f"Saved animation to {filepath}")
+
+        # 3) close the figure so notebook/backend won’t display the static fallback
+        plt.close(fig)
+
+        # 4) return the HTML5 snippet for embedding
+        if output:
+            return anim.to_html5_video()

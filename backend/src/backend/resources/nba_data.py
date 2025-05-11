@@ -43,12 +43,24 @@ class GamePlaysResource(Resource):
         return jsonify(dataset_manager.get_plays_for_game(game_id))
 
 
+# class PlayDetailsResource(Resource):
+#     def get(self, game_id, play_id):
+#         try:
+#             play = dataset_manager.get_play_id(game_id, play_id)
+#             if play:
+#                 return jsonify(play)
+#             return {"error": "Play not found"}, 404
+#         except ValueError:
+#             return {"error": "Invalid play ID format"}, 400
+
+
 class PlayDetailsResource(Resource):
     def get(self, game_id, play_id):
         try:
-            play = dataset_manager.get_play_id(game_id, play_id)
-            if play:
-                return jsonify(play)
+            video = dataset_manager.get_play_video(game_id, play_id)
+            if video:
+                # TODO: do I need to do that?
+                return jsonify(video)
             return {"error": "Play not found"}, 404
         except ValueError:
             return {"error": "Invalid play ID format"}, 400

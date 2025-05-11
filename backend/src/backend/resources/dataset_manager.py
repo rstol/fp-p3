@@ -1,4 +1,5 @@
 import polars as pl
+from Event import Event
 from polars import DataFrame
 
 
@@ -49,3 +50,12 @@ class DatasetManager:
             return pl.read_ndjson(f"{self.data_dir}/plays/{game_id}.jsonl")
         except FileNotFoundError:
             return []
+
+    # TODO: untested
+    def get_play_video(self, game_id: str, event_id: str) -> str | None:
+        event_json = self.get_play_id(game_id, event_id)
+        game = self.get_game_details(game_id)
+        home = self.get_team_details(game["home_team_id"])
+        visitor = self.get_team_details(game["visitor_team_id"])
+        event = Event(event_json, home, visitor)
+        return event.generate_mp4html()
