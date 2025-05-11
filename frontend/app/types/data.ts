@@ -23,23 +23,46 @@ export type Team = {
 
 export type Game = {
   game_id: string;
-  game_date: string; // or use `Date` if you plan to parse it
+  game_date: string;
   home_team_id: number;
   visitor_team_id: number;
 };
 
-export type Point = {
+export interface PlayerInfo {
+  player_id: number;
+  team: string;
+  team_id: number;
+  player_name?: string;
+}
+
+export interface PlayDetail {
+  game_id: string;
+  event_id: string;
+  
+  primary_player_info?: PlayerInfo | null;
+  secondary_player_info?: PlayerInfo | null;
+  
+  event_type: number;
+  possession_team_id?: number | null;
+  
+  event_desc_home: string | null;
+  event_desc_away: string | null;
+  
+  game_date?: string;
+}
+
+export interface PlayData {
   x: number;
   y: number;
   cluster: number;
   event_id: string;
-  play_type?: string;
-  description?: string;
-  period?: number;
   game_id: string;
-};
+  event_desc_home: string | null;
+  event_desc_away: string | null;
+  game_date?: string;
+  event_type: number;
+}
 
-export type Play = Pick<
-  Point,
-  'game_id' | 'event_id' | 'cluster' | 'play_type' | 'description' | 'period'
->;
+export type Point = PlayData;
+
+export type Play = Point;

@@ -48,4 +48,4 @@ class DatasetManager:
         try:
             return pl.read_ndjson(f"{self.data_dir}/plays/{game_id}.jsonl")
         except FileNotFoundError:
-            return []
+            return pl.DataFrame()

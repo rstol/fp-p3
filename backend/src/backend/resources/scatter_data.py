@@ -99,53 +99,58 @@ class TeamPlaysScatterResource(Resource):
         scatter_data = self._generate_scatter_data(plays)
 
         scatter_data = self._apply_clustering(scatter_data)
-        print(scatter_data.columns)
-        scatter_data = scatter_data.select(
-            [
-                "x",
-                "y",
-                "cluster",
-                "play_type",
-                "description",
-                "event_id",
-                "game_id",
-            ]
-        )
 
-        return {
-            "total_games": total_games,
-            "points": scatter_data.to_dicts()
-        }
+        final_columns = [
+            "x",
+            "y",
+            "cluster",
+            "event_id",
+            "game_id",
+            "event_desc_home",  # Full home description
+            "event_desc_away",  # Full away description
+            "game_date",  # Game date
+            "event_type",  # Original event_type (numeric)
+        ]
+
+        # TODO: check if this is needed?
+        for col_name in final_columns:
+            if col_name not in scatter_data.columns:
+                if col_name in ["event_desc_home", "event_desc_away", "game_date"]:
+                    scatter_data = scatter_data.with_columns(
+                        pl.lit(None, dtype=pl.String).alias(col_name)
+                    )
+                else:
+                    scatter_data = scatter_data.with_columns(pl.lit(None).alias(col_name))
+
+        scatter_data = scatter_data.select(final_columns)
+
+        return {"total_games": total_games, "points": scatter_data.to_dicts()}
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
-        all_plays: list[pl.DataFrame] = []
-        schema = None
-        for game in games.rows(named=True):
-            game_id = game["game_id"]
+        all_plays_list: list[pl.DataFrame] = []
+        for game_row in games.rows(named=True):
+            game_id = game_row["game_id"]
+            current_game_date = game_row.get("game_date")
             logger.info(f"Processing game {game_id}")
 
-            plays = self.dataset_manager.get_plays_for_game(game_id, as_dicts=False)
-            if isinstance(plays, pl.DataFrame) and not plays.is_empty():
-                if schema is None:
-                    schema = plays.schema
-                    all_plays.append(plays)
+            plays_df = self.dataset_manager.get_plays_for_game(game_id, as_dicts=False)
+            if isinstance(plays_df, pl.DataFrame) and not plays_df.is_empty():
+                if current_game_date:
+                    plays_df = plays_df.with_columns(pl.lit(current_game_date).alias("game_date"))
                 else:
-                    try:
-                        all_plays.append(plays.cast(schema))
-                    except Exception as e:  # noqa: BLE001
-                        logger.warning(f"Skipping game {game_id} due to schema issue: {e}")
-        if not all_plays:
+                    plays_df = plays_df.with_columns(
+                        pl.lit(None, dtype=pl.String).alias("game_date")
+                    )
+
+                all_plays_list.append(plays_df)
+
+        if len(all_plays_list) == 0:
             return pl.DataFrame()
 
-        plays = pl.concat(all_plays)
-        return plays.with_columns(
-            pl.when(pl.col("event_desc_home") == "nan")
-            .then(pl.col("event_desc_away"))
-            .otherwise(pl.col("event_desc_home"))
-            .str.head(15)
-            .alias("description"),
-            pl.col("event_type").alias("play_type"),
-        )
+        # TODO: check this?
+        plays = pl.concat(all_plays_list, how="diagonal_relaxed")
+
+        return plays
 
     def _generate_scatter_data(self, plays):
         x_centroids = {k: v[0] for k, v in self.play_centroids.items()}
@@ -166,7 +171,7 @@ class TeamPlaysScatterResource(Resource):
         coords = data_points.select(["x", "y"]).to_numpy()
 
         n_clusters = 3 if len(data_points) >= 9 else min(len(data_points) // 3, 2)
-        n_clusters = max(2, n_clusters)  # At least 2 clusters
+        n_clusters = max(2, n_clusters)
 
         try:
             kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
@@ -176,7 +181,6 @@ class TeamPlaysScatterResource(Resource):
             )
         except (AttributeError, TypeError, ValueError) as e:
             logger.error(f"Error during clustering: {e}")
-            # Default to assigning alternating clusters
             for i, point in enumerate(data_points):
                 point["cluster"] = i % n_clusters
 

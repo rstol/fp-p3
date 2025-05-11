@@ -24,12 +24,12 @@ const margin = { top: 40, right: 10, bottom: 10, left: 10 };
 
 const getZoomMethod =
   (svgRef: React.RefObject<SVGSVGElement | null>, method: string) =>
-  (...args: any[]) => {
-    const svg = svgRef?.current;
-    if (svg && typeof (svg as any)[method] === 'function') {
-      (svg as any)[method](...args);
-    }
-  };
+    (...args: any[]) => {
+      const svg = svgRef?.current;
+      if (svg && typeof (svg as any)[method] === 'function') {
+        (svg as any)[method](...args);
+      }
+    };
 
 function Legend({
   clusters,
@@ -422,8 +422,9 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         container.selectAll(clusterClass).attr('opacity', 1);
         tooltip?.html(`
       <div>
-        <p>Type: ${d.play_type || 'Unknown'}</p>
-        <p>Description: ${d.description || 'N/A'}</p>
+        <p>Type: ${d.event_type || 'Unknown'}</p>
+        <p>Home: ${d.event_desc_home || 'N/A'}</p>
+        <p>Away: ${d.event_desc_away || 'N/A'}</p>
         <p>Cluster: ${d.cluster}</p>
       </div>
     `);

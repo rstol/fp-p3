@@ -1,7 +1,6 @@
 import { Check, Edit } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useDashboardStore } from '~/lib/stateStore';
-import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -82,24 +81,21 @@ function EditableField({
 }
 
 export default function PlayView() {
-  // TODO get this info for the currently selected play
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
-  const isLoading = false; // TODO fetching data
 
-  if (isLoading) {
-    return <PlayDetailsSkeleton />;
-  } else if (!selectedPlay) {
+  if (!selectedPlay) {
     return (
       <Card className="gap-4 border-none pt-1 shadow-none">
         <CardHeader>
           <CardTitle>Selected Play Details</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <div className="text-sm">No play selected.</div>
         </CardContent>
       </Card>
     );
   }
+
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
       <CardHeader>
@@ -108,21 +104,23 @@ export default function PlayView() {
       <CardContent className="space-y-4">
         <img src="/spurs.gif" alt="spurs_play_view" />
         <div className="divide-y divide-solid text-sm">
-          <div className="flex gap-4 pb-1">
-            <span className="shrink-0">Game Date:</span>
-            <span className="flex-1 text-right">2015-10-28</span>
-          </div>
+          {selectedPlay.game_date && (
+            <div className="flex gap-4 py-1">
+              <span className="shrink-0">Game Date:</span>
+              <span className="flex-1 text-right">{selectedPlay.game_date ? selectedPlay.game_date : 'N/A'}</span>
+            </div>
+          )}
           <div className="flex gap-4 py-1">
             <span className="shrink-0">Description Home:</span>
-            <span className="flex-1 text-right">Jump Ball Monroe vs. Lopez: Tip to Porzingis</span>
+            <span className="flex-1 text-right">{selectedPlay.event_desc_home}</span>
           </div>
-          <div className="flex gap-4 pt-1">
+          <div className="flex gap-4 py-1">
             <span className="shrink-0">Description Away:</span>
-            <span className="flex-1 text-right">N/A</span>
+            <span className="flex-1 text-right">{selectedPlay.event_desc_away}</span>
           </div>
         </div>
       </CardContent>
-      <CardFooter className="flex flex-col gap-4">
+      <CardFooter className="flex-col items-start gap-2">
         <EditableField id="play_tag" label="Play Tag" placeholder="Tag the play..." />
         <EditableField
           id="play_note"
