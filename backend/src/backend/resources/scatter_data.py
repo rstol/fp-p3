@@ -57,48 +57,50 @@ class TeamPlaysScatterResource(Resource):
 
         self.cluster_std_dev = 25
 
-    def get(self, team_id):
-        """Get scatter plot data for a team's plays."""
-        logger.info(f"Fetching scatter data for team_id: {team_id}")
-
-        timeframe = request.args.get("timeframe", "last_3")
-        try:
-            num_games = int(timeframe.split("_")[1])
-        except (ValueError, AttributeError):
-            logger.error(f"Invalid timeframe format: {timeframe}")
-            return {"error": "Invalid timeframe format"}, 400
-        logger.info(f"Using timeframe: {timeframe} (limiting to {num_games} games)")
+    def _prepare_scatter_data_for_response(self, team_id_str: str, timeframe_str: str):
+        logger.info(f"Prep scatter data: team {team_id_str}, timeframe {timeframe_str}")
 
         try:
-            team_id = int(team_id)
+            # Ensure splitting timeframe_str and accessing index [1] is safe
+            parts = timeframe_str.split("_")
+            if len(parts) < 2 or not parts[1].isdigit():
+                raise ValueError("Timeframe format error")
+            num_games = int(parts[1])
         except ValueError:
-            logger.error(f"Invalid team_id format: {team_id}")
+            logger.error(f"Invalid timeframe format: {timeframe_str}")
+            return {"error": "Invalid timeframe format"}, 400
+        logger.info(f"Using timeframe: {timeframe_str} (limiting to {num_games} games)")
+
+        try:
+            team_id = int(team_id_str)
+        except ValueError:
+            logger.error(f"Invalid team_id format: {team_id_str}")
             return {"error": "Invalid team ID format"}, 400
 
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
         logger.info(f"Found {len(games)} games for team {team_id}")
         total_games = len(games)
 
-        # Sort games by date (if available) and limit to the requested number
         if not games.is_empty() and "game_date" in games.columns:
             games = games.sort("game_date", descending=True)
 
-        # Limit to the requested number of games based on timeframe
         games = games.limit(num_games)
-        logger.info(f"Limited to {len(games)} games based on timeframe {timeframe}")
+        logger.info(f"Limited to {len(games)} games for timeframe {timeframe_str}")
 
         if games.is_empty():
-            logger.warning(f"No games found for team {team_id}")
-            return {"error": "No games found for this team"}, 404
+            logger.warning(
+                f"No games for team {team_id_str} (timeframe: {timeframe_str})."
+                " Returning empty points."
+            )
+            return {"total_games": total_games, "points": []}, 200
 
         plays = self._concat_plays_from_games(games)
-        logger.info(f"Collected {len(plays)} plays for generating scatter points")
+        logger.info(f"Collected {len(plays)} plays.")
         if plays.is_empty():
-            return {"error": "No plays found"}, 404
+            return {"total_games": total_games, "points": []}, 200
 
-        scatter_data = self._generate_scatter_data(plays)
-
-        scatter_data = self._apply_clustering(scatter_data)
+        scatter_data_df = self._generate_scatter_data(plays)
+        scatter_data_df = self._apply_clustering(scatter_data_df)
 
         final_columns = [
             "x",
@@ -106,25 +108,55 @@ class TeamPlaysScatterResource(Resource):
             "cluster",
             "event_id",
             "game_id",
-            "event_desc_home",  # Full home description
-            "event_desc_away",  # Full away description
-            "game_date",  # Game date
-            "event_type",  # Original event_type (numeric)
+            "event_desc_home",
+            "event_desc_away",
+            "game_date",
+            "event_type",
         ]
 
-        # TODO: check if this is needed?
+        # Ensure all final_columns exist, adding them with nulls if not present
+        current_cols = scatter_data_df.columns
         for col_name in final_columns:
-            if col_name not in scatter_data.columns:
-                if col_name in ["event_desc_home", "event_desc_away", "game_date"]:
-                    scatter_data = scatter_data.with_columns(
-                        pl.lit(None, dtype=pl.String).alias(col_name)
+            if col_name not in current_cols:
+                # Determine dtype for pl.lit carefully
+                if col_name in ["x", "y", "cluster", "event_type"]:
+                    # Numeric columns
+                    scatter_data_df = scatter_data_df.with_columns(
+                        pl.lit(None, dtype=pl.Float64).alias(col_name)
                     )
                 else:
-                    scatter_data = scatter_data.with_columns(pl.lit(None).alias(col_name))
+                    # String columns
+                    scatter_data_df = scatter_data_df.with_columns(
+                        pl.lit(None, dtype=pl.String).alias(col_name)
+                    )
 
-        scatter_data = scatter_data.select(final_columns)
+        # Select only the final columns in the specified order
+        scatter_data_df = scatter_data_df.select(final_columns)
 
-        return {"total_games": total_games, "points": scatter_data.to_dicts()}
+        return {"total_games": total_games, "points": scatter_data_df.to_dicts()}, 200
+
+    def get(self, team_id):
+        """Get scatter plot data for a team's plays."""
+        # logger.info(f"Fetching scatter data for team_id: {team_id}")
+        timeframe = request.args.get("timeframe", "last_3")
+        data, status_code = self._prepare_scatter_data_for_response(team_id, timeframe)
+        return data, status_code
+
+    def post(self, team_id):
+        logger.info(f"Received cluster update POST request for team_id: {team_id}")
+        updated_plays_data = request.get_json()
+
+        if not updated_plays_data:
+            logger.warning(f"No data provided in cluster update for team_id: {team_id}")
+            return {"error": "No data provided for update"}, 400
+
+        logger.info(f"Cluster update data for team_id {team_id}: {updated_plays_data}")
+        # TODO: Implement the actual logic to process these updates in the data source.
+
+        # For now, return the original/current scatter data for this team.
+        timeframe_for_refresh = request.args.get("timeframe", "last_3")
+        data, status_code = self._prepare_scatter_data_for_response(team_id, timeframe_for_refresh)
+        return data, status_code
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
         all_plays_list: list[pl.DataFrame] = []

@@ -6,6 +6,14 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card'
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
+import { useFetcher } from 'react-router';
+
+interface ClientActionResult {
+  success: boolean;
+  error?: string;
+  message?: string;
+  data?: any; // Consider a more specific type for 'data' if known
+}
 
 function EditableField({
   id,
@@ -105,6 +113,21 @@ export default function PlayView() {
   );
   const stagedChangesCount = useDashboardStore((state) => state.stagedChangesCount);
   const pendingClusterUpdates = useDashboardStore((state) => state.pendingClusterUpdates);
+  const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
+  const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
+
+  const fetcher = useFetcher<ClientActionResult>();
+
+  useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data) {
+      const result = fetcher.data;
+      if (result.success) {
+        clearPendingClusterUpdates();
+      } else if (result.error) {
+        console.error('[PlayView.tsx] Fetcher submission error:', result.error);
+      }
+    }
+  }, [fetcher.state, fetcher.data, clearPendingClusterUpdates]);
 
   if (!selectedPlay) {
     return (
@@ -118,6 +141,65 @@ export default function PlayView() {
       </Card>
     );
   }
+
+  const onClickApplyChanges = async () => {
+    if (!selectedTeamId) {
+      console.error('[PlayView.tsx] No team selected. Cannot apply changes.');
+      return;
+    }
+    if (pendingClusterUpdates.size === 0) {
+      return;
+    }
+
+    const updatesToSend: { gameid: string; playid: number; cluster: number }[] = [];
+    pendingClusterUpdates.forEach((newCluster, playIdKey) => {
+      const parts = playIdKey.split('-');
+
+      if (parts.length === 2) {
+        const gameId = parts[0];
+        const playIdStr = parts[1];
+        const playIdNum = parseInt(playIdStr, 10);
+
+        if (isNaN(playIdNum)) {
+          console.error(`[PlayView.tsx] Failed to parse playId '${playIdStr}' to number for key '${playIdKey}'`);
+        } else {
+          updatesToSend.push({
+            gameid: gameId,
+            playid: playIdNum,
+            cluster: newCluster,
+          });
+        }
+      } else {
+        console.error(`[PlayView.tsx] Invalid playIdKey format: '${playIdKey}'. Expected 'GAMEID-PLAYID'.`);
+      }
+    });
+
+    if (updatesToSend.length === 0) {
+      if (pendingClusterUpdates.size > 0) {
+        console.error('[PlayView.tsx] Changes were staged, but none could be parsed into valid updates. Aborting POST.');
+      }
+      return;
+    }
+
+    const payload = {
+      teamId: selectedTeamId,
+      updates: updatesToSend,
+    };
+
+    fetcher.submit(payload, {
+      method: 'POST',
+      encType: 'application/json',
+    });
+  };
+
+  const handleClusterChange = (newClusterValue: string) => {
+    const newClusterId = parseInt(newClusterValue, 10);
+    if (!isNaN(newClusterId)) {
+      stageSelectedPlayClusterUpdate(newClusterId);
+    } else {
+      console.warn('Invalid Play Cluster ID entered, not a number:', newClusterValue);
+    }
+  };
 
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
@@ -149,22 +231,13 @@ export default function PlayView() {
           label="Play Cluster"
           placeholder="Set Cluster ID..."
           value={selectedPlay.cluster}
-          onSave={(newClusterValue) => {
-            const newClusterId = parseInt(newClusterValue, 10);
-            if (!isNaN(newClusterId)) {
-              stageSelectedPlayClusterUpdate(newClusterId);
-              console.log('Play Cluster change staged:', newClusterId);
-            } else {
-              console.warn('Invalid Play Cluster ID entered, not a number:', newClusterValue);
-            }
-          }}
+          onSave={handleClusterChange}
         />
         <EditableField
           id="play_note"
           label="Play Note"
           placeholder="Add a note..."
           isTextarea={true}
-          // value={selectedPlay.note || ''} 
           onSave={(newNote) => {
             console.log('Play Note saved:', newNote);
             // TODO: Implement saving logic for play note (update store, API call)
@@ -176,14 +249,8 @@ export default function PlayView() {
           <div className="mt-6 w-full flex items-center justify-end border-t pt-4">
             <Button
               size="sm"
-              onClick={() => {
-                console.log('Applying pending changes:');
-                pendingClusterUpdates.forEach((clusterId, playId) => {
-                  console.log(`Play ID: ${playId}, New Cluster ID: ${clusterId}`);
-                });
-                // TODO: Implement API call to send changes to the backend
-                // on success: clearPendingClusterUpdates();
-              }}
+              disabled={stagedChangesCount === 0 || !selectedTeamId}
+              onClick={onClickApplyChanges}
             >
               Apply Changes ({stagedChangesCount})
             </Button>

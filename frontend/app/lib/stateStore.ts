@@ -8,6 +8,7 @@ type State = {
   selectedPlay: Play | null;
   pendingClusterUpdates: Map<string, number>;
   stagedChangesCount: number;
+  selectedTeamId: string | null;
 };
 
 type Action = {
@@ -15,12 +16,14 @@ type Action = {
   resetPlay: () => void;
   stageSelectedPlayClusterUpdate: (clusterId: number) => void;
   clearPendingClusterUpdates: () => void;
+  setSelectedTeamId: (teamId: string | null) => void;
 };
 
 export const useDashboardStore = create<State & Action>((set) => ({
   selectedPlay: null,
   pendingClusterUpdates: new Map<string, number>(),
   stagedChangesCount: 0,
+  selectedTeamId: null,
   updatePlay: (selectedPlay) => set(() => ({ selectedPlay })),
   resetPlay: () =>
     set(() => ({
@@ -47,4 +50,7 @@ export const useDashboardStore = create<State & Action>((set) => ({
       pendingClusterUpdates: new Map<string, number>(),
       stagedChangesCount: 0,
     })),
+  setSelectedTeamId: (teamId) => {
+    set(() => ({ selectedTeamId: teamId }));
+  },
 }));
