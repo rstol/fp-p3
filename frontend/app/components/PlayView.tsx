@@ -10,18 +10,28 @@ import { Textarea } from './ui/textarea';
 function EditableField({
   id,
   label,
+  value: initialValue,
   placeholder,
   isTextarea = false,
+  onSave,
 }: {
   id: string;
   label: string;
+  value?: string | number;
   placeholder: string;
   isTextarea?: boolean;
+  onSave: (newValue: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [value, setValue] = useState('');
+  const [currentValue, setCurrentValue] = useState(
+    initialValue !== undefined ? String(initialValue) : '',
+  );
 
   const inputRef = useRef<null | (HTMLTextAreaElement & HTMLInputElement)>(null);
+
+  useEffect(() => {
+    setCurrentValue(initialValue !== undefined ? String(initialValue) : '');
+  }, [initialValue]);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -29,8 +39,14 @@ function EditableField({
     }
   }, [isEditing]);
 
-  function handleSave() {
+  function handleSaveInternal() {
     setIsEditing(false);
+    onSave(currentValue);
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    handleSaveInternal();
   }
 
   return (
@@ -45,33 +61,35 @@ function EditableField({
           className="w-full justify-between border bg-gray-50 px-3! py-1! text-gray-700"
           onClick={() => setIsEditing(true)}
         >
-          {value ? value : <span className="text-gray-400">{placeholder}</span>}
+          {currentValue ? currentValue : <span className="text-gray-400">{placeholder}</span>}
           <Edit size={6} />
         </Button>
       ) : (
-        <form className="flex gap-2" onSubmit={handleSave} onBlur={handleSave}>
+        <form className="flex gap-2" onSubmit={handleSubmit}>
           {isTextarea ? (
             <Textarea
               id={id}
               placeholder={placeholder}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
+              value={currentValue}
+              onChange={(e) => setCurrentValue(e.target.value)}
               className="flex-1"
               rows={1}
               ref={inputRef}
+              onBlur={handleSaveInternal}
             />
           ) : (
             <Input
               id={id}
               type="text"
               placeholder={placeholder}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
+              value={currentValue}
+              onChange={(e) => setCurrentValue(e.target.value)}
               className="flex-1"
               ref={inputRef}
+              onBlur={handleSaveInternal}
             />
           )}
-          <Button onClick={handleSave} size="sm" className="h-9">
+          <Button type="submit" size="sm" className="h-9">
             <Check size={6} />
           </Button>
         </form>
@@ -82,6 +100,7 @@ function EditableField({
 
 export default function PlayView() {
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
+  const updateSelectedPlayCluster = useDashboardStore((state) => state.updateSelectedPlayCluster);
 
   if (!selectedPlay) {
     return (
@@ -121,12 +140,33 @@ export default function PlayView() {
         </div>
       </CardContent>
       <CardFooter className="flex-col items-start gap-2">
-        <EditableField id="play_tag" label="Play Tag" placeholder="Tag the play..." />
+        <EditableField
+          id="play_cluster"
+          label="Play Cluster"
+          placeholder="Set Cluster ID..."
+          value={selectedPlay.cluster}
+          onSave={(newClusterValue) => {
+            const newClusterId = parseInt(newClusterValue, 10);
+            if (!isNaN(newClusterId)) {
+              updateSelectedPlayCluster(newClusterId);
+              console.log('Play Cluster saved and store updated:', newClusterId);
+              // TODO: Implement API call to persist this change to the backend
+            } else {
+              console.warn('Invalid Play Cluster ID entered, not a number:', newClusterValue);
+            }
+          }}
+        />
         <EditableField
           id="play_note"
           label="Play Note"
           placeholder="Add a note..."
           isTextarea={true}
+          // value={selectedPlay.note || ''} 
+          onSave={(newNote) => {
+            console.log('Play Note saved:', newNote);
+            // TODO: Implement saving logic for play note (update store, API call)
+            // Example: if (selectedPlay) { updateSelectedPlayNote(newNote); }
+          }}
         />
       </CardFooter>
     </Card>

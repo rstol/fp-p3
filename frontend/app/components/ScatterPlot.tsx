@@ -1,6 +1,6 @@
 import * as d3 from 'd3';
 import { Circle, GrabIcon, Info, Minus, Move, Plus, RefreshCcw, ZoomIn } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import type { clientLoader } from '~/routes/_index';
 import type { Point } from '~/types/data';
@@ -22,14 +22,14 @@ import { Label } from '~/components/ui/label';
 const defaultDimensions = { width: 500, height: 400 };
 const margin = { top: 40, right: 10, bottom: 10, left: 10 };
 
-const getZoomMethod =
+const getZoomMethod = 
   (svgRef: React.RefObject<SVGSVGElement | null>, method: string) =>
-    (...args: any[]) => {
-      const svg = svgRef?.current;
-      if (svg && typeof (svg as any)[method] === 'function') {
-        (svg as any)[method](...args);
-      }
-    };
+  (...args: any[]) => {
+    const svg = svgRef?.current;
+    if (svg && typeof (svg as any)[method] === 'function') {
+      (svg as any)[method](...args);
+    }
+  };
 
 function Legend({
   clusters,
@@ -37,7 +37,7 @@ function Legend({
   zoomedCluster,
   onSelectCluster,
 }: {
-  clusters: string[];
+  clusters: string[]; 
   color: d3.ScaleOrdinal<string, string>;
   zoomedCluster: string | null;
   onSelectCluster: (cluster: string) => void;
@@ -118,253 +118,174 @@ function InfoBar() {
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">
               <p>Different colors represent different types of plays.</p>
+              <p>
+                Zoom in using controls or mouse wheel. Pan by dragging the background. Click on a
+                play to select it. Reset zoom with the refresh button.
+              </p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </div>
-
-      {/* Control hints */}
-      <div className="flex items-center gap-3">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <GrabIcon className="h-3 w-3" />
-                <span>Drag points</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Drag points to reassign clusters</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Move className="h-3 w-3" />
-                <span>Pan</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Drag the background to pan</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <ZoomIn className="h-3 w-3" />
-                <span>Zoom</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Use mouse wheel to zoom</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+      <div className="text-xs text-gray-500">Powered by D3.js</div>
     </div>
   );
 }
 
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
-  const svgRef = useRef<SVGSVGElement>(null);
   const loaderData = useLoaderData<typeof clientLoader>();
-  const data = loaderData?.scatterData?.points ?? [];
+  const rawPointsFromLoader = loaderData?.scatterData?.points ?? [];
+
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
   const updatePlay = useDashboardStore((state) => state.updatePlay);
-  const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
-  const color = d3.scaleOrdinal(d3.schemeCategory10);
+  const resetPlayStore = useDashboardStore((state) => state.resetPlay);
+
+  const [searchParams] = useSearchParams();
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
+  const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
 
-  const zoomed = useCallback(
-    ({ transform }: d3.D3ZoomEvent<Element, unknown> | { transform: d3.ZoomTransform }) => {
-      setCurrentTransform(transform);
+  const baseDataForPlot = useMemo(() => {
+    let filteredPoints = rawPointsFromLoader || [];
+    return filteredPoints;
+  }, [rawPointsFromLoader, searchParams]);
 
-      const container = d3.select(svgRef.current).select('g');
-      container.attr('transform', transform as any);
+  const [plotData, setPlotData] = useState<Point[]>(baseDataForPlot);
 
-      // Keep point radius and stroke width constant
-      container
-        .selectAll('circle')
-        .attr('r', function (d: any) {
-          const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
-          return isSelected ? 8 / transform.k : 5 / transform.k;
-        })
-        .attr('stroke', function (d: any) {
-          const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
-          return isSelected ? 'black' : 'white';
-        })
-        .attr('stroke-width', function (d: any) {
-          const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
-          return isSelected ? 2 / transform.k : 1 / transform.k;
-        });
-      container.selectAll('path').attr('stroke-width', 0.8 / transform.k); // contour
-    },
-    [selectedPlay],
-  );
-  const zoom = d3.zoom().scaleExtent([1, 50]).on('zoom', zoomed);
+  useEffect(() => {
+    setPlotData(baseDataForPlot);
+  }, [baseDataForPlot]);
+
+  useEffect(() => {
+    if (selectedPlay) {
+      setPlotData((currentPlotData) =>
+        currentPlotData.map((p) =>
+          getPlayId(p) === getPlayId(selectedPlay)
+            ? { ...p, cluster: selectedPlay.cluster } 
+            : p,
+        ),
+      );
+    } 
+  }, [selectedPlay]); 
+
+  const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+  const zoomBehavior = useMemo(() => d3.zoom<SVGSVGElement, unknown>()
+    .scaleExtent([0.5, 20])
+    .on('zoom', (event) => {
+      setCurrentTransform(event.transform);
+    }), []);
 
   const zoomIntoCluster = useCallback(
-    (cluster: string) => {
-      if (!svgRef.current) return;
+    (clusterId: string) => {
       const svg = d3.select(svgRef.current);
+      const g = svg.select<SVGGElement>('g.all-content');
+      if (g.empty() || !plotData || !plotData.length) return; 
 
-      const circles = svg.selectAll(`circle.cluster-${cluster}`).nodes() as SVGCircleElement[];
+      const pointsInCluster = plotData.filter((d) => String(d.cluster) === clusterId); 
+      if (!pointsInCluster.length) return;
 
-      const cxValues = circles.map((c) => c.cx.baseVal.value);
-      const cyValues = circles.map((c) => c.cy.baseVal.value);
+      const xScale = d3
+        .scaleLinear()
+        .domain(d3.extent(plotData, (d) => d.x) as [number, number]) 
+        .range([0, defaultDimensions.width]);
+      const yScale = d3
+        .scaleLinear()
+        .domain(d3.extent(plotData, (d) => d.y) as [number, number]) 
+        .range([defaultDimensions.height, 0]);
 
-      if (!cxValues.length || !cyValues.length) return;
+      const xExtent = d3.extent(pointsInCluster, (d) => d.x) as [number, number];
+      const yExtent = d3.extent(pointsInCluster, (d) => d.y) as [number, number];
 
-      const x0 = d3.min(cxValues)!;
-      const x1 = d3.max(cxValues)!;
-      const y0 = d3.min(cyValues)!;
-      const y1 = d3.max(cyValues)!;
+      const viewBoxWidth = defaultDimensions.width;
+      const viewBoxHeight = defaultDimensions.height;
 
-      const k =
-        0.9 * Math.min(defaultDimensions.width / (x1 - x0), defaultDimensions.height / (y1 - y0));
-      const tx = (defaultDimensions.width - k * (x0 + x1)) / 2;
-      const ty = (defaultDimensions.height - k * (y0 + y1)) / 2;
+      const scaleX = viewBoxWidth / (xScale(xExtent[1]) - xScale(xExtent[0]));
+      const scaleY = viewBoxHeight / (yScale(yExtent[0]) - yScale(yExtent[1]));
+      const k = Math.min(scaleX, scaleY) * 0.9;
 
-      const transform = d3.zoomIdentity.translate(tx, ty).scale(k);
+      const tx = viewBoxWidth / 2 - k * (xScale(xExtent[0]) + xScale(xExtent[1])) / 2;
+      const ty = viewBoxHeight / 2 - k * (yScale(yExtent[0]) + yScale(yExtent[1])) / 2;
 
       svg
         .transition()
         .duration(750)
-        .call(zoom.transform as any, transform);
-
-      setZoomedCluster(cluster);
+        .call(zoomBehavior.transform as any, d3.zoomIdentity.translate(tx, ty).scale(k));
+      setZoomedCluster(clusterId);
     },
-    [zoom],
+    [plotData, zoomBehavior], 
   );
+  
+  const reset = useCallback(() => {
+    setZoomedCluster(null);
+    d3.select(svgRef.current)
+      .transition()
+      .duration(750)
+      .call(zoomBehavior.transform as any, d3.zoomIdentity);
+  }, [zoomBehavior]);
 
-  // Main rendering effect when data or dimensions change
   useEffect(() => {
-    if (!data || data.length === 0 || !svgRef.current) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    (svg as any).zoomIn = () => zoomBehavior.scaleBy(d3.select(svg), 1.2);
+    (svg as any).zoomOut = () => zoomBehavior.scaleBy(d3.select(svg), 0.8);
+    (svg as any).zoomReset = reset;
+  }, [zoomBehavior, reset]);
+  
+  const handlePointDrag = (selection: d3.Selection<any, Point, any, any>) => {
+    function dragstarted(this: SVGCircleElement, event: d3.D3DragEvent<SVGCircleElement, Point, any>, d: Point) {
+      d3.select(this).raise().attr('stroke', 'black');
+    }
+    function dragged(this: SVGCircleElement, event: d3.D3DragEvent<SVGCircleElement, Point, any>, d: Point) {
+      d3.select(this).attr('cx', event.x).attr('cy', event.y);
+    }
+    function dragended(this: SVGCircleElement, event: d3.D3DragEvent<SVGCircleElement, Point, any>, d: Point) {
+      d3.select(this).attr('stroke', null);
+    }
+    return d3
+      .drag<SVGCircleElement, Point>()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended);
+  };
+
+  useEffect(() => {
+    if (!svgRef.current || !plotData) return; 
 
     const svg = d3.select(svgRef.current);
+    svg.selectAll('*').remove(); 
 
-    // Set up scales with original domains
-    const xExtent = d3.extent(data, (d) => d.x) as [number, number];
-    const yExtent = d3.extent(data, (d) => d.y) as [number, number];
+    const container = svg.append('g').attr('class', 'all-content');
+    svg.call(zoomBehavior as any).on("dblclick.zoom", null);
 
     const xScale = d3
       .scaleLinear()
-      .domain(xExtent)
-      .range([margin.left + margin.right, defaultDimensions.width - margin.left - margin.right]);
-
+      .domain(d3.extent(plotData, (d) => d.x) as [number, number])
+      .range([0, defaultDimensions.width]);
     const yScale = d3
       .scaleLinear()
-      .domain(yExtent)
-      .range([defaultDimensions.height - margin.bottom - margin.top, margin.top + margin.bottom]);
+      .domain(d3.extent(plotData, (d) => d.y) as [number, number])
+      .range([defaultDimensions.height, 0]);
 
-    // Clear the SVG
-    svg.selectAll('*').remove();
-
-    // Add background rect for zooming/panning
-    svg
+    container
       .append('rect')
       .attr('width', defaultDimensions.width)
       .attr('height', defaultDimensions.height)
-      .attr('fill', 'oklch(0.985 0.002 247.839)') // Light grey background
-      .attr('cursor', 'move');
+      .style('fill', 'none') 
+      .style('pointer-events', 'all')
+      .on('click', () => {
+         if (resetPlayStore) resetPlayStore(); 
+      });
 
-    // Create a group for all visualization content
-    const container = svg.append('g');
-
-    svg.call(zoom as any).on('dblclick.zoom', null);
-    // Apply zoom behavior to svg but filter so it only works on background or when using mousewheel
-    function reset() {
-      setZoomedCluster(null);
-      svg
-        .transition()
-        .duration(750)
-        .call(zoom.transform as any, d3.zoomIdentity);
-    }
-
-    Object.assign(svg.node() as {}, {
-      zoomIn: () => svg.transition().call(zoom.scaleBy as any, 2),
-      zoomOut: () => svg.transition().call(zoom.scaleBy as any, 0.5),
-      zoomReset: reset,
-    });
-
-    // Function to handle point dragging
-    const clusters = d3.groups(data, (d) => d.cluster);
-    const handlePointDrag = (selection: d3.Selection<any, Point, any, any>) => {
-      const drag = d3
-        .drag<SVGCircleElement, Point>()
-        .on('start', function (event, d) {
-          // Prevent zoom during drag
-          event.sourceEvent.stopPropagation();
-          d3.select(this)
-            .raise()
-            .attr('r', 7)
-            .attr('stroke-width', 2)
-            .attr('stroke', 'black')
-            .attr('cursor', 'grabbing');
-        })
-        .on('drag', function (event, d) {
-          // Prevent zoom during drag
-          event.sourceEvent.stopPropagation();
-
-          // Get mouse position relative to the container
-          const [x, y] = d3.pointer(event, container.node());
-
-          // Update data coordinates
-          d.x = xScale.invert(x);
-          d.y = yScale.invert(y);
-
-          // Update circle position
-          d3.select(this).attr('cx', xScale(d.x)).attr('cy', yScale(d.y));
-        })
-        .on('end', function (event, d) {
-          event.sourceEvent.stopPropagation();
-
-          d3.select(this).attr('stroke-width', 1).attr('stroke', 'white').attr('cursor', 'grab');
-
-          // Update cluster assignment
-          let minDist = Infinity;
-          let closest = d.cluster;
-
-          for (const [id, points] of clusters) {
-            const cx = d3.mean(points, (p) => p.x)!;
-            const cy = d3.mean(points, (p) => p.y)!;
-            const dist = (cx - d.x) ** 2 + (cy - d.y) ** 2;
-            if (dist < minDist) {
-              minDist = dist;
-              closest = +id;
-            }
-          }
-
-          // Update the cluster if it changed
-          if (d.cluster !== closest) {
-            d.cluster = closest;
-
-            // Instead of redrawing everything, update just this point's fill color
-            d3.select(this).attr('fill', color(String(d.cluster)) as string);
-          }
-        });
-
-      // Apply drag behavior to the selection
-      selection.call(drag as any);
-      return selection;
-    };
-
-    // Create contours for each cluster first to be drawn below the points
-
-    for (const [clusterId, points] of clusters) {
-      if (points.length >= 3) {
+    const uniqueClusters = Array.from(new Set(plotData.map((d) => d.cluster)));
+    for (const clusterId of uniqueClusters) {
+      const pointsInThisCluster = plotData.filter((d) => d.cluster === clusterId);
+      if (pointsInThisCluster.length > 2) {
         const density = d3
           .contourDensity<Point>()
           .x((d) => xScale(d.x))
           .y((d) => yScale(d.y))
           .size([defaultDimensions.width, defaultDimensions.height])
-          .bandwidth(15)(points);
+          .bandwidth(15)(pointsInThisCluster);
 
         const outermost = density.slice(0, 1);
         container
@@ -375,19 +296,18 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           .join('path')
           .attr('d', d3.geoPath())
           .attr('fill-opacity', 0.05)
-          .attr('fill', color(String(clusterId)))
+          .attr('fill', color(String(clusterId))) 
           .attr('stroke', color(String(clusterId)))
           .attr('stroke-width', 0.8)
           .attr('opacity', 0.7)
           .attr('cursor', 'move');
       }
     }
-    const tooltip = d3.select('.tooltip');
+    const tooltip = d3.select('.tooltip'); 
 
-    // Add points to the visualization
     container
       .selectAll('circle')
-      .data(data)
+      .data(plotData) 
       .join('circle')
       .attr('r', (d) => {
         const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
@@ -409,13 +329,9 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .on('click', (event, play) => {
         event.stopPropagation();
         if (!selectedPlay || getPlayId(selectedPlay) !== getPlayId(play)) {
-          // Update state with event_id and game_id when point is clicked
-          updatePlay(play);
+          updatePlay(play); 
         }
       })
-      // TODO the handlePointDrag is not thought out and needs to be reworked (reassign in backend etc.)
-      // .attr('cursor', 'grab')
-      // .call(handlePointDrag)
       .on('mouseover', (event, d) => {
         const clusterClass = `.cluster-${d.cluster}`;
         container.selectAll('circle').attr('opacity', 0.4);
@@ -425,7 +341,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         <p>Type: ${d.event_type || 'Unknown'}</p>
         <p>Home: ${d.event_desc_home || 'N/A'}</p>
         <p>Away: ${d.event_desc_away || 'N/A'}</p>
-        <p>Cluster: ${d.cluster}</p>
+        <p>Cluster: ${d.cluster}</p> 
       </div>
     `);
         return tooltip.style('visibility', 'visible');
@@ -439,24 +355,45 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         container.selectAll('circle').attr('opacity', 1);
         return tooltip?.style('visibility', 'hidden');
       });
-  }, [data, selectedPlay, svgRef.current]);
+      
+      const g = d3.select(svgRef.current).select('g.all-content');
+      if (g.node()) { 
+        g.attr('transform', currentTransform.toString());
+      }
+
+  }, [
+    plotData, 
+    selectedPlay, 
+    svgRef, 
+    color, 
+    updatePlay, 
+    zoomBehavior, 
+    currentTransform, 
+    resetPlayStore
+  ]);
 
   useEffect(() => {
-    zoomed({ transform: currentTransform });
-  }, [selectedPlay, currentTransform]);
+    if (svgRef.current) {
+      const g = d3.select(svgRef.current).select('g.all-content');
+      if (g.node()) {
+         g.attr('transform', currentTransform.toString());
+      }
+    }
+  }, [currentTransform]);
 
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
-  const clusters = Array.from(new Set(data.map((d) => String(d.cluster)))).sort();
+  const clustersForLegend = Array.from(new Set(plotData.map((d) => String(d.cluster)))).sort();
+  
   return (
     <div className="flex flex-col">
-      {teamID && data.length === 0 ? (
-        <div className="py-4 text-center">No play data available for this team.</div>
+      {teamID && plotData.length === 0 && !isLoading ? (
+        <div className="py-4 text-center">No play data available for this team or current filters.</div>
       ) : (
         <div className="relative">
-          <Filters teamID={teamID} />
+          <Filters teamID={teamID} /> 
           <Legend
-            clusters={clusters}
+            clusters={clustersForLegend} 
             color={color}
             zoomedCluster={zoomedCluster}
             onSelectCluster={zoomIntoCluster}
