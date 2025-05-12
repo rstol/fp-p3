@@ -34,7 +34,7 @@ class PlayClustering:
         embeddings = self._load_all_embeddings()
         self._build_index(embeddings)
         self._init_kmeans(embeddings)
-        self.team_embeddings = self._set_team_embeddings(embeddings)
+        self._set_team_embeddings(embeddings)
 
     def _load_all_embeddings(self):
         npy_files = glob.glob(os.path.join(EMBEDDINGS_DIR, "*.npy"))
@@ -67,7 +67,7 @@ class PlayClustering:
 
     def _set_team_embeddings(self, embeddings):
         index = self.get_team_embedding_ids().index
-        return embeddings[index]
+        self.team_embeddings = embeddings[index]
 
     def get_initial_clusters(self, initial_k=12, niter=20):
         distances, index = self.kmeans.index.search(
@@ -145,6 +145,8 @@ class PlayClustering:
             if label not in new_clusters_by_label:
                 new_clusters_by_label[label] = []
             new_clusters_by_label[label].append(fb.play_id)
+
+        # TODO
 
         # Create new clusters
         for label, play_ids in new_clusters_by_label.items():
