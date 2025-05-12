@@ -1,6 +1,10 @@
 import polars as pl
 from polars import DataFrame
 
+from backend.resources.Game import Game
+from backend.resources.Play import Play
+from backend.resources.PlayId import PlayId
+
 
 class DatasetManager:
     def __init__(self, data_dir: str) -> None:
@@ -8,6 +12,7 @@ class DatasetManager:
 
         self.teams = pl.read_ndjson(f"{self.data_dir}/teams.jsonl")
         self.games = pl.read_ndjson(f"{self.data_dir}/games.jsonl")
+        self.games_data = {}
 
     def get_teams(self) -> list[dict[str, str | int | list[dict[str, str | int]]]]:
         return self.teams.to_dicts()
@@ -36,16 +41,19 @@ class DatasetManager:
     def get_plays_for_game(
         self, game_id: str, as_dicts: bool = True
     ) -> list[dict[str, str]] | DataFrame:
-        plays = self._load_game_plays(game_id)
-        return plays.to_dicts() if as_dicts else plays
+        game = self._get_game(game_id)
+        return game.data_df.to_dicts() if as_dicts else game.data_df
 
-    def get_play_id(self, game_id: str, play_id: str) -> dict[str, str] | None:
-        plays = self._load_game_plays(game_id)
-        play_dicts = plays.filter(pl.col("event_id") == play_id).head(1).to_dicts()
-        return play_dicts[0] if len(play_dicts) > 0 else None
+    def get_play_id(self, game_id: str, event_id: str) -> Play | None:
+        play_id = PlayId(game_id, event_id)
+        game = self._get_game(game_id)
+        return game.get_play_by_id(play_id)
 
-    def _load_game_plays(self, game_id: str) -> DataFrame:
-        try:
-            return pl.read_parquet(f"{self.data_dir}/plays/{game_id}.parquet")
-        except FileNotFoundError:
-            return pl.DataFrame()
+    def _get_game(self, game_id: str):
+        game = None
+        if self.games_data.get(game_id):
+            game = self.games_data[game_id]
+        else:
+            game = Game(game_id)
+            self.games_data.setdefault(game_id, game)
+        return game

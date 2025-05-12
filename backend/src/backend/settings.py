@@ -10,3 +10,11 @@ GAMES_DIR = os.getenv("GAMES_DIR")
 DATA_DIR = os.getenv("DATA_DIR")
 EXPERIMENTS_DIR = os.getenv("EXPERIMENTS_DIR")
 EMBEDDINGS_DIR = f"{DATA_DIR}/embeddings"
+
+TEAM_IDS_SAMPLE = {
+    "1610612748",
+    "1610612752",
+    "1610612754",
+    "1610612755",
+    "1610612761",
+}

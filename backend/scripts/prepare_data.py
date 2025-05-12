@@ -14,16 +14,9 @@ import pandas as pd
 import polars as pl
 from datasets import Dataset, load_dataset
 
-from backend.settings import EMBEDDINGS_DIR, TRACKING_DIR
+from backend.settings import EMBEDDINGS_DIR, TEAM_IDS_SAMPLE, TRACKING_DIR
 
 NUM_PROCESSES = os.cpu_count()
-TEAM_IDS_SAMPLE = {
-    1610612748,
-    1610612752,
-    1610612754,
-    1610612755,
-    1610612761,
-}
 
 
 def load_nba_dataset(split: str | None = None, name: str = "full"):
@@ -109,7 +102,7 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
         )
         .filter(
             pl.col("pair_id").is_in(play_ids)
-            & pl.col("home").struct.field("teamid").is_in(TEAM_IDS_SAMPLE)
+            & pl.col("home").struct.field("teamid").cast(str).is_in(TEAM_IDS_SAMPLE)
         )
         .drop("pair_id"),
         batched=True,

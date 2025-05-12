@@ -44,11 +44,11 @@ class GamePlaysResource(Resource):
 
 
 class PlayDetailsResource(Resource):
-    def get(self, game_id, play_id):
+    def get(self, game_id, event_id):
         try:
-            play = dataset_manager.get_play_id(game_id, play_id)
+            play = dataset_manager.get_play_id(game_id, event_id)
             if play:
-                return jsonify(play)
+                return jsonify(play.get_play_details())
             return {"error": "Play not found"}, 404
         except ValueError:
             return {"error": "Invalid play ID format"}, 400
