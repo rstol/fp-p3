@@ -58,9 +58,3 @@ backend:
       value: "/application_root/"
 
   url: null
-
-  volumes:
-    - name: data-volume
-      hostPath:
-        path: ./backend/data
-      mountPath: /application_root/data
