@@ -145,19 +145,26 @@ def train_model(train_loader, valid_loader, model, device, opts):
 
         start_time = time.time()
         # Train
-        for train_idx, batch in enumerate(train_loader):
+        for train_idx, train_tensors in enumerate(train_loader):
             if train_idx % 1000 == 0:
                 print(train_idx, flush=True)
             # Skip bad sequences.
-            if len(batch["player_idxs"]) < seq_len:
-                print(f"Skipping bad sequence: {len(batch['player_idxs'])}")
+            if len(train_tensors["player_idxs"]) < seq_len:
+                print(f"Skipping bad sequence: {len(train_tensors['player_idxs'])}")
                 continue
 
             player_feats = torch.cat(
-                [batch["player_xs"], batch["player_ys"], batch["player_vxs"], batch["player_vys"]],
+                [
+                    train_tensors["player_xs"],
+                    train_tensors["player_ys"],
+                    train_tensors["player_vxs"],
+                    train_tensors["player_vys"],
+                ],
                 dim=-1,
             )  # [T, 40]
-            x = torch.cat([batch["game_data"], player_feats], dim=-1).to(device)  # [T, 40 + 10]
+            x = torch.cat([train_tensors["game_data"], player_feats], dim=-1).to(
+                device
+            )  # [T, 40 + 10]
 
             x_hat, mu, logvar = model(x)
 
@@ -181,10 +188,9 @@ def train_model(train_loader, valid_loader, model, device, opts):
         total_valid_loss = 0.0
         n_valid = 0
         with torch.no_grad():
-            for batch in valid_loader:
-                x = torch.cat([batch["player_xs"], batch["player_ys"]], dim=-1).to(device)
-                x_hat, mu, logvar = model(x)
-                loss, _, _ = vae_loss(x_hat, x, mu, logvar, beta=opts["train"]["beta"])
+            for valid_tensors in valid_loader:
+                x_hat, mu, logvar = model(valid_tensors)
+                loss, _, _ = vae_loss(x_hat, valid_tensors, mu, logvar, beta=opts["train"]["beta"])
                 total_valid_loss += loss.item()
                 n_valid += 1
         valid_loss = total_valid_loss / n_valid

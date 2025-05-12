@@ -10,6 +10,7 @@ import pandas as pd
 import polars as pl
 from datasets import Dataset, load_dataset
 
+from backend.model.utils import get_game_time
 from backend.settings import COURT_LENGTH, COURT_WIDTH, GAMES_DIR, TRACKING_DIR
 
 # Event type to event name mapping
@@ -45,25 +46,8 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
         trust_remote_code=True,
         name=name,
         split=split,
-        num_proc=NUM_PROCESSES,
+        num_proc=NUM_PROCESSES // 2,
     )
-
-
-def get_game_time(game_clock: float, quarter: int) -> float:
-    """
-    Convert game clock and quarter to continuous game time in seconds.
-
-    Args:
-        game_clock: Seconds remaining in the quarter
-        quarter: Quarter number (1-4 for regulation, 5+ for overtime)
-
-    Returns:
-        Total seconds elapsed since the start of the game
-    """
-    if quarter <= 4:
-        return (quarter - 1) * 720 + (720 - game_clock)
-    else:
-        return 4 * 720 + (quarter - 5) * 300 + (300 - game_clock)
 
 
 def left_court_offense(moment, poss_team_id):
@@ -742,7 +726,7 @@ def save_batched_features(
         normalized_plays = []
         normalized_ids = []
         for play, pid in zip(batch_plays, batch_ids, strict=False):
-            normed_plays = normalize_play(play, target_len=50, downsample_factor=4)
+            normed_plays = normalize_play(play, target_len=50, downsample_factor=5)
             if normed_plays is None:
                 continue
             normalized_plays.extend(normed_plays)
@@ -791,7 +775,7 @@ if __name__ == "__main__":
     # The following filters out approx 50% of the plays
     def filter_plays(df):
         return df.filter(
-            (pl.col("moments").list.len() > 0)
+            (pl.col("moments").list.len() >= 100)
             & (pl.col("event_info").struct.field("possession_team_id").is_not_null())
             & (~pl.col("event_info").struct.field("possession_team_id").is_nan())
             & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
@@ -806,6 +790,7 @@ if __name__ == "__main__":
     )
 
     playerid_to_idx = build_player_index_map(dataset)
+
     # Save the player ID mapping
     Path(GAMES_DIR).mkdir(parents=True, exist_ok=True)
     with open(f"{GAMES_DIR}/playerid_to_idx.pydict", "wb") as f:

@@ -42,6 +42,9 @@ RUN uv sync --frozen --no-install-project
 
 # Copy application files
 COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
+# Copy data files
+COPY --chown=app-user:app-user data/embeddings ${PYTHONPATH}/data/embeddings
+COPY --chown=app-user:app-user data/nba_tracking_data ${PYTHONPATH}/data/nba_tracking_data
 
 CMD ["python", "-m", "backend.router.app"]
 
@@ -55,6 +58,9 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 # Copy application files
 COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
+# Copy data files
+COPY --chown=app-user:app-user data/embeddings ${PYTHONPATH}/data/embeddings
+COPY --chown=app-user:app-user data/nba_tracking_data ${PYTHONPATH}/data/nba_tracking_data
 
 # Activate entrypoint for running the Gunicorn application server
 # For environments with multiple CPU cores, increase the number of workers
