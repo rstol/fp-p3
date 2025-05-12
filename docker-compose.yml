@@ -30,10 +30,11 @@ services:
     restart: unless-stopped
     environment:
       - TRACKING_DIR=/application_root/data/nba_tracking_data
+      - DATA_DIR=/application_root/data
+      - EMBEDDINGS_DIR=/application_root/data/embeddings
     volumes:
       - ./backend/src/server:/application_root/server:cached
       - ./backend/data:/application_root/data:cached
-      - ./backend/http:/application_root/http:cached
     ports:
       - '8080:8080'
 volumes:

@@ -161,10 +161,10 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
     }
 
     for game_id, game_dataset in play_datasets.items():
-        output_file = plays_dir / f"{game_id}.jsonl"
+        output_file = plays_dir / f"{game_id}.parquet"
         # Load just a single game into memory with to_polars
         print(f"Writing {output_file} for game {game_id}")
-        game_dataset.to_polars(batched=False).write_ndjson(output_file)
+        game_dataset.to_polars(batched=False).write_parquet(output_file)
 
     # Extract game and team info
     dataset_info = dataset.select_columns(

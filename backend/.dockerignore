@@ -1,5 +1,5 @@
 __pycache__/
 cache/
-nba_tracking_data
 .venv
 games_preprocessed
+experiments

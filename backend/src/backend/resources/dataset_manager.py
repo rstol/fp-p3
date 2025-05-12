@@ -46,6 +46,6 @@ class DatasetManager:
 
     def _load_game_plays(self, game_id: str) -> DataFrame:
         try:
-            return pl.read_ndjson(f"{self.data_dir}/plays/{game_id}.jsonl")
+            return pl.read_parquet(f"{self.data_dir}/plays/{game_id}.parquet")
         except FileNotFoundError:
             return []
