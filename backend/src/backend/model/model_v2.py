@@ -16,8 +16,6 @@ class PlayTransformer(pl.LightningModule):
         super(PlayTransformer, self).__init__()
         # self.cfg = cfg
         self.in_feat_dim = in_feat_dim
-        # self.in_dynamic_rg_dim = cfg.model.in_dynamic_rg_dim
-        # self.in_static_rg_dim = cfg.model.in_static_rg_dim
         self.time_steps = time_steps
         # self.current_step = cfg.model.current_step
         self.feature_dim = feature_dim
@@ -36,10 +34,6 @@ class PlayTransformer(pl.LightningModule):
         self.decoder = Decoder(
             self.device, self.time_steps, self.feature_dim, self.head_num, self.k, self.F
         )
-
-        ### viz options
-        # self.width = cfg.viz.width
-        # self.totensor = transforms.ToTensor()
 
     def forward(
         self,
@@ -63,7 +57,7 @@ class PlayTransformer(pl.LightningModule):
         return {
             "prediction": decoding.permute(1, 2, 0, 3),
             "att_weights": e["att_weights"],
-        }  # [F,A,T,4]转换为[A,T,F,4]
+        }  # [F,A,T,4] converted to [A,T,F,4]
 
     def get_encoder_output(
         self,
@@ -83,11 +77,6 @@ class PlayTransformer(pl.LightningModule):
         return e
 
     def training_step(self, batch, batch_idx):
-        """states_batch, agents_batch_mask, states_padding_mask_batch, states_hidden_mask_batch, \
-                    roadgraph_feat_batch, roadgraph_padding_batch, traffic_light_feat_batch, traffic_light_padding_batch, \
-                        agent_rg_mask, agent_traffic_mask, (num_agents_accum, num_rg_accum, num_tl_accum), \
-                            sdc_masks, center_ps = batch.values()"""
-
         (
             states_batch,
             agents_batch_mask,
@@ -98,15 +87,6 @@ class PlayTransformer(pl.LightningModule):
         ) = batch
         states_hidden_mask_batch = states_hidden_BP_batch
         print(torch.mean(states_hidden_mask_batch.float()).item())
-
-        """
-        no_nonpad_mask = torch.sum((states_padding_mask_batch*~states_hidden_mask_batch),dim=-1) != 0
-        states_batch = states_batch[no_nonpad_mask]
-        agents_batch_mask = agents_batch_mask[no_nonpad_mask][:,no_nonpad_mask]
-        states_padding_mask_batch = states_padding_mask_batch[no_nonpad_mask]
-        states_hidden_mask_batch = states_hidden_mask_batch[no_nonpad_mask]
-        """
-        # agent_ids_batch = agent_ids_batch[no_nonpad_mask]
 
         # Predict
         out = self(
@@ -196,13 +176,6 @@ class PlayTransformer(pl.LightningModule):
 
         states_hidden_mask_batch = states_hidden_BP_batch
 
-        """
-        no_nonpad_mask = torch.sum((states_padding_mask_batch*~states_hidden_mask_batch),dim=-1) != 0
-        states_batch = states_batch[no_nonpad_mask]
-        agents_batch_mask = agents_batch_mask[no_nonpad_mask][:,no_nonpad_mask]
-        states_padding_mask_batch = states_padding_mask_batch[no_nonpad_mask]
-        states_hidden_mask_batch = states_hidden_mask_batch[no_nonpad_mask]
-        """
         # Predict
         out = self(
             states_batch,

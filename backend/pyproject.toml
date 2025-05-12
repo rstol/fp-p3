@@ -25,6 +25,7 @@ dependencies = [
     "py7zr>=0.22.0",
     "tqdm>=4.67.1",
     "polars>=1.26.0",
+    "umap-learn>=0.5.7",
 ]
 
 [dependency-groups]
@@ -38,6 +39,8 @@ train = [
     "einops>=0.8.1",
     "pytorch-lightning>=2.5.1.post0",
     "tensorboard>=2.19.0",
+    "matplotlib>=3.10.3",
+    "faiss-cpu>=1.11.0",
 ]
 
 [build-system]

@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset
 
 from backend.model.Possesion import Possession
-from backend.model.utils import split_list_by_v
+from backend.model.utils import split_list_by_velocity
 
 
 class PlayDataset(Dataset):
@@ -28,7 +28,6 @@ class PlayDataset(Dataset):
 
 
 def collate_batch(batch: list[Possession]):
-    # tensor sequence length 11*121*3 #complement T dimensions to 121
     sample_freq = 5  # downsample
     sequence_length = int(24 * 25 / sample_freq + 1)  # 24s sequence length
     list_24s = [
@@ -73,7 +72,7 @@ def collate_batch(batch: list[Possession]):
         play_tensor = play_tensor
         # The dimension of tensor A is 6
         A, D, T = play_tensor.size()
-        # If there are less than 11 agents: complement scence_tensor with -1, and agent_ids with -1.
+        # If there are less than 6 agents: complement scence_tensor with -1, and agent_ids with -1.
         if A < 6:
             new_dim = torch.full((6 - A, D, T), -1)
             play_tensor = torch.cat([new_dim, play_tensor], dim=0)
@@ -87,7 +86,7 @@ def collate_batch(batch: list[Possession]):
         head_padding_size = 0
         end_padding_size = 121 - (head_padding_size + len(time_24s) + 1)  # endtime～0
 
-        # [11,121,4] padding the temporal T dimension of scence_tensor with zeros
+        # [6,121,4] padding the temporal T dimension of play_tensor with zeros
         states_feat = torch.nn.functional.pad(
             play_tensor,
             (0, 0, head_padding_size + 1, end_padding_size, 0, 0),
@@ -95,7 +94,7 @@ def collate_batch(batch: list[Possession]):
             value=0,
         )
         # states_padding: padding of the position of the tensor
-        # bool (11,121) padding
+        # bool (6,121) padding
         states_padding = states_feat[:, :, 0]
         states_padding = states_padding == 0
 
@@ -112,7 +111,7 @@ def collate_batch(batch: list[Possession]):
         else:
             states_hidden_BP[:, : current_step + 1] = False
             v_tensor = play_tensor[:, :, 2] >= 4  # Obtaining the velocity tensor [A,T,1]
-            index_v = split_list_by_v(v_tensor)
+            index_v = split_list_by_velocity(v_tensor)
             for index, lst in enumerate(index_v):
                 if len(lst) >= 2:
                     random_elements = random.sample(lst, 2)
@@ -139,13 +138,13 @@ def collate_batch(batch: list[Possession]):
 
     num_agents_accum = np.cumsum(np.insert(num_agents, 0, 0)).astype(
         np.int64
-    )  # Now insert 0 at index=0 and sum cumulatively [0, 11, 22, ....]
+    )  # Now insert 0 at index=0 and sum cumulatively [0, 6, 12, ....]
     agents_batch_mask = np.ones(
         (num_agents_accum[-1], num_agents_accum[-1])
     )  # Create an all-1 [A*batch,A*batch] matrix
 
     for i in range(len(num_agents)):
-        # Construct (11*batch_size, 11*batch_size) matrix for batch_size chunks all 1 matrix
+        # Construct (6*batch_size, 6*batch_size) matrix for batch_size chunks all 1 matrix
         agents_batch_mask[
             num_agents_accum[i] : num_agents_accum[i + 1],
             num_agents_accum[i] : num_agents_accum[i + 1],

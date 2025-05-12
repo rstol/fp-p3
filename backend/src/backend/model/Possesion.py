@@ -41,7 +41,7 @@ class Possession:
         agents = []
         for agent in player_data:
             agents.append(Agent(int(agent["teamid"]), int(agent["playerid"])))
-        agents.append(Agent(-1, -1))  # Ball is also an Agent
+        agents.append(Agent(-1, -1))  # Ball is an Agent
         agents = self.get_agents_feature(agents)
         return agents
 
@@ -56,6 +56,12 @@ class Possession:
             # get x，y
             for moment in self.moments:
                 valid = 0
+                ball_coord = moment["ball_coordinates"]
+                if agent.agentid == -1:
+                    agent.x.append(ball_coord["x"])
+                    agent.y.append(ball_coord["y"])
+                    valid = 1
+                    agent.valid.append(valid)
                 for player_coord in moment["player_coordinates"]:
                     if agent.agentid == player_coord["playerid"]:
                         agent.x.append(player_coord["x"])
@@ -63,13 +69,7 @@ class Possession:
                         valid = 1
                         agent.valid.append(valid)
                         continue
-                ball_coord = moment["ball_coordinates"]
-                if agent.agentid == -1:
-                    agent.x.append(ball_coord["x"])
-                    agent.y.append(ball_coord["y"])
-                    valid = 1
-                    agent.valid.append(valid)
-                if valid == 0:
+                if valid == 0:  # invalid agent coordinates
                     agent.x.append(-1)
                     agent.y.append(-1)
                     agent.valid.append(0)

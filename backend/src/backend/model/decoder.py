@@ -44,10 +44,9 @@ class Decoder(nn.Module):
             nn.BatchNorm2d(4),
             nn.Softplus(),
             Permute4Batchnorm((2, 0, 3, 1)),
-        )  # 最后多一个softplus是为了保证输出参数都是>0
-        # 输出为x,y的laplace分布参数 4个 x.loc,x.scale,y.loc,y.scale
+        )  # The extra softplus at the end is to ensure that the output parameters are all > 0
+        # Output for x,y laplace distribution parameters 4 x.loc,x.scale,y.loc,y.scale
         self.layer_Z1.apply(init_xavier_glorot)
-        # self.layer_Z2 = nn.Linear(4 ,2)  # 输出应该是x, y
 
     def forward(self, state_feat, batch_mask, padding_mask, hidden_mask=None):
         A, T, D = state_feat.shape
@@ -55,14 +54,6 @@ class Decoder(nn.Module):
         # state_feat = state_feat.reshape((A,T,-1,self.F))
         # x = state_feat.permute(3,0,1,2)
 
-        """onehots_ = copy.deepcopy(self.onehots_)
-        onehots_ = onehots_.repeat(1,A,T,1)
-        onehots_ = onehots_.to(state_feat.device)
-        # x = state_feat.unsqueeze(0).repeat(self.F,1,1,1)    # [F,A,T,D]
-
-        x = torch.cat((x,onehots_),dim=-1)                  # [F,A,T,D+F]
-        x = self.layer_T(x)                                 # [F,A,T,D]
-        """
         onehots_ = self.onehots_.view(self.F, 1, 1, self.F).repeat(1, A, T, 1)
         onehots_ = onehots_.to(state_feat.device)
         x = state_feat.unsqueeze(0).repeat(self.F, 1, 1, 1)
