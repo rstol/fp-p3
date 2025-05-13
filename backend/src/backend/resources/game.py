@@ -1,4 +1,6 @@
 from dataclasses import dataclass, field
+from pathlib import Path
+from types import MappingProxyType
 
 import polars as pl
 
@@ -14,25 +16,27 @@ class Game:
     plays: dict[PlayId, Play] = field(init=False)
 
     def __post_init__(self):
-        self.data_df = self._load_game()
-        self.plays = self._get_plays()
+        df = self._load_game()
+        plays = self._build_plays(df)
 
-    def _get_plays(self):
-        plays = {}
-        for play in self.data_df.iter_rows(named=True):
-            play_id = PlayId(play["game_id"], play["event_id"])
-            plays[play_id] = Play(play_id, play)
-        return plays
+        object.__setattr__(self, "data_df", df)
+        object.__setattr__(self, "plays", MappingProxyType(plays))
 
     def get_play_by_id(self, play_id: PlayId):
         if play_id not in self.plays:
             return None
         return self.plays[play_id]
 
-    def _load_game(self):
+    def _load_game(self) -> pl.DataFrame:
+        path = Path(TRACKING_DIR) / "plays" / f"{self.game_id}.parquet"
         try:
-            return pl.read_parquet(f"{TRACKING_DIR}/plays/{self.game_id}.parquet")
+            return pl.read_parquet(path)
         except FileNotFoundError:
             return pl.DataFrame()
 
-    # TODO more helper functions
+    @staticmethod
+    def _build_plays(df: pl.DataFrame) -> dict[PlayId, Play]:
+        return {
+            (pid := PlayId(row["game_id"], row["event_id"])): Play(pid, row)
+            for row in df.iter_rows(named=True)
+        }

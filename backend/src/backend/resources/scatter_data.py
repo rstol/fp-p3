@@ -9,6 +9,8 @@ from sklearn.cluster import KMeans
 from backend.resources.dataset_manager import DatasetManager
 from backend.settings import TRACKING_DIR
 
+from .play_clustering import PlayClustering
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,8 +37,8 @@ class TeamPlaysScatterResource(Resource):
 
         self.cluster_std_dev = 25
 
-    def _prepare_scatter_data_for_response(self, team_id_str: str, timeframe_str: str):
-        logger.info(f"Prep scatter data: team {team_id_str}, timeframe {timeframe_str}")
+    def _prepare_scatter_data_for_response(self, team_id: str, timeframe_str: str):
+        logger.info(f"Prep scatter data: team {team_id}, timeframe {timeframe_str}")
 
         try:
             # Ensure splitting timeframe_str and accessing index [1] is safe
@@ -51,9 +53,9 @@ class TeamPlaysScatterResource(Resource):
         logger.info(f"Using timeframe: {timeframe_str} (limiting to {num_games} games)")
 
         try:
-            team_id = int(team_id_str)
+            team_id = int(team_id)
         except ValueError:
-            logger.exception(f"Invalid team_id format: {team_id_str}")
+            logger.exception(f"Invalid team_id format: {team_id}")
             return {"error": "Invalid team ID format"}, 400
 
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
@@ -68,8 +70,7 @@ class TeamPlaysScatterResource(Resource):
 
         if games.is_empty():
             logger.warning(
-                f"No games for team {team_id_str} (timeframe: {timeframe_str})."
-                " Returning empty points."
+                f"No games for team {team_id} (timeframe: {timeframe_str}). Returning empty points."
             )
             return {"total_games": total_games, "points": []}, 200
 
@@ -78,8 +79,8 @@ class TeamPlaysScatterResource(Resource):
         if plays.is_empty():
             return {"total_games": total_games, "points": []}, 200
 
-        scatter_data_df = self._generate_scatter_data(plays)
-        scatter_data_df = self._apply_clustering(scatter_data_df)
+        scatter_data_df = self._generate_scatter_data(plays, team_id)
+        # scatter_data_df = self._apply_clustering(scatter_data_df)
 
         final_columns = [
             "x",
@@ -160,9 +161,12 @@ class TeamPlaysScatterResource(Resource):
         # TODO(mboss): check this?
         return pl.concat(all_plays_list, how="diagonal_relaxed")
 
-    def _generate_scatter_data(self, plays):
-        x_centroids = {k: v[0] for k, v in self.play_centroids.items()}
-        y_centroids = {k: v[1] for k, v in self.play_centroids.items()}
+    def _generate_scatter_data(self, plays: pl.DataFrame, team_id: int) -> pl.DataFrame:
+        play_clustering = PlayClustering(team_id=team_id)
+        initial_clusters = play_clustering.get_initial_clusters()
+
+        x_centroids = {cluster.id: cluster.centroid[0] for cluster in initial_clusters}
+        y_centroids = {cluster.id: cluster.centroid[1] for cluster in initial_clusters}
 
         plays = plays.with_columns(
             x=pl.col("event_type").mod(10).replace(x_centroids),
@@ -173,6 +177,7 @@ class TeamPlaysScatterResource(Resource):
         return plays.with_columns(
             x=pl.col("x") + pl.Series(np.random.normal(0, self.cluster_std_dev, num_rows)),
             y=pl.col("y") + pl.Series(np.random.normal(0, self.cluster_std_dev, num_rows)),
+            cluster=pl.col("event_type").mod(10),
         )
 
     def _apply_clustering(self, data_points):

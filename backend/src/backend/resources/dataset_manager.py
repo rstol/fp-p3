@@ -12,7 +12,7 @@ class DatasetManager:
 
         self.teams = pl.read_ndjson(f"{self.data_dir}/teams.jsonl")
         self.games = pl.read_ndjson(f"{self.data_dir}/games.jsonl")
-        self.games_data = {}
+        self.games_data: dict[str, Game] = {}
 
     def get_teams(self) -> list[dict[str, str | int | list[dict[str, str | int]]]]:
         return self.teams.to_dicts()
@@ -50,10 +50,4 @@ class DatasetManager:
         return game.get_play_by_id(play_id)
 
     def _get_game(self, game_id: str):
-        game = None
-        if self.games_data.get(game_id):
-            game = self.games_data[game_id]
-        else:
-            game = Game(game_id)
-            self.games_data.setdefault(game_id, game)
-        return game
+        return self.games_data.setdefault(game_id, Game(game_id))

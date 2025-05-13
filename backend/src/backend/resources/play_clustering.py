@@ -22,7 +22,7 @@ class PlayClustering:
         self.embedding_ids = self._get_embedding_ids()
         self.d = 256
         self.initial_k = initial_k
-        self._init()  # TODO lazy?
+        self._init()
 
     def _get_embedding_ids(self) -> pl.LazyFrame:
         return pl.scan_csv(Path(EMBEDDINGS_DIR) / "embedding_sources.csv")
@@ -90,7 +90,7 @@ class PlayClustering:
         for i, cluster_play in enumerate(cluster_plays):
             timestamp = time.time()
             cluster = Cluster(
-                id=f"cluster-{i}",
+                id=i,
                 label=f"Cluster {i + 1}",
                 centroid=centroids[i],
                 plays=[cluster_play],
@@ -137,7 +137,7 @@ class PlayClustering:
         # TODO
 
         # Create new clusters
-        for label, play_ids in new_clusters_by_label.items():
+        for label in new_clusters_by_label:
             play_embeddings = None
             faiss.normalize_L2(play_embeddings)
 
@@ -177,7 +177,7 @@ class PlayClustering:
             # Add to target cluster
             for i, cluster in enumerate(updated_clusters):
                 if cluster.id == fb.to_cluster_id:
-                    updated_play_ids = cluster.play_ids + [fb.play_id]
+                    updated_play_ids = [*cluster.play_ids, fb.play_id]
                     updated_clusters[i] = Cluster(
                         id=cluster.id,
                         label=cluster.label,
