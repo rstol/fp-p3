@@ -1,10 +1,9 @@
-import os
 import time
 from pathlib import Path
 
 import faiss
 import numpy as np
-import pandas as pd
+import polars as pl
 import torch
 
 from backend.resources.cluster import Cluster, ClusterPlay
@@ -25,16 +24,16 @@ class PlayClustering:
         self.initial_k = initial_k
         self._init()  # TODO lazy?
 
-    def _get_embedding_ids(self):
-        return pd.read_csv(os.path.join(EMBEDDINGS_DIR, "embedding_sources.csv"), dtype="str")
+    def _get_embedding_ids(self) -> pl.LazyFrame:
+        return pl.scan_csv(Path(EMBEDDINGS_DIR) / "embedding_sources.csv")
 
-    def _init(self):
+    def _init(self) -> None:
         embeddings = self._load_all_embeddings()
         self._build_index(embeddings)
         self._init_kmeans(embeddings)
         self._set_team_embeddings(embeddings)
 
-    def _load_all_embeddings(self):
+    def _load_all_embeddings(self) -> np.ndarray:
         npy_files = list(Path(EMBEDDINGS_DIR).glob("*.npy"))
         embeddings_all = []
         for file_path in npy_files:
@@ -55,12 +54,17 @@ class PlayClustering:
         kmeans.train(embeddings)
         self.kmeans = kmeans
 
-    def get_team_embedding_ids(self):
-        return self.embedding_ids[self.embedding_ids["offensive_team_id"].isin([self.team_id])]
+    def get_team_embedding_ids(self) -> pl.LazyFrame:
+        return self.embedding_ids.with_row_index().filter(
+            pl.col("offensive_team_id").eq(int(self.team_id))
+        )
 
-    def _set_team_embeddings(self, embeddings):
-        index = self.get_team_embedding_ids().index
-        self.team_embeddings = embeddings[index]
+    def _set_team_embeddings(self, embeddings: np.ndarray) -> None:
+        self.team_embedding_ids = self.get_team_embedding_ids().collect()
+        self.team_embeddings_idx = (
+            self.team_embedding_ids.select(pl.col("index")).to_series().to_numpy()
+        )
+        self.team_embeddings = embeddings[self.team_embeddings_idx]
 
     def get_initial_clusters(self, initial_k: int = 12, niter: int = 20) -> list[Cluster]:
         distances, index = self.kmeans.index.search(self.team_embeddings, 1)
@@ -68,34 +72,28 @@ class PlayClustering:
         cluster_assignments = index[..., 0]
         centroids = self.kmeans.centroids
 
-        play_ids = self.get_team_embedding_ids()
-        play_ids_reset_idx = play_ids.reset_index(drop=True)
+        distance_indices = distances.argsort()
+        points_min_distance_indices = distance_indices[
+            (cluster_assignments[distance_indices][None] == np.arange(initial_k)[:, None]).argmax(
+                axis=1
+            )
+        ]
 
+        plays = self.team_embedding_ids[points_min_distance_indices]
+        min_distances = distances[points_min_distance_indices]
+
+        cluster_plays = [
+            ClusterPlay(PlayId(play["game_id"], play["event_id"]), distance)
+            for play, distance in zip(plays.to_dicts(), min_distances, strict=True)
+        ]
         clusters = []
-        for i in range(initial_k):
-            (cluster_idxs,) = np.where(cluster_assignments == i)
-            cluster_play_ids = play_ids_reset_idx.iloc[cluster_idxs].reset_index(drop=True)
-
-            subset_distance = distances[cluster_idxs]
-            centroid_idx = np.argmin(subset_distance)
-            play = cluster_play_ids.iloc[centroid_idx]
-            cluster_plays = [
-                ClusterPlay(
-                    PlayId(play["game_id"], play["event_id"]), subset_distance[centroid_idx]
-                )
-            ]
-
-            if not cluster_plays:
-                continue
-
-            # cluster_embeddings = self.team_embeddings[clusted_idxs]
-
+        for i, cluster_play in enumerate(cluster_plays):
             timestamp = time.time()
             cluster = Cluster(
                 id=f"cluster-{i}",
-                label=f"Cluster {i + 1}",  # Default name
+                label=f"Cluster {i + 1}",
                 centroid=centroids[i],
-                plays=cluster_plays,
+                plays=[cluster_play],
                 confidence=None,
                 created=timestamp,
                 last_modified=timestamp,
@@ -105,7 +103,9 @@ class PlayClustering:
 
         self.clusters = clusters
 
-    def find_similar_plays(self, k: int = 10):
+        return clusters
+
+    def find_similar_plays(self, k: int = 10) -> list[int]:
         q = np.expand_dims(embeddings_team[target_play_idx], axis=0)
         faiss.normalize_L2(q)
         distance, index = index.search(q, k)  # actual search
