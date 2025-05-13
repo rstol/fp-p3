@@ -1,8 +1,6 @@
 import logging
-import os
 
 import numpy as np
-import pandas as pd
 import polars as pl
 from flask import request
 from flask_restful import Resource
@@ -14,26 +12,6 @@ from backend.settings import TRACKING_DIR
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class DatasetResource(Resource):
-    """dataset resource."""
-
-    data_root = os.path.join(".", "data")
-
-    def get(self, name):
-        path_name = os.path.join(self.data_root, f"dataset_{name}.csv")
-        data = pd.read_csv(path_name)
-
-        # process the data, e.g. find the clusters
-        kmeans = KMeans(n_clusters=2, n_init=10, random_state=0).fit(data)
-        labels = kmeans.labels_.tolist()
-
-        # Add cluster to data
-        data["cluster"] = labels
-
-        # Convert to dictionary
-        return data.to_dict(orient="records")
 
 
 class TeamPlaysScatterResource(Resource):
@@ -64,17 +42,18 @@ class TeamPlaysScatterResource(Resource):
             # Ensure splitting timeframe_str and accessing index [1] is safe
             parts = timeframe_str.split("_")
             if len(parts) < 2 or not parts[1].isdigit():
-                raise ValueError("Timeframe format error")
+                msg = "Timeframe format error"
+                raise ValueError(msg)  # noqa: TRY301
             num_games = int(parts[1])
         except ValueError:
-            logger.error(f"Invalid timeframe format: {timeframe_str}")
+            logger.exception(f"Invalid timeframe format: {timeframe_str}")
             return {"error": "Invalid timeframe format"}, 400
         logger.info(f"Using timeframe: {timeframe_str} (limiting to {num_games} games)")
 
         try:
             team_id = int(team_id_str)
         except ValueError:
-            logger.error(f"Invalid team_id format: {team_id_str}")
+            logger.exception(f"Invalid team_id format: {team_id_str}")
             return {"error": "Invalid team ID format"}, 400
 
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
@@ -137,7 +116,6 @@ class TeamPlaysScatterResource(Resource):
 
     def get(self, team_id):
         """Get scatter plot data for a team's plays."""
-        # logger.info(f"Fetching scatter data for team_id: {team_id}")
         timeframe = request.args.get("timeframe", "last_3")
         data, status_code = self._prepare_scatter_data_for_response(team_id, timeframe)
         return data, status_code
@@ -151,7 +129,7 @@ class TeamPlaysScatterResource(Resource):
             return {"error": "No data provided for update"}, 400
 
         logger.info(f"Cluster update data for team_id {team_id}: {updated_plays_data}")
-        # TODO: Implement the actual logic to process these updates in the data source.
+        # TODO(mboss): Implement the actual logic to process these updates in the data source.
 
         # For now, return the original/current scatter data for this team.
         timeframe_for_refresh = request.args.get("timeframe", "last_3")
@@ -179,10 +157,8 @@ class TeamPlaysScatterResource(Resource):
         if len(all_plays_list) == 0:
             return pl.DataFrame()
 
-        # TODO: check this?
-        plays = pl.concat(all_plays_list, how="diagonal_relaxed")
-
-        return plays
+        # TODO(mboss): check this?
+        return pl.concat(all_plays_list, how="diagonal_relaxed")
 
     def _generate_scatter_data(self, plays):
         x_centroids = {k: v[0] for k, v in self.play_centroids.items()}
@@ -211,8 +187,8 @@ class TeamPlaysScatterResource(Resource):
             data_points = data_points.with_columns(
                 pl.Series(clusters, dtype=pl.Int32).alias("cluster")
             )
-        except (AttributeError, TypeError, ValueError) as e:
-            logger.error(f"Error during clustering: {e}")
+        except (AttributeError, TypeError, ValueError):
+            logger.exception("Error during clustering")
             for i, point in enumerate(data_points):
                 point["cluster"] = i % n_clusters
 
