@@ -15,6 +15,7 @@ RUN npm ci --ignore-scripts
 FROM node:20-alpine AS build-env
 ENV ROOT_PATH=/app_root
 WORKDIR ${ROOT_PATH}
+RUN apk add --no-cache git
 COPY . .
 COPY --from=production-dependencies-env ${ROOT_PATH}/node_modules ${ROOT_PATH}/node_modules
 RUN npm run build
