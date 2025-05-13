@@ -45,7 +45,7 @@ class DatasetManager:
         return plays.to_dicts() if as_dicts else plays
 
     def get_play_raw_data(self, game_id: str, play_id: str) -> dict[str, str] | None:
-        plays = self._load_game_plays(game_id)
+        plays = self._load_game_plays(game_id).fill_null("")
         play_dicts = plays.filter(pl.col("event_id") == play_id).head(1).to_dicts()
         return play_dicts[0] if len(play_dicts) > 0 else None
 
@@ -56,11 +56,11 @@ class DatasetManager:
             return pl.DataFrame()
 
     def get_play_video(self, game_id: str, event_id: str) -> bytes | None:
-        event_json = self.get_play_raw_data(game_id, event_id)
+        event_raw = self.get_play_raw_data(game_id, event_id)
         game = self.get_game_details(game_id)
         if not game:
             return None
         home = self.get_team_details(game["home_team_id"])
         visitor = self.get_team_details(game["visitor_team_id"])
-        event = Event(event_json, home, visitor)
+        event = Event(event_raw, home, visitor)
         return event.generate_mp4()

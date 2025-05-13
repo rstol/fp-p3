@@ -61,10 +61,11 @@ class PlayVideoResource(Resource):
             if video:
                 return Response(video, mimetype="application/octet-stream")
             return {"error": "Play not found"}, 404
-        except ValueError:
+        except ValueError as err:
+            print(err)
             return {"error": "Invalid play ID format"}, 400
 
 
 if __name__ == "__main__":
     play_video = PlayVideoResource()
-    video = play_video.get("0021500648", "5")
+    video = play_video.get("0021500569", "497")

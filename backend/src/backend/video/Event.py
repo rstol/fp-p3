@@ -1,6 +1,8 @@
 import os
 import tempfile
+from functools import lru_cache
 
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib.animation import FFMpegWriter
@@ -10,6 +12,9 @@ from backend.video.Constant import Constant
 from backend.video.Moment import Moment
 
 FPS = RAW_DATA_HZ // SAMPLING_RATE
+
+# Set matplotlib to use a non-interactive backend
+matplotlib.use("Agg")
 
 
 class Event:
@@ -36,9 +41,12 @@ class Event:
     def update_radius(self, i, player_circles, ball_circle, annotations, clock_info):
         moment = self.moments[i]
         for j, circle in enumerate(player_circles):
+            if len(moment.players) != len(player_circles):
+                continue  # skip
             circle.center = moment.players[j].x, moment.players[j].y
             annotations[j].set_position(circle.center)
-            clock_test = f"Quarter {moment.quarter:d}\n {int(moment.game_clock) % 3600 // 60:02d}:{int(moment.game_clock) % 60:02d}\n {moment.shot_clock:03.1f}"
+            shot_clock = moment.shot_clock if moment.shot_clock is not None else 0.0
+            clock_test = f"Quarter {moment.quarter:d}\n {int(moment.game_clock) % 3600 // 60:02d}:{int(moment.game_clock) % 60:02d}\n {shot_clock:03.1f}"
             clock_info.set_text(clock_test)
         ball_circle.center = moment.ball.x, moment.ball.y
         ball_circle.radius = moment.ball.radius / Constant.NORMALIZATION_COEF
@@ -46,14 +54,22 @@ class Event:
 
     def generate_anim(self):
         # Leave some space for inbound passes
-        fig = plt.figure(figsize=(10, 8))
+        fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         ax.set_xlim(Constant.X_MIN, Constant.X_MAX)
         ax.set_ylim(Constant.Y_MIN, Constant.Y_MAX)
         ax.axis("off")
         ax.grid(False)  # Remove grid
         start_moment = self.moments[0]
+        for moment in self.moments:  # Try to find moment with 10 players
+            if len(moment.players) == 10:
+                start_moment = moment
+                break
+
         player_dict = self.player_ids_dict
+        players_missing = [p for p in start_moment.players if p.id not in player_dict]
+        for p in players_missing:  # Handle missing player
+            self.player_ids_dict.setdefault(p.id, ("Unkown", "N/A"))
 
         clock_info = ax.annotate(
             "",
@@ -65,7 +81,7 @@ class Event:
 
         annotations = [
             ax.annotate(
-                self.player_ids_dict[player.id][1],
+                player_dict[player.id][1],
                 xy=[0, 0],
                 color="w",
                 horizontalalignment="center",
@@ -141,6 +157,7 @@ class Event:
 
         return fig, anim
 
+    @lru_cache(maxsize=20)
     def generate_mp4(self, fps=FPS, bitrate=-1) -> bytes:
         """
         Generates and returns the raw binary data of the play animation as MP4.
@@ -158,17 +175,11 @@ class Event:
         bytes
             Raw binary MP4 data that can be sent directly in a Flask response.
         """
-        # Set matplotlib to use a non-interactive backend
-        import matplotlib
-
-        matplotlib.use("Agg")
-
         fig, anim = self.generate_anim()
 
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_file:
             temp_filename = temp_file.name
 
-        # TODO fix frame-rate the motion is too fast!
         writer = FFMpegWriter(fps=fps, bitrate=bitrate, codec="h264")
         anim.save(temp_filename, writer=writer)
 
