@@ -14,7 +14,7 @@ import pandas as pd
 import polars as pl
 from datasets import Dataset, load_dataset
 
-from backend.settings import EMBEDDINGS_DIR, TEAM_IDS_SAMPLE, TRACKING_DIR
+from backend.settings import EMBEDDINGS_DIR, SAMPLING_RATE, TEAM_IDS_SAMPLE, TRACKING_DIR
 
 NUM_PROCESSES = os.cpu_count()
 
@@ -36,8 +36,8 @@ def load_nba_dataset(split: str | None = None, name: str = "full"):
     )
 
 
-def downsample_moments(moments: list[dict], rate: int) -> list[dict]:
-    return moments[::rate]
+def downsample_moments(moments: list[dict]) -> list[dict]:
+    return moments[::SAMPLING_RATE]
 
 
 def simplify_player_coords(player_coords: list[dict]) -> list[dict]:
@@ -47,9 +47,9 @@ def simplify_player_coords(player_coords: list[dict]) -> list[dict]:
     ]
 
 
-def process_play(play: dict[str, Any], sampling_rate: int) -> dict[str, Any]:
+def process_play(play: dict[str, Any]) -> dict[str, Any]:
     """Process a single play for the dataset map function."""
-    play["moments"] = downsample_moments(play["moments"], sampling_rate)
+    play["moments"] = downsample_moments(play["moments"])
     for moment in play["moments"]:
         moment["player_coordinates"] = simplify_player_coords(moment["player_coordinates"])
 
@@ -83,7 +83,7 @@ def extract_game_and_team_info(play: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> None:
+def process_dataset(dataset: Dataset, output_path: Path) -> None:
     """Process the dataset using datasets library features."""
     # Use preprocessed plays for which embeddings are saved
     embedding_ids = pd.read_csv(os.path.join(EMBEDDINGS_DIR, "embedding_sources.csv"), dtype="str")
@@ -122,7 +122,6 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
     )
     dataset_plays = dataset_plays.map(
         process_play,
-        fn_kwargs={"sampling_rate": sampling_rate},
         remove_columns=list(set(dataset_plays.column_names)),
         num_proc=NUM_PROCESSES,
         desc="Processing plays",
@@ -217,13 +216,7 @@ if __name__ == "__main__":
         default="tiny",
         help="Dataset size (tiny: 5 games, small: 25 games, medium: 100 games, full: all games)",
     )
-    parser.add_argument(
-        "--sampling-rate",
-        type=int,
-        default=3,
-        help="Rate at which to downsample moments (e.g., 3 means keep every 3rd moment)",
-    )
     target_path = Path(TRACKING_DIR).resolve()
     args = parser.parse_args()
     dataset = load_nba_dataset(split=args.split, name=args.name)
-    process_dataset(dataset, target_path, args.sampling_rate)
+    process_dataset(dataset, target_path)

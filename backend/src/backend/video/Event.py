@@ -1,11 +1,15 @@
-from pathlib import Path
+import os
+import tempfile
 
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib.animation import FFMpegWriter
 
+from backend.settings import RAW_DATA_HZ, SAMPLING_RATE
 from backend.video.Constant import Constant
 from backend.video.Moment import Moment
+
+FPS = RAW_DATA_HZ // SAMPLING_RATE
 
 
 class Event:
@@ -133,69 +137,37 @@ class Event:
 
         return fig, anim
 
-    def generate_jshtml(self):
-        fig, anim = self.generate_anim()
-        plt.close(fig)
-        js_html = anim.to_jshtml(fps=1)
-        return js_html
-
-    def generate_mp4html(self, output=True, save=False, path=None):
+    def generate_mp4(self, fps=FPS, bitrate=-1) -> bytes:
         """
-        Generates an HTML object with the video of the play.
-
-        Warning: this function requires the ffmpeg package.
-        Install with \n
-        ``conda install ffmpeg`` \n
-        Display output with \n
-        ``from IPython.display import HTML`` \n
-        ``HTML(<output>)``
+        Generates and returns the raw binary data of the play animation as MP4.
 
         Parameters
         ----------
         self : Event
-        output : Boolean, optional
-            Whether or not to return an html object with the video.
-        save : Boolean, optional
-            Whether or not to save the video as an mp4.
-            The file name is "game<game_id>play<play_id>.mp4".
-        path : str, optional
-            Path to the directory to save the video in.
-            Default is to create an ouput directory and save it there.
+        fps : int, optional
+            Frames per second for the video.
+        bitrate : int, optional
+            Bitrate of the output video in kbps.
 
         Returns
         -------
-        str | None
-            The html video or None if ``output`` was set to ``False``.
-
-        Raises
-        ------
-        FileExistsError
-            If the specified path already exists and is not a folder.
+        bytes
+            Raw binary MP4 data that can be sent directly in a Flask response.
         """
 
-        # 1) build the animation
         fig, anim = self.generate_anim()
 
-        # 2) if requested, save out an .mp4
-        if save:
-            # determine output filepath
-            if path is not None:
-                outdir = Path(path)
-            else:
-                outdir = Path("output")
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_file:
+            temp_filename = temp_file.name
 
-            outdir.mkdir(parents=True, exist_ok=True)
-            filepath = outdir / f"game{self.game_id}play{self.event_id}.mp4"
+        writer = FFMpegWriter(fps=fps, bitrate=bitrate)
+        anim.save(temp_filename, writer=writer)
 
-            # use FFMpegWriter (requires ffmpeg installed)
-            # TODO: What would the right fps be to get lifelike speed?
-            writer = FFMpegWriter(fps=12)
-            anim.save(str(filepath), writer=writer)
-            print(f"Saved animation to {filepath}")
-
-        # 3) close the figure so notebook/backend won’t display the static fallback
         plt.close(fig)
 
-        # 4) return the HTML5 snippet for embedding
-        if output:
-            return anim.to_html5_video()
+        with open(temp_filename, "rb") as f:
+            video_data = f.read()
+
+        os.unlink(temp_filename)
+
+        return video_data

@@ -1,4 +1,4 @@
-from flask import jsonify
+from flask import Response, jsonify
 from flask_restful import Resource
 
 from backend.resources.dataset_manager import DatasetManager
@@ -43,24 +43,23 @@ class GamePlaysResource(Resource):
         return jsonify(dataset_manager.get_plays_for_game(game_id))
 
 
-# class PlayDetailsResource(Resource):
-#     def get(self, game_id, play_id):
-#         try:
-#             play = dataset_manager.get_play_id(game_id, play_id)
-#             if play:
-#                 return jsonify(play)
-#             return {"error": "Play not found"}, 404
-#         except ValueError:
-#             return {"error": "Invalid play ID format"}, 400
+class PlayRawDataResource(Resource):
+    def get(self, game_id, play_id):
+        try:
+            play = dataset_manager.get_play_raw_data(game_id, play_id)
+            if play:
+                return jsonify(play)
+            return {"error": "Play not found"}, 404
+        except ValueError:
+            return {"error": "Invalid play ID format"}, 400
 
 
 class PlayDetailsResource(Resource):
-    def get(self, game_id, play_id):
+    def get(self, game_id, event_id):
         try:
-            video = dataset_manager.get_play_video(game_id, play_id)
+            video = dataset_manager.get_play_video(game_id, event_id)
             if video:
-                # TODO: do I need to do that?
-                return jsonify(video)
+                return Response(video, mimetype="application/octet-stream")
             return {"error": "Play not found"}, 404
         except ValueError:
             return {"error": "Invalid play ID format"}, 400
