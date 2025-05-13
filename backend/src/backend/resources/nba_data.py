@@ -67,5 +67,6 @@ class PlayVideoResource(Resource):
 
 
 if __name__ == "__main__":
+    """Use for debugging"""
     play_video = PlayVideoResource()
     video = play_video.get("0021500569", "497")
