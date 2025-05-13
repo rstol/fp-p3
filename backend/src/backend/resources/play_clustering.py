@@ -13,19 +13,27 @@ from backend.settings import EMBEDDINGS_DIR, TEAM_IDS_SAMPLE
 
 
 class PlayClustering:
-    def __init__(self, team_id: str, initial_k: int = 12) -> None:
+    def __init__(
+        self, team_id: str, game_ids: list[str] | None = None, initial_k: int = 12
+    ) -> None:
         self.team_id = team_id
+        self.game_ids = game_ids
         self.index: faiss.Index | None = None
         self.kmeans: faiss.Kmeans | None = None
         self.clusters = []
-        self.team_embeddings: np.ndarray = None
+        self.team_embeddings: np.ndarray | None = None
         self.embedding_ids = self._get_embedding_ids()
         self.d = 256
         self.initial_k = initial_k
         self._init()
 
     def _get_embedding_ids(self) -> pl.LazyFrame:
-        return pl.scan_csv(Path(EMBEDDINGS_DIR) / "embedding_sources.csv")
+        embeddings_sources_df = pl.scan_csv(Path(EMBEDDINGS_DIR) / "embedding_sources.csv")
+        if self.game_ids is not None:
+            embeddings_sources_df = embeddings_sources_df.filter(
+                pl.col("game_id").is_in([int(game_id) for game_id in self.game_ids])
+            )
+        return embeddings_sources_df
 
     def _init(self) -> None:
         embeddings = self._load_all_embeddings()
@@ -66,7 +74,9 @@ class PlayClustering:
         )
         self.team_embeddings = embeddings[self.team_embeddings_idx]
 
-    def get_initial_clusters(self, initial_k: int = 12, niter: int = 20) -> list[Cluster]:
+    def get_initial_clusters(
+        self, initial_k: int = 12, niter: int = 20
+    ) -> tuple[list[Cluster], np.ndarray]:
         distances, index = self.kmeans.index.search(self.team_embeddings, 1)
         distances = distances[..., 0]
         cluster_assignments = index[..., 0]
@@ -83,8 +93,10 @@ class PlayClustering:
         min_distances = distances[points_min_distance_indices]
 
         cluster_plays = [
-            ClusterPlay(PlayId(play["game_id"], play["event_id"]), distance)
-            for play, distance in zip(plays.to_dicts(), min_distances, strict=True)
+            ClusterPlay(PlayId(play["game_id"], play["event_id"]), distance, index)
+            for play, distance, index in zip(
+                plays.to_dicts(), min_distances, points_min_distance_indices, strict=True
+            )
         ]
         clusters = []
         for i, cluster_play in enumerate(cluster_plays):
@@ -103,7 +115,7 @@ class PlayClustering:
 
         self.clusters = clusters
 
-        return clusters
+        return clusters, cluster_assignments
 
     def find_similar_plays(self, k: int = 10) -> list[int]:
         q = np.expand_dims(embeddings_team[target_play_idx], axis=0)

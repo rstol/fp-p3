@@ -1,7 +1,7 @@
 import logging
 
-import numpy as np
 import polars as pl
+import umap
 from flask import request
 from flask_restful import Resource
 from sklearn.cluster import KMeans
@@ -22,20 +22,7 @@ class TeamPlaysScatterResource(Resource):
     def __init__(self):
         self.dataset_manager = DatasetManager(TRACKING_DIR)
 
-        self.play_centroids = {
-            0: (20, 20),
-            1: (80, 80),
-            2: (40, 20),
-            3: (60, 40),
-            4: (60, 40),
-            5: (80, 80),
-            6: (20, 60),
-            7: (40, 60),
-            8: (40, 20),
-            9: (20, 40),
-        }
-
-        self.cluster_std_dev = 25
+        self.umap_model = umap.UMAP(n_neighbors=5)
 
     def _prepare_scatter_data_for_response(self, team_id: str, timeframe_str: str):
         logger.info(f"Prep scatter data: team {team_id}, timeframe {timeframe_str}")
@@ -162,22 +149,25 @@ class TeamPlaysScatterResource(Resource):
         return pl.concat(all_plays_list, how="diagonal_relaxed")
 
     def _generate_scatter_data(self, plays: pl.DataFrame, team_id: int) -> pl.DataFrame:
-        play_clustering = PlayClustering(team_id=team_id)
-        initial_clusters = play_clustering.get_initial_clusters()
-
-        x_centroids = {cluster.id: cluster.centroid[0] for cluster in initial_clusters}
-        y_centroids = {cluster.id: cluster.centroid[1] for cluster in initial_clusters}
-
-        plays = plays.with_columns(
-            x=pl.col("event_type").mod(10).replace(x_centroids),
-            y=pl.col("event_type").mod(10).replace(y_centroids),
+        # TODO(mboss): the play are filtered differently that in the embeddings,
+        # offensive_team_id != home_team_id or the other one?
+        play_clustering = PlayClustering(
+            team_id=team_id  # , game_ids=plays["game_id"].unique().to_list()
         )
+        initial_clusters, cluster_assignments = play_clustering.get_initial_clusters()
 
-        num_rows = plays.shape[0]
+        # y = np.full(len(play_clustering.team_embeddings), -1)
+        # for cluster in initial_clusters:
+        #     for play in cluster.plays:
+        #         y[play.index] = cluster.id
+
+        xys = self.umap_model.fit_transform(play_clustering.team_embeddings)
+
+        # return fake x,y,cluster given the index mismatch, just take first ones
         return plays.with_columns(
-            x=pl.col("x") + pl.Series(np.random.normal(0, self.cluster_std_dev, num_rows)),
-            y=pl.col("y") + pl.Series(np.random.normal(0, self.cluster_std_dev, num_rows)),
-            cluster=pl.col("event_type").mod(10),
+            x=pl.lit(xys[: len(plays), 0]),
+            y=pl.lit(xys[: len(plays), 1]),
+            cluster=pl.lit(cluster_assignments[: len(plays)]).cast(pl.Int32),
         )
 
     def _apply_clustering(self, data_points):

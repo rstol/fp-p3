@@ -9,6 +9,7 @@ from backend.resources.playid import PlayId
 class ClusterPlay:
     play_id: PlayId
     distance: float
+    index: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
