@@ -120,7 +120,7 @@ export default function PlayView() {
   const pendingClusterUpdates = useDashboardStore((state) => state.pendingClusterUpdates);
   const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
-  const [playDetails, setPlayDetails] = useState<PlayDetails>(null);
+  const [playDetails, setPlayDetails] = useState<PlayDetails | null>(null);
 
   const fetcher = useFetcher<ClientActionResult>();
 

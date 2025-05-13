@@ -5,7 +5,10 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
-const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
+const commitHash =
+  process.env.NODE_ENV === 'production'
+    ? (process.env.VITE_COMMIT_HASH ?? 'unknown')
+    : execSync('git rev-parse --short HEAD').toString().trim();
 
 export default defineConfig({
   server: {

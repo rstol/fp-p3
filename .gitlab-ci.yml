@@ -74,6 +74,7 @@ build:kaniko:
       --target production
       --destination $IMG
       --no-push-cache
+      --build-arg COMMIT_HASH=${CI_COMMIT_SHORT_SHA}
 
 # define a job for creating and pushing a merged manifest for multi-arch support. See: https://github.com/GoogleContainerTools/kaniko#merging-the-container-manifests
 build:merge-manifests:
