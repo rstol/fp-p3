@@ -288,7 +288,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .style('fill', 'none')
       .style('pointer-events', 'all')
       .on('click', () => {
-        if (resetPlayStore) resetPlayStore();
+        // if (resetPlayStore) resetPlayStore();
       });
 
     const uniqueClusters = Array.from(new Set(plotData.map((d) => d.cluster)));

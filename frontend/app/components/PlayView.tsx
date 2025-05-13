@@ -7,6 +7,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { useFetcher } from 'react-router';
+import { BASE_URL } from '~/lib/const';
 
 interface ClientActionResult {
   success: boolean;
@@ -106,6 +107,10 @@ function EditableField({
   );
 }
 
+type PlayDetails = {
+  videoURL: string;
+};
+
 export default function PlayView() {
   const selectedPlay = useDashboardStore((state) => state.selectedPlay);
   const stageSelectedPlayClusterUpdate = useDashboardStore(
@@ -115,6 +120,7 @@ export default function PlayView() {
   const pendingClusterUpdates = useDashboardStore((state) => state.pendingClusterUpdates);
   const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
+  const [playDetails, setPlayDetails] = useState<PlayDetails>(null);
 
   const fetcher = useFetcher<ClientActionResult>();
 
@@ -128,6 +134,26 @@ export default function PlayView() {
       }
     }
   }, [fetcher.state, fetcher.data, clearPendingClusterUpdates]);
+
+  useEffect(() => {
+    if (!selectedPlay) return;
+
+    const fetchPlayDetails = async () => {
+      try {
+        const res = await fetch(
+          `${BASE_URL}/plays/${selectedPlay.game_id}/${selectedPlay.event_id}/video`,
+        );
+        const arrayBuffer = await res.arrayBuffer();
+        const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
+        const videoURL = URL.createObjectURL(blob);
+        setPlayDetails({ videoURL });
+      } catch (error) {
+        console.error('Failed to fetch play details:', error);
+      }
+    };
+
+    fetchPlayDetails();
+  }, [selectedPlay]);
 
   if (!selectedPlay) {
     return (
@@ -213,7 +239,12 @@ export default function PlayView() {
         <CardTitle>Selected Play Details</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <img src="/spurs.gif" alt="spurs_play_view" />
+        {playDetails?.videoURL && (
+          <video controls autoPlay disablePictureInPicture disableRemotePlayback loop muted>
+            <source src={playDetails.videoURL} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        )}
         <div className="divide-y divide-solid text-sm">
           {selectedPlay.game_date && (
             <div className="flex gap-4 py-1">
