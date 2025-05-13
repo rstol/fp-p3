@@ -54,7 +54,7 @@ class PlayRawDataResource(Resource):
             return {"error": "Invalid play ID format"}, 400
 
 
-class PlayDetailsResource(Resource):
+class PlayVideoResource(Resource):
     def get(self, game_id, event_id):
         try:
             video = dataset_manager.get_play_video(game_id, event_id)
@@ -63,3 +63,8 @@ class PlayDetailsResource(Resource):
             return {"error": "Play not found"}, 404
         except ValueError:
             return {"error": "Invalid play ID format"}, 400
+
+
+if __name__ == "__main__":
+    play_video = PlayVideoResource()
+    video = play_video.get("0021500648", "5")

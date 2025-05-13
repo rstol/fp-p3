@@ -26,6 +26,8 @@ def add_routes(app):
     api.add_resource(
         res.nba_data.PlayRawDataResource, API + "games/<string:game_id>/plays/<string:play_id>"
     )
-    api.add_resource(res.nba_data.PlayDetailsResource, API + "plays/<string:play_id>")
+    api.add_resource(
+        res.nba_data.PlayVideoResource, API + "plays/<string:game_id>/<string:event_id>/video"
+    )
 
     return api

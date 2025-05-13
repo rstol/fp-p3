@@ -46,9 +46,11 @@ class Event:
 
     def generate_anim(self):
         # Leave some space for inbound passes
-        ax = plt.axes(xlim=(Constant.X_MIN, Constant.X_MAX), ylim=(Constant.Y_MIN, Constant.Y_MAX))
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(1, 1, 1)
+        ax.set_xlim(Constant.X_MIN, Constant.X_MAX)
+        ax.set_ylim(Constant.Y_MIN, Constant.Y_MAX)
         ax.axis("off")
-        fig = plt.gcf()
         ax.grid(False)  # Remove grid
         start_moment = self.moments[0]
         player_dict = self.player_ids_dict
@@ -123,7 +125,9 @@ class Event:
             frames=len(self.moments),
             interval=Constant.INTERVAL,
         )
-        court = plt.imread("court.png")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        court_path = os.path.join(script_dir, "court.png")
+        court = plt.imread(court_path)
         plt.imshow(
             court,
             zorder=0,
@@ -154,13 +158,18 @@ class Event:
         bytes
             Raw binary MP4 data that can be sent directly in a Flask response.
         """
+        # Set matplotlib to use a non-interactive backend
+        import matplotlib
+
+        matplotlib.use("Agg")
 
         fig, anim = self.generate_anim()
 
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_file:
             temp_filename = temp_file.name
 
-        writer = FFMpegWriter(fps=fps, bitrate=bitrate)
+        # TODO fix frame-rate the motion is too fast!
+        writer = FFMpegWriter(fps=fps, bitrate=bitrate, codec="h264")
         anim.save(temp_filename, writer=writer)
 
         plt.close(fig)
