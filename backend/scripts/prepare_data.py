@@ -5,6 +5,7 @@
 #     "polars",
 #     "py7zr",
 # ]
+# ///
 import argparse
 import os
 from pathlib import Path
@@ -90,21 +91,27 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
     play_ids = list(embedding_ids["game_id"] + "_" + embedding_ids["event_id"])
 
     dataset = dataset.with_format("polars")
+
+    def filter_pair_id(df):
+        return (
+            df.with_columns(
+                [
+                    (
+                        pl.col("gameid").cast(str)
+                        + "_"
+                        + pl.col("event_info").struct.field("id").cast(str)
+                    ).alias("pair_id")
+                ]
+            )
+            .filter(
+                pl.col("pair_id").is_in(play_ids)
+                & pl.col("home").struct.field("teamid").cast(str).is_in(TEAM_IDS_SAMPLE)
+            )
+            .drop("pair_id")
+        )
+
     dataset = dataset.map(
-        lambda df: df.with_columns(
-            [
-                (
-                    pl.col("gameid").cast(str)
-                    + "_"
-                    + pl.col("event_info").struct.field("id").cast(str)
-                ).alias("pair_id")
-            ]
-        )
-        .filter(
-            pl.col("pair_id").is_in(play_ids)
-            & pl.col("home").struct.field("teamid").cast(str).is_in(TEAM_IDS_SAMPLE)
-        )
-        .drop("pair_id"),
+        filter_pair_id,
         batched=True,
         desc="Filtering dataset",
         num_proc=NUM_PROCESSES,

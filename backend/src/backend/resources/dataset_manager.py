@@ -1,9 +1,9 @@
 import polars as pl
 from polars import DataFrame
 
-from backend.resources.Game import Game
-from backend.resources.Play import Play
-from backend.resources.PlayId import PlayId
+from backend.resources.game import Game
+from backend.resources.play import Play
+from backend.resources.playid import PlayId
 
 
 class DatasetManager:

@@ -2,16 +2,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from backend.resources.PlayId import PlayId
+from backend.resources.playid import PlayId
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class ClusterPlay:
     play_id: PlayId
     distance: float
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class Cluster:
     """Representation of a play cluster."""
 

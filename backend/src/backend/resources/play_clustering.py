@@ -1,25 +1,23 @@
-import glob
 import os
 import time
+from pathlib import Path
 
 import faiss
 import numpy as np
 import pandas as pd
 import torch
 
-from backend.resources.Cluster import Cluster, ClusterPlay
-from backend.resources.FeedbackItem import FeedbackItem
-from backend.resources.PlayId import PlayId
-
-# import polars as pl
+from backend.resources.cluster import Cluster, ClusterPlay
+from backend.resources.feedback_item import FeedbackItem
+from backend.resources.playid import PlayId
 from backend.settings import EMBEDDINGS_DIR, TEAM_IDS_SAMPLE
 
 
 class PlayClustering:
-    def __init__(self, team_id: str, initial_k=12):
+    def __init__(self, team_id: str, initial_k: int = 12) -> None:
         self.team_id = team_id
-        self.index = None  # FAISS index
-        self.kmeans = None  # FAISS kMeans to init clusters
+        self.index: faiss.Index | None = None
+        self.kmeans: faiss.Kmeans | None = None
         self.clusters = []
         self.team_embeddings: np.ndarray = None
         self.embedding_ids = self._get_embedding_ids()
@@ -37,26 +35,21 @@ class PlayClustering:
         self._set_team_embeddings(embeddings)
 
     def _load_all_embeddings(self):
-        npy_files = glob.glob(os.path.join(EMBEDDINGS_DIR, "*.npy"))
-        embeddings_all = None
+        npy_files = list(Path(EMBEDDINGS_DIR).glob("*.npy"))
+        embeddings_all = []
         for file_path in npy_files:
             embedding: list[torch.Tensor] = np.load(file_path, allow_pickle=True)
-            if embeddings_all is None:
-                embeddings_all = [e.numpy() for e in embedding]
-            else:
-                embeddings_all = np.concatenate(
-                    (embeddings_all, [e.numpy() for e in embedding]), axis=0
-                )
-        return embeddings_all
+            embeddings_all.append([e.numpy() for e in embedding])
+        return np.concatenate(embeddings_all, axis=0)
 
-    def _build_index(self, embeddings):
+    def _build_index(self, embeddings: np.ndarray) -> None:
         index = faiss.index_factory(self.d, "Flat", faiss.METRIC_INNER_PRODUCT)
-        faiss.normalize_L2(embeddings)  # Normalise in place
+        faiss.normalize_L2(embeddings)
         index.add(embeddings)
         assert index.is_trained
         self.index = index
 
-    def _init_kmeans(self, embeddings):
+    def _init_kmeans(self, embeddings: np.ndarray) -> None:
         kmeans = faiss.Kmeans(self.d, self.initial_k, niter=20)
         faiss.normalize_L2(embeddings)
         kmeans.train(embeddings)
@@ -69,25 +62,20 @@ class PlayClustering:
         index = self.get_team_embedding_ids().index
         self.team_embeddings = embeddings[index]
 
-    def get_initial_clusters(self, initial_k=12, niter=20):
-        distances, index = self.kmeans.index.search(
-            self.team_embeddings, 1
-        )  # assign each embedding to cluster centroid
-        distances = distances.reshape(-1)
-        cluster_assignments = index.reshape(-1)
+    def get_initial_clusters(self, initial_k: int = 12, niter: int = 20) -> list[Cluster]:
+        distances, index = self.kmeans.index.search(self.team_embeddings, 1)
+        distances = distances[..., 0]
+        cluster_assignments = index[..., 0]
         centroids = self.kmeans.centroids
-        clusters = []
-        timestamp = time.time()
+
         play_ids = self.get_team_embedding_ids()
         play_ids_reset_idx = play_ids.reset_index(drop=True)
 
+        clusters = []
         for i in range(initial_k):
-            cluster_idxs = [
-                idx for idx, cluster_idx in enumerate(cluster_assignments) if cluster_idx == i
-            ]
+            (cluster_idxs,) = np.where(cluster_assignments == i)
             cluster_play_ids = play_ids_reset_idx.iloc[cluster_idxs].reset_index(drop=True)
 
-            # Add play closest to centroid
             subset_distance = distances[cluster_idxs]
             centroid_idx = np.argmin(subset_distance)
             play = cluster_play_ids.iloc[centroid_idx]
@@ -102,29 +90,29 @@ class PlayClustering:
 
             # cluster_embeddings = self.team_embeddings[clusted_idxs]
 
-            clusters.append(
-                Cluster(
-                    id=f"cluster-{i}",
-                    label=f"Cluster {i + 1}",  # Default name
-                    centroid=centroids[i],
-                    plays=cluster_plays,
-                    confidence=None,
-                    created=timestamp,
-                    last_modified=timestamp,
-                    created_by="system",
-                )
+            timestamp = time.time()
+            cluster = Cluster(
+                id=f"cluster-{i}",
+                label=f"Cluster {i + 1}",  # Default name
+                centroid=centroids[i],
+                plays=cluster_plays,
+                confidence=None,
+                created=timestamp,
+                last_modified=timestamp,
+                created_by="system",
             )
+            clusters.append(cluster)
 
         self.clusters = clusters
 
-    def find_similar_plays(self, k=10):
+    def find_similar_plays(self, k: int = 10):
         q = np.expand_dims(embeddings_team[target_play_idx], axis=0)
         faiss.normalize_L2(q)
         distance, index = index.search(q, k)  # actual search
         print(distance, index)  # Distance index of top k neighbors to query
         # TODO
 
-    def apply_scout_feedback(self, feedback: list[FeedbackItem]):
+    def apply_scout_feedback(self, feedback: list[FeedbackItem]) -> list[Cluster]:
         """Apply feedback from scouts to refine clusters.
 
         Args:
