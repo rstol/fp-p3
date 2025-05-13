@@ -111,21 +111,12 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
         )
 
     dataset = dataset.map(
-        filter_pair_id,
-        batched=True,
-        desc="Filtering dataset",
-        num_proc=NUM_PROCESSES,
+        filter_pair_id, batched=True, desc="Filtering dataset", num_proc=NUM_PROCESSES
     )
     dataset = dataset.with_format(None)  # Back to default dict format
 
     dataset_plays = dataset.select_columns(
-        [
-            "gameid",
-            "primary_info",
-            "secondary_info",
-            "event_info",
-            "moments",
-        ]
+        ["gameid", "primary_info", "secondary_info", "event_info", "moments"]
     )
     dataset_plays = dataset_plays.map(
         process_play,
@@ -167,26 +158,13 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
         game_dataset.to_polars(batched=False).write_parquet(output_file)
 
     # Extract game and team info
-    dataset_info = dataset.select_columns(
-        [
-            "gameid",
-            "gamedate",
-            "home",
-            "visitor",
-        ]
-    )
+    dataset_info = dataset.select_columns(["gameid", "gamedate", "home", "visitor"])
     dataset_info = dataset_info.map(
-        extract_game_and_team_info,
-        remove_columns=dataset_info.column_names,
+        extract_game_and_team_info, remove_columns=dataset_info.column_names
     )
 
     dataset_game = dataset_info.select_columns(
-        [
-            "game_id",
-            "game_date",
-            "home_team_id",
-            "visitor_team_id",
-        ]
+        ["game_id", "game_date", "home_team_id", "visitor_team_id"]
     )
     df_game = dataset_game.to_polars()
     df_game = df_game.unique(subset=["game_id"], keep="first")

@@ -3,15 +3,13 @@ name = "backend"
 version = "0.0.1"
 description = "Backend for the dummy project of the XAI-IML 2025 course."
 readme = "README.md"
-authors = [
-    {name = "Romeo Stoll", email = "stollr@student.ethz.ch"}
-]
+authors = [{ name = "Romeo Stoll", email = "stollr@student.ethz.ch" }]
 classifiers = [
     "Intended Audience :: Developers",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
-    "Development Status :: 4 - Beta"
+    "Development Status :: 4 - Beta",
 ]
 requires-python = ">=3.12"
 dependencies = [
@@ -29,10 +27,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "ruff>=0.2.0",
-    "pre-commit>=2.20.0",
-]
+dev = ["ruff>=0.2.0", "pre-commit>=2.20.0"]
 train = [
     "torch>=2.6.0",
     "torchvision>=0.21.0",
@@ -48,15 +43,114 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.ruff]
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "wandb",
+    "outputs",
+]
+
 line-length = 100
+
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W", "N", "B", "C4", "UP", "BLE", "C90", "A"]
-ignore = []
+select = [
+    "E", # pycodestyle (Error)
+    "F", # Pyflakes
+    "I", # isort 
+    "N", # pep8-naming
+    # "D",      # pydocstyle
+    "UP",  # pyupgrade
+    "YTT", # flake8-2020
+    # "ANN",    # flake8-annotations
+    "ASYNC", # flake8-async
+    "BLE",   # flake8-blind-except
+    "FBT",   # flake8-boolean-trap
+    "B",     # flake8-bugbear
+    "A",     # flake8-builtins
+    "COM",   # flake8-commas
+    "C4",    # flake8-comprehensions
+    "DTZ",   # flake8-datetimez
+    "T10",   # flake8-debugger
+    "EM",    # flake8-errmsg
+    "EXE",   # flake8-executable
+    "FA",    # flake8-future-annotations
+    "ISC",   # flake8-implicit-str-concat
+    "ICN",   # flake8-import-conventions
+    "G",     # flake8-logging-format
+    "INP",   # flake8-no-pep420
+    "PIE",   # flake8-pie
+    "T20",   # flake8-print
+    "PYI",   # flake8-pyi
+    "PT",    # flake8-pytest-style
+    "Q",     # flake8-quotes
+    "RSE",   # flake8-raise
+    "RET",   # flake8-return
+    "SLF",   # flake8-self
+    "SLOT",  # flake8-slot
+    "SIM",   # flake8-simplify
+    "TID",   # flake8-tidy-imports
+    "INT",   # flake8-gettext
+    "PTH",   # flake8-use-pathlib
+    "TD",    # flake8-todo
+    "FIX",   # flake8-fixme
+    "ERA",   # eradicate
+    "PGH",   # pygrep-hooks,
+    "PL",    # Pylint
+    "TRY",   # tryceratops
+    "FLY",   # flynt
+    "NPY",   # NumPy-specific-rules
+    "AIR",   # Airflow
+    "PERF",  # Perflint
+    "RUF",   # Ruff-specific rules
+]
+ignore = [
+    "N803",    # invalid-argument-name
+    "N806",    # non-lowercase-variable-in-function
+    "N812",    # lowercase-imported-as-non-lowercase
+    "FBT001",  # boolean-type-hint-positional-argument
+    "FBT002",  # boolean-default-value-positional-argument
+    "B023",    # function-uses-loop-variable
+    "G004",    # logging-f-string
+    "PLR0913", # too-many-arguments
+    "PLR0915", # too-many-statements
+    "PLR2004", # magic-value-comparison
+    "PLW2901", # redefined-loop-name
+    "NPY002",  # numpy-legacy-random
+    "COM812",  # missing-trailling-comma
+    "PGH003",  # blanket-type-ignore
+    "FIX002",  # line-contains-todo,
+    "TD003",   # missing-issue-link
+    "ISC001",  # single-line-implicit-string-concatenation
+    "PYI041",  # missing-type-annotation-for-implicit-none
+]
+
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+split-on-trailing-comma = false
 
 [tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-line-ending = "auto"
-docstring-code-format = true
+skip-magic-trailing-comma = true

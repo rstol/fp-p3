@@ -56,10 +56,7 @@ def convert_game(game_id: str, game_dataset: Dataset, shots_df: pd.DataFrame):
         possesion = Possession(event, game_id)
         p_id = (possesion.gameid, possesion.eventid, possesion.off_teamid)
         possesion_ids.append(p_id)
-        with open(
-            f"{GAMES_DIR}/{'_'.join(p_id)}.pkl",
-            "wb",
-        ) as f:
+        with open(f"{GAMES_DIR}/{'_'.join(p_id)}.pkl", "wb") as f:
             pickle.dump(possesion, f)
     return possesion_ids
 
@@ -114,10 +111,7 @@ if __name__ == "__main__":
         )
 
     dataset = dataset.map(
-        filter_plays,
-        batched=True,
-        num_proc=NUM_PROCESSES,
-        desc="Filtering dataset",
+        filter_plays, batched=True, num_proc=NUM_PROCESSES, desc="Filtering dataset"
     )
 
     play_ids = convert_scene_trajectory(dataset)

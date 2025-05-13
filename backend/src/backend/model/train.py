@@ -72,9 +72,7 @@ def init_basketball_datasets(opts):
     dataset_config["mode"] = "valid"
     valid_dataset = Baller2PlayDataset(**dataset_config)
     valid_loader = DataLoader(
-        dataset=valid_dataset,
-        batch_size=None,
-        num_workers=opts["train"]["workers"],
+        dataset=valid_dataset, batch_size=None, num_workers=opts["train"]["workers"]
     )
 
     samps_per_gameid = int(np.ceil(num_samples / len(test_gameids)))
@@ -91,17 +89,10 @@ def init_basketball_datasets(opts):
     dataset_config["mode"] = "test"
     test_dataset = Baller2PlayDataset(**dataset_config)
     test_loader = DataLoader(
-        dataset=test_dataset,
-        batch_size=None,
-        num_workers=opts["train"]["workers"],
+        dataset=test_dataset, batch_size=None, num_workers=opts["train"]["workers"]
     )
 
-    return (
-        train_loader,
-        train_dataset,
-        valid_loader,
-        test_loader,
-    )
+    return (train_loader, train_dataset, valid_loader, test_loader)
 
 
 def init_model(opts, train_dataset: Baller2PlayDataset):
@@ -224,12 +215,7 @@ if __name__ == "__main__":
 
     opts = yaml.safe_load(open(f"{EXPERIMENTS_DIR}/{JOB}/{JOB}.yaml"))
 
-    (
-        train_loader,
-        train_dataset,
-        valid_loader,
-        test_loader,
-    ) = init_basketball_datasets(opts)
+    (train_loader, train_dataset, valid_loader, test_loader) = init_basketball_datasets(opts)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

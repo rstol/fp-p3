@@ -56,18 +56,17 @@ def home_away_event_conversion(number):
         return None
     if int(number.item()) == 4:
         return "home"
-    elif int(number.item()) == 5:
+    if int(number.item()) == 5:
         return "away"
-    else:
-        return None
+    return None
 
 
 def identify_offense(row):
     identified_offense_events = [1, 2, 3, 4, 5]
-    if int(row["EVENTMSGTYPE"].item()) in identified_offense_events:
-        poss_team_id = row["PLAYER1_TEAM_ID"].item()
-    elif ("OFF.FOUL" in str(row["HOMEDESCRIPTION"].item())) or (
-        "OFF.FOUL" in str(row["VISITORDESCRIPTION"].item())
+    if (
+        int(row["EVENTMSGTYPE"].item()) in identified_offense_events
+        or ("OFF.FOUL" in str(row["HOMEDESCRIPTION"].item()))
+        or ("OFF.FOUL" in str(row["VISITORDESCRIPTION"].item()))
     ):
         poss_team_id = row["PLAYER1_TEAM_ID"].item()
     elif int(row["EVENTMSGTYPE"].item()) == 6:
@@ -212,8 +211,7 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
         pbp_out = dl_manager.download_and_extract(_PBP_URL)
         return [
             datasets.SplitGenerator(
-                name=datasets.Split.TRAIN,
-                gen_kwargs={"filepaths": file_paths, "pbp_out": pbp_out},
+                name=datasets.Split.TRAIN, gen_kwargs={"filepaths": file_paths, "pbp_out": pbp_out}
             )
         ]
 
@@ -227,11 +225,11 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
                 game_id = game["gameid"]
                 game_date = game["gamedate"]
 
-                game_events = pbp.loc[(pbp.GAME_ID == int(game_id))]
+                game_events = pbp.loc[(int(game_id) == pbp.GAME_ID)]
                 for event in game["events"]:
                     event_id = event["eventId"]
 
-                    event_row = game_events.loc[pbp.EVENTNUM == int(event_id)]
+                    event_row = game_events.loc[int(event_id) == pbp.EVENTNUM]
                     if len(event_row) != 1:
                         continue
 
@@ -275,13 +273,7 @@ class NbaTracking(datasets.GeneratorBasedBuilder):
                                 "z": moment[5][0][4],
                             },
                             "player_coordinates": [
-                                {
-                                    "teamid": i[0],
-                                    "playerid": i[1],
-                                    "x": i[2],
-                                    "y": i[3],
-                                    "z": i[4],
-                                }
+                                {"teamid": i[0], "playerid": i[1], "x": i[2], "y": i[3], "z": i[4]}
                                 for i in moment[5][1:]
                             ],
                         }
