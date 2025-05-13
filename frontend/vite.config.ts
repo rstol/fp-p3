@@ -1,8 +1,11 @@
 import { reactRouter } from '@react-router/dev/vite';
 import tailwindcss from '@tailwindcss/vite';
+import { execSync } from 'child_process';
 import path from 'path';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+
+const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
 
 export default defineConfig({
   server: {
@@ -33,6 +36,9 @@ export default defineConfig({
     alias: {
       '~': path.resolve(__dirname, 'app'),
     },
+  },
+  define: {
+    __COMMIT_HASH__: JSON.stringify(commitHash),
   },
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
 });

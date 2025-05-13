@@ -23,6 +23,7 @@ import {
 import { GameFilter } from '~/lib/const';
 import { cn } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
+import { useDashboardStore } from '~/lib/stateStore';
 
 const allGameFilters = [
   { value: GameFilter.LAST1, label: 'Last Game' },
@@ -39,6 +40,15 @@ export default function Filters({ teamID }: { teamID: string | null }) {
   const [_, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
   const isNavigating = Boolean(navigation.location);
+  const setSelectedTeamIdInStore = useDashboardStore((state) => state.setSelectedTeamId);
+
+  useEffect(() => {
+    if (teamID) {
+      setSelectedTeamIdInStore(teamID);
+    } else if (teamID === null) {
+      setSelectedTeamIdInStore(null);
+    }
+  }, [teamID, setSelectedTeamIdInStore]);
 
   const commandItems = teams.map((team) => ({
     value: String(team.teamid),
@@ -89,6 +99,7 @@ export default function Filters({ teamID }: { teamID: string | null }) {
                         prev.set('teamid', currentTeamId);
                         return prev;
                       });
+                      setSelectedTeamIdInStore(currentTeamId);
                     }}
                   >
                     <Check

@@ -137,7 +137,6 @@ dmypy.json
 cache/
 
 # Data 
-nba_tracking_data
 games_preprocessed
 experiments
 backend/data/raw/events

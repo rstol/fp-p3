@@ -30,6 +30,8 @@ class Baller2PlayDataset(Dataset):
         self.n_players = 10
 
         self.max_player_move = max_player_move
+
+        self.all_plays = self._load_all_plays()
         # define the start and chunk size in the train loop such that the samples overlap and have
         # a fixed length which is maybe X moments to get 6 seconds in one sequence
 
@@ -99,12 +101,45 @@ class Baller2PlayDataset(Dataset):
 
         return self.get_sample(X, start)
 
-    def build_play_start_index_map(self, ids):
-        starts_by_play = {}
-        for i in range(len(ids) - self.chunk_size):
-            if all(all(ids[i + j] == ids[i]) for j in range(self.chunk_size)):
-                starts_by_play.setdefault(f"{ids[i]}", []).append(i)
-        return starts_by_play
+    def _load_all_plays(self):
+        """Load all play IDs from all games"""
+        plays = []
+
+        for game_id in self.game_ids:
+            identifiers = np.load(f"{GAMES_DIR}/{game_id}_ids.npy", allow_pickle=True)
+
+            # Find continuous sequences with the same ID
+            current_id = None
+            start_idx = 0
+
+            for i, id_val in enumerate(identifiers):
+                if id_val != current_id:
+                    # End of a sequence
+                    if current_id is not None:
+                        plays.append(
+                            {
+                                "game_id": game_id,
+                                "play_id": current_id,
+                                "start": start_idx,
+                                "end": i,
+                            }
+                        )
+                    # Start of a new sequence
+                    current_id = id_val
+                    start_idx = i
+
+            # Add the last play
+            if current_id is not None:
+                plays.append(
+                    {
+                        "game_id": game_id,
+                        "play_id": current_id,
+                        "start": start_idx,
+                        "end": len(identifiers),
+                    }
+                )
+
+        return plays
 
 
 if __name__ == "__main__":

@@ -5,32 +5,18 @@
 #     "polars",
 #     "py7zr",
 # ]
-# ///
 import argparse
-import logging
 import os
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import polars as pl
 from datasets import Dataset, load_dataset
 
-from backend.settings import TRACKING_DIR
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from backend.settings import EMBEDDINGS_DIR, TEAM_IDS_SAMPLE, TRACKING_DIR
 
 NUM_PROCESSES = os.cpu_count()
-TEAM_IDS_SAMPLE = {
-    1610612741,
-    1610612748,
-    1610612752,
-    1610612754,
-    1610612755,
-    1610612761,
-    1610612766,
-}
 
 
 def load_nba_dataset(split: str | None = None, name: str = "full"):
@@ -99,22 +85,26 @@ def extract_game_and_team_info(play: dict[str, Any]) -> dict[str, Any]:
 
 def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> None:
     """Process the dataset using datasets library features."""
-    logger.info("Start processing data.")
+    # Use preprocessed plays for which embeddings are saved
+    embedding_ids = pd.read_csv(os.path.join(EMBEDDINGS_DIR, "embedding_sources.csv"), dtype="str")
+    play_ids = list(embedding_ids["game_id"] + "_" + embedding_ids["event_id"])
 
     dataset = dataset.with_format("polars")
     dataset = dataset.map(
-        lambda df: df.filter(
-            (pl.col("moments").list.len() > 0)  # Exclude empty moments
-            & (pl.col("event_info").struct.field("possession_team_id").is_not_null())
-            & (~pl.col("event_info").struct.field("possession_team_id").is_nan())
-            & (pl.col("moments").list.first().struct.field("player_coordinates").list.len() == 10)
-            & pl.col("event_info")
-            .struct.field("type")
-            .is_in([1, 2])  # See preprocess.py for description of event types
-            & (
-                pl.col("home").struct.field("teamid").is_in(TEAM_IDS_SAMPLE)
-            )  # Filter for small set of teams
-        ),
+        lambda df: df.with_columns(
+            [
+                (
+                    pl.col("gameid").cast(str)
+                    + "_"
+                    + pl.col("event_info").struct.field("id").cast(str)
+                ).alias("pair_id")
+            ]
+        )
+        .filter(
+            pl.col("pair_id").is_in(play_ids)
+            & pl.col("home").struct.field("teamid").is_in(TEAM_IDS_SAMPLE)
+        )
+        .drop("pair_id"),
         batched=True,
         desc="Filtering dataset",
         num_proc=NUM_PROCESSES,
@@ -164,10 +154,10 @@ def process_dataset(dataset: Dataset, output_path: Path, sampling_rate: int) -> 
     }
 
     for game_id, game_dataset in play_datasets.items():
-        output_file = plays_dir / f"{game_id}.jsonl"
+        output_file = plays_dir / f"{game_id}.parquet"
         # Load just a single game into memory with to_polars
         print(f"Writing {output_file} for game {game_id}")
-        game_dataset.to_polars(batched=False).write_ndjson(output_file)
+        game_dataset.to_polars(batched=False).write_parquet(output_file)
 
     # Extract game and team info
     dataset_info = dataset.select_columns(
