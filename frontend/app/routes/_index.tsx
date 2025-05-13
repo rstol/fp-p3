@@ -1,5 +1,9 @@
 import localforage from 'localforage';
-import { useSearchParams, type ClientLoaderFunctionArgs, type ActionFunctionArgs } from 'react-router';
+import {
+  useSearchParams,
+  type ClientLoaderFunctionArgs,
+  type ActionFunctionArgs,
+} from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import { PlaysTable } from '~/components/PlaysTable';
@@ -10,7 +14,7 @@ import { Separator } from '~/components/ui/separator';
 import { BASE_URL, GameFilter } from '~/lib/const';
 import type { Game, Point, Team } from '~/types/data';
 import type { Route } from './+types/_index';
-import { max } from 'd3';
+import { fetchWithCache, purgeCacheIfNeeded } from '~/lib/fetchCache';
 
 interface ScatterDataResponse {
   total_games: number;
@@ -24,31 +28,9 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-function createCacheKey(fullUrl: string, includeSearch: boolean = false): string {
-  const urlObj = new URL(fullUrl);
-  return includeSearch ? urlObj.pathname + urlObj.search : urlObj.pathname;
-}
-
-async function fetchWithCache<T>(url: string, includeSearch: boolean = false): Promise<T> {
-  const key = createCacheKey(url, includeSearch);
-  const cached = await localforage.getItem<T>(key);
-  if (cached) {
-    console.log(`Cache hit for ${key}`);
-    return cached;
-  }
-  console.log(`Cache miss for ${key}`);
-
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch from ${url}`);
-
-  const data: T = await res.json();
-  await localforage.setItem(key, data);
-  return data;
-}
-
 export async function clientAction({ request }: ActionFunctionArgs) {
-  if (request.method !== "POST") {
-    return { success: false, error: "Invalid request method - expected POST", status: 405 };
+  if (request.method !== 'POST') {
+    return { success: false, error: 'Invalid request method - expected POST', status: 405 };
   }
 
   try {
@@ -56,42 +38,51 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     const { teamId, updates } = payload;
 
     if (!teamId || typeof teamId !== 'string') {
-      return { success: false, error: "Missing or invalid teamId in payload", status: 400 };
+      return { success: false, error: 'Missing or invalid teamId in payload', status: 400 };
     }
     if (!Array.isArray(updates) || updates.length === 0) {
-      return { success: false, error: "Missing or empty updates array in payload", status: 400 };
+      return { success: false, error: 'Missing or empty updates array in payload', status: 400 };
     }
 
     // Construct the full backend API URL using BASE_URL from constants
     const backendApiUrl = `${BASE_URL}/teams/${teamId}/plays/scatter`;
-    
+
     const backendResponse = await fetch(backendApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ updates }), 
+      body: JSON.stringify({ updates }),
     });
 
     if (!backendResponse.ok) {
-      const errorData = await backendResponse.json().catch(() => ({ message: 'Backend returned an error without JSON body' }));
-      console.error(`[_index.clientAction] Backend API error: ${backendResponse.status}`, errorData);
-      return { success: false, error: errorData.message || "Failed to apply changes via backend", status: backendResponse.status };
+      const errorData = await backendResponse
+        .json()
+        .catch(() => ({ message: 'Backend returned an error without JSON body' }));
+      console.error(
+        `[_index.clientAction] Backend API error: ${backendResponse.status}`,
+        errorData,
+      );
+      return {
+        success: false,
+        error: errorData.message || 'Failed to apply changes via backend',
+        status: backendResponse.status,
+      };
     }
 
-    const responseData = await backendResponse.json(); 
-    return { success: true, data: responseData, message: "Changes applied successfully." };
-
+    const responseData = await backendResponse.json();
+    return { success: true, data: responseData, message: 'Changes applied successfully.' };
   } catch (error) {
-    console.error("[_index.clientAction] Error processing request:", error);
+    console.error('[_index.clientAction] Error processing request:', error);
     if (error instanceof SyntaxError) {
-        return { success: false, error: "Invalid JSON payload provided", status: 400 };
+      return { success: false, error: 'Invalid JSON payload provided', status: 400 };
     }
-    return { success: false, error: "An unexpected server error occurred", status: 500 };
+    return { success: false, error: 'An unexpected server error occurred', status: 500 };
   }
 }
 
 export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
+  purgeCacheIfNeeded();
   const url = new URL(request.url);
   const teamID = url.searchParams.get('teamid');
   let timeframe = isNaN(Number(url.searchParams.get('timeframe')))

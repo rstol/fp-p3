@@ -1,6 +1,8 @@
 import polars as pl
 from polars import DataFrame
 
+from backend.settings import TEAM_IDS_SAMPLE
+
 
 class DatasetManager:
     def __init__(self, data_dir: str) -> None:
@@ -10,7 +12,9 @@ class DatasetManager:
         self.games = pl.read_ndjson(f"{self.data_dir}/games.jsonl")
 
     def get_teams(self) -> list[dict[str, str | int | list[dict[str, str | int]]]]:
-        return self.teams.to_dicts()
+        return self.teams.filter(
+            pl.col("teamid").is_in(TEAM_IDS_SAMPLE)
+        ).to_dicts()  # Restrict to home teams with embeddings
 
     def get_team_details(self, team_id: str) -> dict[str, str] | None:
         team_id = int(team_id)
