@@ -1,7 +1,8 @@
 import pandas as pd
-from Constant import Constant
-from Event import Event
-from Team import Team
+
+from backend.video.Constant import Constant
+from backend.video.Event import Event
+from backend.video.Team import Team
 
 
 class Game:

@@ -1,13 +1,11 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from Constant import Constant
-from IPython.display import HTML
 from matplotlib import animation
 from matplotlib.animation import FFMpegWriter
-from matplotlib.patches import Arc, Circle, Rectangle
-from Moment import Moment
-from Team import Team
+
+from backend.video.Constant import Constant
+from backend.video.Moment import Moment
 
 
 class Event:
@@ -25,25 +23,18 @@ class Event:
         guest_players = visitor["players"]
         players = home_players + guest_players
         player_ids = [player["playerid"] for player in players]
-        player_names = [
-            " ".join([player["firstname"], player["lastname"]]) for player in players
-        ]
+        player_names = [" ".join([player["firstname"], player["lastname"]]) for player in players]
         player_jerseys = [player["jersey"] for player in players]
-        values = list(zip(player_names, player_jerseys))
+        values = list(zip(player_names, player_jerseys, strict=False))
         # Example: 101108: ['Chris Paul', '3']
-        self.player_ids_dict = dict(zip(player_ids, values))
+        self.player_ids_dict = dict(zip(player_ids, values, strict=False))
 
     def update_radius(self, i, player_circles, ball_circle, annotations, clock_info):
         moment = self.moments[i]
         for j, circle in enumerate(player_circles):
             circle.center = moment.players[j].x, moment.players[j].y
             annotations[j].set_position(circle.center)
-            clock_test = "Quarter {:d}\n {:02d}:{:02d}\n {:03.1f}".format(
-                moment.quarter,
-                int(moment.game_clock) % 3600 // 60,
-                int(moment.game_clock) % 60,
-                moment.shot_clock,
-            )
+            clock_test = f"Quarter {moment.quarter:d}\n {int(moment.game_clock) % 3600 // 60:02d}:{int(moment.game_clock) % 60:02d}\n {moment.shot_clock:03.1f}"
             clock_info.set_text(clock_test)
         ball_circle.center = moment.ball.x, moment.ball.y
         ball_circle.radius = moment.ball.radius / Constant.NORMALIZATION_COEF
@@ -51,9 +42,7 @@ class Event:
 
     def generate_anim(self):
         # Leave some space for inbound passes
-        ax = plt.axes(
-            xlim=(Constant.X_MIN, Constant.X_MAX), ylim=(Constant.Y_MIN, Constant.Y_MAX)
-        )
+        ax = plt.axes(xlim=(Constant.X_MIN, Constant.X_MAX), ylim=(Constant.Y_MIN, Constant.Y_MAX))
         ax.axis("off")
         fig = plt.gcf()
         ax.grid(False)  # Remove grid
@@ -97,7 +86,7 @@ class Event:
             " #".join([player_dict[player.id][0], player_dict[player.id][1]])
             for player in sorted_players[5:]
         ]
-        players_data = list(zip(home_players, guest_players))
+        players_data = list(zip(home_players, guest_players, strict=False))
 
         table = plt.table(
             cellText=players_data,
@@ -118,9 +107,7 @@ class Event:
             plt.Circle((0, 0), Constant.PLAYER_CIRCLE_SIZE, color=player.color)
             for player in start_moment.players
         ]
-        ball_circle = plt.Circle(
-            (0, 0), Constant.PLAYER_CIRCLE_SIZE, color=start_moment.ball.color
-        )
+        ball_circle = plt.Circle((0, 0), Constant.PLAYER_CIRCLE_SIZE, color=start_moment.ball.color)
         for circle in player_circles:
             ax.add_patch(circle)
         ax.add_patch(ball_circle)
