@@ -162,7 +162,7 @@ class Event:
         return fig, anim
 
     @lru_cache(maxsize=20)
-    def generate_mp4(self, fps=FPS, bitrate=-1) -> bytes:
+    def generate_mp4(self, fps=FPS, bitrate=-1, load_prerendered=False) -> bytes:
         """
         Generates and returns the raw binary data of the play animation as MP4.
 
@@ -179,6 +179,16 @@ class Event:
         bytes
             Raw binary MP4 data that can be sent directly in a Flask response.
         """
+        if load_prerendered:
+            filename = os.path.join(
+                VIDEO_DATA_DIR, f"{self.game_id}_{self.event_id}.mp4"
+            )
+
+            if os.path.exists(filename):
+                with open(filename, "rb") as f:
+                    video_data = f.read()
+                    return video_data
+
         fig, anim = self.generate_anim()
 
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_file:
