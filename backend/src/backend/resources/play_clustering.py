@@ -76,7 +76,7 @@ class PlayClustering:
 
     def get_initial_clusters(
         self, initial_k: int = 12, niter: int = 20
-    ) -> tuple[list[Cluster], np.ndarray]:
+    ) -> tuple[list[Cluster], np.ndarray, pl.DataFrame]:
         distances, index = self.kmeans.index.search(self.team_embeddings, 1)
         distances = distances[..., 0]
         cluster_assignments = index[..., 0]
@@ -115,7 +115,7 @@ class PlayClustering:
 
         self.clusters = clusters
 
-        return clusters, cluster_assignments
+        return clusters, cluster_assignments, self.team_embedding_ids
 
     def find_similar_plays(self, k: int = 10) -> list[int]:
         q = np.expand_dims(embeddings_team[target_play_idx], axis=0)
