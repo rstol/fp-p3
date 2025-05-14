@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib.animation import FFMpegWriter
 
-from backend.settings import RAW_DATA_HZ, SAMPLING_RATE
+from backend.settings import RAW_DATA_HZ, SAMPLING_RATE, VIDEO_DATA_DIR
 from backend.video.Constant import Constant
 from backend.video.Moment import Moment
 
@@ -32,7 +32,9 @@ class Event:
         guest_players = visitor["players"]
         players = home_players + guest_players
         player_ids = [player["playerid"] for player in players]
-        player_names = [" ".join([player["firstname"], player["lastname"]]) for player in players]
+        player_names = [
+            " ".join([player["firstname"], player["lastname"]]) for player in players
+        ]
         player_jerseys = [player["jersey"] for player in players]
         values = list(zip(player_names, player_jerseys, strict=False))
         # Example: 101108: ['Chris Paul', '3']
@@ -129,7 +131,9 @@ class Event:
             plt.Circle((0, 0), Constant.PLAYER_CIRCLE_SIZE, color=player.color)
             for player in start_moment.players
         ]
-        ball_circle = plt.Circle((0, 0), Constant.PLAYER_CIRCLE_SIZE, color=start_moment.ball.color)
+        ball_circle = plt.Circle(
+            (0, 0), Constant.PLAYER_CIRCLE_SIZE, color=start_moment.ball.color
+        )
         for circle in player_circles:
             ax.add_patch(circle)
         ax.add_patch(ball_circle)
@@ -191,3 +195,13 @@ class Event:
         os.unlink(temp_filename)
 
         return video_data
+
+    def prerender(self, fps=FPS, bitrate=-1):
+        fig, anim = self.generate_anim()
+
+        filename = os.path.join(VIDEO_DATA_DIR, f"{self.game_id}_{self.event_id}.mp4")
+
+        writer = FFMpegWriter(fps=fps, bitrate=bitrate, codec="h264")
+        anim.save(filename, writer=writer)
+
+        plt.close(fig)
