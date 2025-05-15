@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { useFetcher } from 'react-router';
 import { BASE_URL } from '~/lib/const';
+import { Skeleton } from './ui/skeleton';
 
 interface ClientActionResult {
   success: boolean;
@@ -121,6 +122,7 @@ export default function PlayView() {
   const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
   const [playDetails, setPlayDetails] = useState<PlayDetails>(null);
+  const [isLoadingVideo, seIsLoadingVideo] = useState(false);
 
   const fetcher = useFetcher<ClientActionResult>();
 
@@ -138,6 +140,7 @@ export default function PlayView() {
   useEffect(() => {
     if (!selectedPlay) return;
 
+    seIsLoadingVideo(true);
     const fetchPlayDetails = async () => {
       try {
         const publicPath = `/public/videos/${selectedPlay.game_id}/${selectedPlay.event_id}.mp4`;
@@ -160,6 +163,8 @@ export default function PlayView() {
         }
       } catch (error) {
         console.error('Failed to fetch play details:', error);
+      } finally {
+        seIsLoadingVideo(false);
       }
     };
 
@@ -250,11 +255,23 @@ export default function PlayView() {
         <CardTitle>Selected Play Details</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {playDetails?.videoURL && (
-          <video controls autoPlay disablePictureInPicture disableRemotePlayback loop muted>
-            <source src={playDetails.videoURL} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
+        {isLoadingVideo ? (
+          <Skeleton className="mb-4 h-52 w-full" />
+        ) : (
+          playDetails?.videoURL && (
+            <video
+              key={playDetails.videoURL} // Force remount component on change
+              controls
+              autoPlay
+              disablePictureInPicture
+              disableRemotePlayback
+              loop
+              muted
+            >
+              <source src={playDetails.videoURL} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          )
         )}
         <div className="divide-y divide-solid text-sm">
           {selectedPlay.game_date && (
