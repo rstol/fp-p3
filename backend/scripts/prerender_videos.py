@@ -18,6 +18,5 @@ def process_game(dataset_manager, game):
 if __name__ == "__main__":
     dataset_manager = DatasetManager(TRACKING_DIR)
     games = dataset_manager.get_games()
-
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
         pool.map(partial(process_game, dataset_manager), games)

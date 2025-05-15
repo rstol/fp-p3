@@ -11,7 +11,7 @@ from backend.settings import RAW_DATA_HZ, SAMPLING_RATE, VIDEO_DATA_DIR
 from backend.video.Constant import Constant
 from backend.video.Moment import Moment
 
-FPS = RAW_DATA_HZ // SAMPLING_RATE
+FPS = RAW_DATA_HZ / SAMPLING_RATE
 
 # Set matplotlib to use a non-interactive backend
 matplotlib.use("Agg")
@@ -28,6 +28,7 @@ class Event:
         self.moments = [Moment(moment) for moment in moments]
         self.game_id = event["game_id"]
         self.event_id = event["event_id"]
+        self.score = event["event_score"]
         home_players = home["players"]
         guest_players = visitor["players"]
         players = home_players + guest_players
@@ -40,13 +41,13 @@ class Event:
 
     def update_radius(self, i, player_circles, ball_circle, annotations, clock_info):
         moment = self.moments[i]
+        if len(moment.players) != len(player_circles):
+            return player_circles, ball_circle
         for j, circle in enumerate(player_circles):
-            if len(moment.players) != len(player_circles):
-                continue  # skip
             circle.center = moment.players[j].x, moment.players[j].y
             annotations[j].set_position(circle.center)
             shot_clock = moment.shot_clock if moment.shot_clock is not None else 0.0
-            clock_test = f"Quarter {moment.quarter:d}\n {int(moment.game_clock) % 3600 // 60:02d}:{int(moment.game_clock) % 60:02d}\n {shot_clock:03.1f}"
+            clock_test = f"Quarter {moment.quarter:d}, Score {self.score if self.score and self.score != 'nan' else 'N/A'}\n {int(moment.game_clock) % 3600 // 60:02d}:{int(moment.game_clock) % 60:02d}\n {shot_clock:03.1f}"
             clock_info.set_text(clock_test)
         ball_circle.center = moment.ball.x, moment.ball.y
         ball_circle.radius = moment.ball.radius / Constant.NORMALIZATION_COEF
@@ -54,12 +55,13 @@ class Event:
 
     def generate_anim(self):
         # Leave some space for inbound passes
-        fig = plt.figure()
+        fig = plt.figure(figsize=(Constant.X_MAX / 10, Constant.Y_MAX / 10 + 0.2))
         ax = fig.add_subplot(1, 1, 1)
         ax.set_xlim(Constant.X_MIN, Constant.X_MAX)
         ax.set_ylim(Constant.Y_MIN, Constant.Y_MAX)
         ax.axis("off")
         ax.grid(False)  # Remove grid
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
         start_moment = self.moments[0]
         for moment in self.moments:  # Try to find moment with 10 players
             if len(moment.players) == 10:
@@ -98,31 +100,21 @@ class Event:
         guest_player = sorted_players[5]
         column_labels = tuple([home_player.team.name, guest_player.team.name])
         column_colours = tuple([home_player.team.color, guest_player.team.color])
-        cell_colours = [column_colours for _ in range(5)]
-
-        home_players = [
-            " #".join([player_dict[player.id][0], player_dict[player.id][1]])
-            for player in sorted_players[:5]
-        ]
-        guest_players = [
-            " #".join([player_dict[player.id][0], player_dict[player.id][1]])
-            for player in sorted_players[5:]
-        ]
-        players_data = list(zip(home_players, guest_players, strict=False))
+        cell_colours = [column_colours]
 
         table = plt.table(
-            cellText=players_data,
-            colLabels=column_labels,
-            colColours=column_colours,
+            cellText=[column_labels],
+            # colLabels=column_labels,
+            # colColours=column_colours,
             colWidths=[Constant.COL_WIDTH, Constant.COL_WIDTH],
-            loc="bottom",
+            loc="top",
             cellColours=cell_colours,
             fontsize=Constant.FONTSIZE,
             cellLoc="center",
         )
         table.scale(1, Constant.SCALE)
         # table_cells = table.properties()['child_artists']
-        for key, cell in table.get_celld().items():
+        for cell in table.get_celld().values():
             cell.get_text().set_color("white")
 
         player_circles = [
@@ -149,9 +141,9 @@ class Event:
             zorder=0,
             extent=[
                 Constant.X_MIN,
-                Constant.X_MAX - Constant.DIFF,
-                Constant.Y_MAX,
+                Constant.X_MAX,
                 Constant.Y_MIN,
+                Constant.Y_MAX,
             ],
         )
 
