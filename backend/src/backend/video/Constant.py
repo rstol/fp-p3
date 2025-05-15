@@ -12,9 +12,9 @@ class Constant:
     X_MAX = COURT_LENGTH
     Y_MIN = 0
     Y_MAX = COURT_WIDTH
-    COL_WIDTH = 0.1
+    COL_WIDTH = 0.4
     SCALE = 1.65
     FONTSIZE = 6
-    X_CENTER = X_MAX / 2 - DIFF / 1.5 + 0.10
+    X_CENTER = X_MAX / 2
     Y_CENTER = Y_MAX - DIFF / 1.5 - 3.2
     MESSAGE = "You can rerun the script and choose any event from 0 to "

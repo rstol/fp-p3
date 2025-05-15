@@ -9,4 +9,3 @@ class Player:
         self.id = player["playerid"]
         self.x = player["x"]
         self.y = player["y"]
-        self.color = self.team.color

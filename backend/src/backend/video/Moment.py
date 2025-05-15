@@ -12,4 +12,5 @@ class Moment:
         ball = moment["ball_coordinates"]  # Hardcoded position for ball in json
         self.ball = Ball(ball)
         players = moment["player_coordinates"]  # Hardcoded position for players in json
+
         self.players = [Player(player) for player in players]

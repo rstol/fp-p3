@@ -16,6 +16,9 @@ FPS = RAW_DATA_HZ / SAMPLING_RATE
 # Set matplotlib to use a non-interactive backend
 matplotlib.use("Agg")
 
+OFFENSE_COLOR = "#008348"
+DEFENSE_COLOR = "#006BB6"
+
 
 class Event:
     """A class for handling and showing events"""
@@ -36,6 +39,14 @@ class Event:
         player_names = [" ".join([player["firstname"], player["lastname"]]) for player in players]
         player_jerseys = [player["jersey"] for player in players]
         values = list(zip(player_names, player_jerseys, strict=False))
+
+        def get_color_by_id(teamid):
+            return OFFENSE_COLOR if event["possession_team_id"] == teamid else DEFENSE_COLOR
+
+        self.team_by_id = {
+            home["teamid"]: (get_color_by_id(home["teamid"]), home["name"]),
+            visitor["teamid"]: (get_color_by_id(visitor["teamid"]), visitor["name"]),
+        }
         # Example: 101108: ['Chris Paul', '3']
         self.player_ids_dict = dict(zip(player_ids, values, strict=False))
 
@@ -55,7 +66,7 @@ class Event:
 
     def generate_anim(self):
         # Leave some space for inbound passes
-        fig = plt.figure(figsize=(Constant.X_MAX / 10, Constant.Y_MAX / 10 + 0.2))
+        fig = plt.figure(figsize=(Constant.X_MAX / 10, Constant.Y_MAX / 10 + 0.45))
         ax = fig.add_subplot(1, 1, 1)
         ax.set_xlim(Constant.X_MIN, Constant.X_MAX)
         ax.set_ylim(Constant.Y_MIN, Constant.Y_MAX)
@@ -98,17 +109,20 @@ class Event:
 
         home_player = sorted_players[0]
         guest_player = sorted_players[5]
-        column_labels = tuple([home_player.team.name, guest_player.team.name])
-        column_colours = tuple([home_player.team.color, guest_player.team.color])
-        cell_colours = [column_colours]
+        cell_labels = (
+            self.team_by_id[home_player.team.id][1],
+            self.team_by_id[guest_player.team.id][1],
+        )
+        cell_colours = (
+            self.team_by_id[home_player.team.id][0],
+            self.team_by_id[guest_player.team.id][0],
+        )
 
         table = plt.table(
-            cellText=[column_labels],
-            # colLabels=column_labels,
-            # colColours=column_colours,
+            cellText=[cell_labels],
             colWidths=[Constant.COL_WIDTH, Constant.COL_WIDTH],
             loc="top",
-            cellColours=cell_colours,
+            cellColours=[cell_colours],
             fontsize=Constant.FONTSIZE,
             cellLoc="center",
         )
@@ -118,7 +132,9 @@ class Event:
             cell.get_text().set_color("white")
 
         player_circles = [
-            plt.Circle((0, 0), Constant.PLAYER_CIRCLE_SIZE, color=player.color)
+            plt.Circle(
+                (0, 0), Constant.PLAYER_CIRCLE_SIZE, color=self.team_by_id[player.team.id][0]
+            )
             for player in start_moment.players
         ]
         ball_circle = plt.Circle((0, 0), Constant.PLAYER_CIRCLE_SIZE, color=start_moment.ball.color)
