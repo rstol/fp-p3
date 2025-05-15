@@ -1,31 +1,23 @@
-import os
-import sys
-from pathlib import Path
-
-# this file lives in e.g. …/backend/src/backend/scripts/my_script.py
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# go up two levels to hit …/backend/src
-src_root = os.path.abspath(os.path.join(script_dir, "..", "src"))
-if src_root not in sys.path:
-    sys.path.insert(0, src_root)
+import multiprocessing
+from functools import partial
 
 from backend.resources.dataset_manager import DatasetManager
-from backend.settings import TRACKING_DIR
+from backend.settings import FRONTEND_PUBLIC_VIDEOS_DIR, TRACKING_DIR
 from backend.video.Event import Event
+
+
+def process_game(dataset_manager, game):
+    plays = dataset_manager.get_plays_for_game(game["game_id"])
+    home = dataset_manager.get_team_details(game["home_team_id"])
+    visitor = dataset_manager.get_team_details(game["visitor_team_id"])
+    for play in plays:
+        event = Event(play, home, visitor)
+        event.prerender(video_dir=FRONTEND_PUBLIC_VIDEOS_DIR)
+
 
 if __name__ == "__main__":
     dataset_manager = DatasetManager(TRACKING_DIR)
+    games = dataset_manager.get_games()
 
-    games = dataset_manager.get_games()[
-        :2
-    ]  # BE AWARE that the [:2] is only for debugging
-
-    for game in games:
-        home = dataset_manager.get_team_details(game["home_team_id"])
-        visitor = dataset_manager.get_team_details(game["visitor_team_id"])
-        plays = dataset_manager.get_plays_for_game(game["game_id"])[
-            :3
-        ]  # BE AWARE that the [:3] is only for debugging
-        for play in plays:
-            event = Event(play, home, visitor)
-            event.prerender()
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        pool.map(partial(process_game, dataset_manager), games)

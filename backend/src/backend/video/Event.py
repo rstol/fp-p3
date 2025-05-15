@@ -32,9 +32,7 @@ class Event:
         guest_players = visitor["players"]
         players = home_players + guest_players
         player_ids = [player["playerid"] for player in players]
-        player_names = [
-            " ".join([player["firstname"], player["lastname"]]) for player in players
-        ]
+        player_names = [" ".join([player["firstname"], player["lastname"]]) for player in players]
         player_jerseys = [player["jersey"] for player in players]
         values = list(zip(player_names, player_jerseys, strict=False))
         # Example: 101108: ['Chris Paul', '3']
@@ -131,9 +129,7 @@ class Event:
             plt.Circle((0, 0), Constant.PLAYER_CIRCLE_SIZE, color=player.color)
             for player in start_moment.players
         ]
-        ball_circle = plt.Circle(
-            (0, 0), Constant.PLAYER_CIRCLE_SIZE, color=start_moment.ball.color
-        )
+        ball_circle = plt.Circle((0, 0), Constant.PLAYER_CIRCLE_SIZE, color=start_moment.ball.color)
         for circle in player_circles:
             ax.add_patch(circle)
         ax.add_patch(ball_circle)
@@ -180,9 +176,7 @@ class Event:
             Raw binary MP4 data that can be sent directly in a Flask response.
         """
         if load_prerendered:
-            filename = os.path.join(
-                VIDEO_DATA_DIR, f"{self.game_id}_{self.event_id}.mp4"
-            )
+            filename = os.path.join(VIDEO_DATA_DIR, f"{self.game_id}_{self.event_id}.mp4")
 
             if os.path.exists(filename):
                 with open(filename, "rb") as f:
@@ -206,12 +200,13 @@ class Event:
 
         return video_data
 
-    def prerender(self, fps=FPS, bitrate=-1):
+    def prerender(self, video_dir=VIDEO_DATA_DIR, fps=FPS, bitrate=-1):
         fig, anim = self.generate_anim()
 
-        filename = os.path.join(VIDEO_DATA_DIR, f"{self.game_id}_{self.event_id}.mp4")
+        game_dir = os.path.join(video_dir, self.game_id)
+        os.makedirs(game_dir, exist_ok=True)
 
         writer = FFMpegWriter(fps=fps, bitrate=bitrate, codec="h264")
-        anim.save(filename, writer=writer)
+        anim.save(f"{game_dir}/{self.event_id}.mp4", writer=writer)
 
         plt.close(fig)

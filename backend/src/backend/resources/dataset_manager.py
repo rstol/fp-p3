@@ -1,12 +1,16 @@
+import os
+
 import polars as pl
 from polars import DataFrame
 
-from backend.settings import TEAM_IDS_SAMPLE
+from backend.settings import TEAM_IDS_SAMPLE, VIDEO_DATA_DIR
 from backend.video.Event import Event
 
 
 class DatasetManager:
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: str | None) -> None:
+        if not data_dir or not os.path.exists(data_dir):
+            raise ValueError("Data directory given to DatasetManager does not exist")
         self.data_dir = data_dir
 
         self.teams = pl.read_ndjson(f"{self.data_dir}/teams.jsonl")
@@ -56,11 +60,16 @@ class DatasetManager:
             return pl.DataFrame()
 
     def get_play_video(self, game_id: str, event_id: str) -> bytes | None:
-        event_raw = self.get_play_raw_data(game_id, event_id)
-        game = self.get_game_details(game_id)
-        if not game:
-            return None
-        home = self.get_team_details(game["home_team_id"])
-        visitor = self.get_team_details(game["visitor_team_id"])
-        event = Event(event_raw, home, visitor)
-        return event.generate_mp4()
+        prerender_file = os.path.join(VIDEO_DATA_DIR, game_id, f"{event_id}.mp4")
+        try:
+            with open(prerender_file, "rb") as f:
+                return f.read()
+        except FileNotFoundError:
+            event_raw = self.get_play_raw_data(game_id, event_id)
+            game = self.get_game_details(game_id)
+            if not game:
+                return None
+            home = self.get_team_details(game["home_team_id"])
+            visitor = self.get_team_details(game["visitor_team_id"])
+            event = Event(event_raw, home, visitor)
+            return event.generate_mp4()

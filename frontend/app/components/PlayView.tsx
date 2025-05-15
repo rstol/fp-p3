@@ -140,13 +140,24 @@ export default function PlayView() {
 
     const fetchPlayDetails = async () => {
       try {
-        const res = await fetch(
-          `${BASE_URL}/plays/${selectedPlay.game_id}/${selectedPlay.event_id}/video`,
-        );
-        const arrayBuffer = await res.arrayBuffer();
-        const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
-        const videoURL = URL.createObjectURL(blob);
-        setPlayDetails({ videoURL });
+        const publicPath = `/public/videos/${selectedPlay.game_id}/${selectedPlay.event_id}.mp4`;
+
+        // Try to fetch from public folder first
+        const checkPublic = await fetch(publicPath, { method: 'HEAD' }).catch(() => ({
+          ok: false,
+        }));
+
+        if (checkPublic.ok) {
+          setPlayDetails({ videoURL: publicPath });
+        } else {
+          const res = await fetch(
+            `${BASE_URL}/plays/${selectedPlay.game_id}/${selectedPlay.event_id}/video`,
+          );
+          const arrayBuffer = await res.arrayBuffer();
+          const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
+          const videoURL = URL.createObjectURL(blob);
+          setPlayDetails({ videoURL });
+        }
       } catch (error) {
         console.error('Failed to fetch play details:', error);
       }

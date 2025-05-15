@@ -105,7 +105,6 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "datasets" },
-    { name = "ffmpeg" },
     { name = "flask" },
     { name = "flask-cors" },
     { name = "flask-restful" },
@@ -137,7 +136,6 @@ train = [
 [package.metadata]
 requires-dist = [
     { name = "datasets", specifier = ">=3.4.1" },
-    { name = "ffmpeg", specifier = ">=1.4" },
     { name = "flask", specifier = ">=3.1.0" },
     { name = "flask-cors", specifier = ">=5.0.1" },
     { name = "flask-restful", specifier = ">=0.3.10" },
@@ -460,12 +458,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/66/75/955527414371843f558234df66fa0b62c6e86e71e4022b1be9333ac6004c/faiss_cpu-1.11.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:6c482d07194638c169b4422774366e7472877d09181ea86835e782e6304d4185", size = 31287635 },
     { url = "https://files.pythonhosted.org/packages/50/51/35b7a3f47f7859363a367c344ae5d415ea9eda65db0a7d497c7ea2c0b576/faiss_cpu-1.11.0-cp313-cp313-win_amd64.whl", hash = "sha256:13eac45299532b10e911bff1abbb19d1bf5211aa9e72afeade653c3f1e50e042", size = 15005455 },
 ]
-
-[[package]]
-name = "ffmpeg"
-version = "1.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f0/cc/3b7408b8ecf7c1d20ad480c3eaed7619857bf1054b690226e906fdf14258/ffmpeg-1.4.tar.gz", hash = "sha256:6931692c890ff21d39938433c2189747815dca0c60ddc7f9bb97f199dba0b5b9", size = 5055 }
 
 [[package]]
 name = "filelock"
