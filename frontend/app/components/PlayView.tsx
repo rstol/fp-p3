@@ -143,7 +143,7 @@ export default function PlayView() {
     seIsLoadingVideo(true);
     const fetchPlayDetails = async () => {
       try {
-        const publicPath = `/public/videos/${selectedPlay.game_id}/${selectedPlay.event_id}.mp4`;
+        const publicPath = `videos/${selectedPlay.game_id}/${selectedPlay.event_id}.mp4`;
 
         // Try to fetch from public folder first
         const checkPublic = await fetch(publicPath, { method: 'HEAD' }).catch(() => ({
