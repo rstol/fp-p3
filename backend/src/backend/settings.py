@@ -9,9 +9,6 @@ TRACKING_DIR = os.getenv("TRACKING_DIR")
 GAMES_DIR = os.getenv("GAMES_DIR")
 DATA_DIR = os.getenv("DATA_DIR")
 VIDEO_DATA_DIR = f"{DATA_DIR}/videos"
-FRONTEND_PUBLIC_VIDEOS_DIR = os.path.abspath(
-    os.path.join(DATA_DIR, "..", "..", "frontend/public/videos")
-)
 EXPERIMENTS_DIR = os.getenv("EXPERIMENTS_DIR")
 EMBEDDINGS_DIR = f"{DATA_DIR}/embeddings"
 

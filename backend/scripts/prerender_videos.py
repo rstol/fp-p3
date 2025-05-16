@@ -1,9 +1,15 @@
 import multiprocessing
+import os
 from functools import partial
 
 from backend.resources.dataset_manager import DatasetManager
-from backend.settings import FRONTEND_PUBLIC_VIDEOS_DIR, TRACKING_DIR
+from backend.settings import TRACKING_DIR
 from backend.video.Event import Event
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_PUBLIC_VIDEOS_DIR = os.path.abspath(
+    os.path.join(script_dir, "..", "..", "frontend/public/videos")
+)
 
 
 def process_game(dataset_manager, game):
