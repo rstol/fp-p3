@@ -3,7 +3,7 @@ import os
 import polars as pl
 from polars import DataFrame
 
-from backend.settings import TEAM_IDS_SAMPLE, VIDEO_DATA_DIR
+from backend.settings import VIDEO_DATA_DIR
 from backend.video.Event import Event
 
 
@@ -17,9 +17,7 @@ class DatasetManager:
         self.games = pl.read_ndjson(f"{self.data_dir}/games.jsonl")
 
     def get_teams(self) -> list[dict[str, str | int | list[dict[str, str | int]]]]:
-        return self.teams.filter(
-            pl.col("teamid").is_in(TEAM_IDS_SAMPLE)
-        ).to_dicts()  # Restrict to home teams with embeddings
+        return self.teams.to_dicts()
 
     def get_team_details(self, team_id: str) -> dict[str, str] | None:
         team_id = int(team_id)
@@ -49,15 +47,19 @@ class DatasetManager:
         return plays.to_dicts() if as_dicts else plays
 
     def get_play_raw_data(self, game_id: str, play_id: str) -> dict[str, str] | None:
-        plays = self._load_game_plays(game_id).fill_null("")
+        plays = self._load_game_plays(game_id).fill_null("").fill_nan(0)
         play_dicts = plays.filter(pl.col("event_id") == play_id).head(1).to_dicts()
         return play_dicts[0] if len(play_dicts) > 0 else None
 
-    def _load_game_plays(self, game_id: str) -> DataFrame:
-        try:
-            return pl.read_parquet(f"{self.data_dir}/plays/{game_id}.parquet")
-        except FileNotFoundError:
-            return pl.DataFrame()
+    def get_play_details(self, game_id: str, play_id: str) -> dict[str, str] | None:
+        # TODO use play Object abstraction instead of raw dict
+        play = self.get_play_raw_data(game_id, play_id)
+        if play:
+            play["possession_team_id"] = int(play["possession_team_id"])
+            del play["moments"]
+            del play["primary_player_info"]
+            del play["secondary_player_info"]
+        return play
 
     def get_play_video(self, game_id: str, event_id: str) -> bytes | None:
         prerender_file = os.path.join(VIDEO_DATA_DIR, game_id, f"{event_id}.mp4")
@@ -73,3 +75,9 @@ class DatasetManager:
             visitor = self.get_team_details(game["visitor_team_id"])
             event = Event(event_raw, home, visitor)
             return event.generate_mp4()
+
+    def _load_game_plays(self, game_id: str) -> DataFrame:
+        try:
+            return pl.read_parquet(f"{self.data_dir}/plays/{game_id}.parquet")
+        except FileNotFoundError:
+            return pl.DataFrame()

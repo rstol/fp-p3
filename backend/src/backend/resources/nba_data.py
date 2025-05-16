@@ -66,6 +66,18 @@ class PlayVideoResource(Resource):
             return {"error": "Invalid play ID format"}, 400
 
 
+class PlayDetailsResource(Resource):
+    def get(self, game_id: str, event_id: str):
+        try:
+            play = dataset_manager.get_play_details(game_id, event_id)
+            if play:
+                return jsonify(play)
+            return {"error": "Play not found"}, 404
+        except ValueError as err:
+            print(err)
+            return {"error": "Invalid play ID format"}, 400
+
+
 if __name__ == "__main__":
     """Use for debugging"""
     play_video = PlayVideoResource()
