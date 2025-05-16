@@ -4,10 +4,10 @@ import { ClusterDetailsSkeleton } from './LoaderSkeletons';
 
 export default function ClusterView() {
   // TODO get this info for the currently selected cluster
-  const selectedPlay = useDashboardStore((state) => state.selectedPlay);
+  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const isLoading = false; // TODO fetching data
   if (isLoading) return <ClusterDetailsSkeleton />;
-  if (!selectedPlay) {
+  if (!selectedPoint) {
     return (
       <Card className="gap-4 border-none pt-1 shadow-none">
         <CardHeader>
@@ -22,7 +22,7 @@ export default function ClusterView() {
   return (
     <Card className="gap-4 border-none pb-1 shadow-none">
       <CardHeader>
-        <CardTitle>Cluster {selectedPlay?.cluster} Statistics</CardTitle>
+        <CardTitle>Cluster {selectedPoint?.cluster} Statistics</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="divide-y divide-solid">

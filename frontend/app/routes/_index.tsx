@@ -85,13 +85,16 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   purgeCacheIfNeeded();
   const url = new URL(request.url);
   const teamID = url.searchParams.get('teamid');
-  let timeframe = isNaN(Number(url.searchParams.get('timeframe')))
-    ? GameFilter.LAST5
-    : Number(url.searchParams.get('timeframe'));
+  const timeframeUrl = url.searchParams.get('timeframe');
+  let timeframe =
+    isNaN(Number(timeframeUrl)) || timeframeUrl === null
+      ? GameFilter.LAST3
+      : Number(url.searchParams.get('timeframe'));
 
   const games = await (teamID
     ? fetchWithCache<Game[]>(`${BASE_URL}/teams/${teamID}/games`)
     : Promise.resolve(null));
+
   const totalGames = games?.length ?? 0;
   timeframe = Math.min(totalGames, timeframe);
 

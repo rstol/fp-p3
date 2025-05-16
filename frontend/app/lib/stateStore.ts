@@ -1,44 +1,44 @@
 import { create } from 'zustand';
-import type { Play } from '~/types/data';
+import type { Point, Play } from '~/types/data';
 
 // Helper to generate a unique ID for a play
-const getPlayId = (play: Play): string => `${play.game_id}-${play.event_id}`;
+const getPlayId = (play: Play | Point): string => `${play.game_id}-${play.event_id}`;
 
 type State = {
-  selectedPlay: Play | null;
+  selectedPoint: Point | null;
   pendingClusterUpdates: Map<string, number>;
   stagedChangesCount: number;
   selectedTeamId: string | null;
 };
 
 type Action = {
-  updatePlay: (play: Play) => void;
-  resetPlay: () => void;
+  updatePoint: (point: Point) => void;
+  resetPoint: () => void;
   stageSelectedPlayClusterUpdate: (clusterId: number) => void;
   clearPendingClusterUpdates: () => void;
   setSelectedTeamId: (teamId: string | null) => void;
 };
 
 export const useDashboardStore = create<State & Action>((set) => ({
-  selectedPlay: null,
+  selectedPoint: null,
   pendingClusterUpdates: new Map<string, number>(),
   stagedChangesCount: 0,
   selectedTeamId: null,
-  updatePlay: (selectedPlay) => set(() => ({ selectedPlay })),
-  resetPlay: () =>
+  updatePoint: (selectedPoint) => set(() => ({ selectedPoint })),
+  resetPoint: () =>
     set(() => ({
-      selectedPlay: null,
+      selectedPoint: null,
     })),
   stageSelectedPlayClusterUpdate: (clusterId) =>
     set((state) => {
-      const { selectedPlay, pendingClusterUpdates } = state;
-      if (selectedPlay) {
-        const playId = getPlayId(selectedPlay);
+      const { selectedPoint, pendingClusterUpdates } = state;
+      if (selectedPoint) {
+        const playId = getPlayId(selectedPoint);
         const newPendingUpdates = new Map(pendingClusterUpdates);
         newPendingUpdates.set(playId, clusterId);
 
         return {
-          selectedPlay: { ...selectedPlay, cluster: clusterId },
+          selectedPoint: { ...selectedPoint, cluster: clusterId },
           pendingClusterUpdates: newPendingUpdates,
           stagedChangesCount: newPendingUpdates.size,
         };

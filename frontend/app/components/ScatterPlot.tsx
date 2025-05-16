@@ -134,36 +134,29 @@ function InfoBar() {
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const loaderData = useLoaderData<typeof clientLoader>();
   const rawPointsFromLoader = loaderData?.scatterData?.points ?? [];
+  const games = loaderData?.games ?? [];
+  const { timeframe } = loaderData;
 
-  const selectedPlay = useDashboardStore((state) => state.selectedPlay);
-  const updatePlay = useDashboardStore((state) => state.updatePlay);
-  const resetPlayStore = useDashboardStore((state) => state.resetPlay);
+  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
+  const updatePoint = useDashboardStore((state) => state.updatePoint);
+  const resetPoint = useDashboardStore((state) => state.resetPoint);
 
   const [searchParams] = useSearchParams();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
 
-  const baseDataForPlot = useMemo(() => {
-    let filteredPoints = rawPointsFromLoader || [];
-    return filteredPoints;
-  }, [rawPointsFromLoader, searchParams]);
-
-  const [plotData, setPlotData] = useState<Point[]>(baseDataForPlot);
+  const [plotData, setPlotData] = useState<Point[]>(rawPointsFromLoader);
 
   useEffect(() => {
-    setPlotData(baseDataForPlot);
-  }, [baseDataForPlot]);
-
-  useEffect(() => {
-    if (selectedPlay) {
+    if (selectedPoint) {
       setPlotData((currentPlotData) =>
         currentPlotData.map((p) =>
-          getPlayId(p) === getPlayId(selectedPlay) ? { ...p, cluster: selectedPlay.cluster } : p,
+          getPlayId(p) === getPlayId(selectedPoint) ? { ...p, cluster: selectedPoint.cluster } : p,
         ),
       );
     }
-  }, [selectedPlay]);
+  }, [selectedPoint]);
 
   const color = d3.scaleOrdinal(d3.schemeCategory10);
 
@@ -288,7 +281,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .style('fill', 'none')
       .style('pointer-events', 'all')
       .on('click', () => {
-        // if (resetPlayStore) resetPlayStore();
+        // if (resetPoint) resetPoint();
       });
 
     const uniqueClusters = Array.from(new Set(plotData.map((d) => d.cluster)));
@@ -325,7 +318,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .data(plotData)
       .join('circle')
       .attr('r', (d) => {
-        const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
+        const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
         return isSelected ? 8 : 5;
       })
       .attr('cx', (d) => xScale(d.x))
@@ -333,18 +326,18 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .attr('class', (d) => `cluster-${d.cluster}`)
       .attr('fill', (d) => color(String(d.cluster)))
       .attr('stroke', (d) => {
-        const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
+        const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
         return isSelected ? 'black' : 'white';
       })
       .attr('stroke-width', (d) => {
-        const isSelected = selectedPlay && getPlayId(selectedPlay) === getPlayId(d);
+        const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
         return isSelected ? 2 : 1;
       })
       .attr('cursor', 'pointer')
       .on('click', (event, play) => {
         event.stopPropagation();
-        if (!selectedPlay || getPlayId(selectedPlay) !== getPlayId(play)) {
-          updatePlay(play);
+        if (!selectedPoint || getPlayId(selectedPoint) !== getPlayId(play)) {
+          updatePoint(play);
         }
       })
       .on('mouseover', (event, d) => {
@@ -375,16 +368,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     if (g.node()) {
       g.attr('transform', currentTransform.toString());
     }
-  }, [
-    plotData,
-    selectedPlay,
-    svgRef,
-    color,
-    updatePlay,
-    zoomBehavior,
-    currentTransform,
-    resetPlayStore,
-  ]);
+  }, [plotData, selectedPoint, svgRef, updatePoint, zoomBehavior, currentTransform, resetPoint]);
 
   useEffect(() => {
     if (svgRef.current) {

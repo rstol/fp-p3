@@ -1,14 +1,16 @@
 import { Check, Edit } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useFetcher, useLoaderData } from 'react-router';
+import { BASE_URL, EventType } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
+import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { useFetcher } from 'react-router';
-import { BASE_URL } from '~/lib/const';
-import { Skeleton } from './ui/skeleton';
+import type { clientLoader } from '~/routes/_index';
+import type { Team } from '~/types/data';
 
 interface ClientActionResult {
   success: boolean;
@@ -108,12 +110,21 @@ function EditableField({
   );
 }
 
-type PlayDetails = {
-  videoURL: string;
+export type PlayDetails = {
+  game_id: string;
+  event_id: string;
+  event_type?: number;
+  event_score?: string;
+  possession_team_id?: number;
+  event_desc_home?: string;
+  event_desc_away?: string;
+  period?: number;
+  videoURL?: string;
+  offenseTeam?: Team;
 };
 
 export default function PlayView() {
-  const selectedPlay = useDashboardStore((state) => state.selectedPlay);
+  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const stageSelectedPlayClusterUpdate = useDashboardStore(
     (state) => state.stageSelectedPlayClusterUpdate,
   );
@@ -122,8 +133,9 @@ export default function PlayView() {
   const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
   const [playDetails, setPlayDetails] = useState<PlayDetails | null>(null);
-  const [isLoadingVideo, seIsLoadingVideo] = useState(false);
-
+  const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
+  const data = useLoaderData<typeof clientLoader>();
+  const teams = data?.teams ?? [];
   const fetcher = useFetcher<ClientActionResult>();
 
   useEffect(() => {
@@ -138,40 +150,50 @@ export default function PlayView() {
   }, [fetcher.state, fetcher.data, clearPendingClusterUpdates]);
 
   useEffect(() => {
-    if (!selectedPlay) return;
+    if (!selectedPoint) return;
 
-    seIsLoadingVideo(true);
+    seIsLoadingPlayDetails(true);
     const fetchPlayDetails = async () => {
       try {
-        const publicPath = `videos/${selectedPlay.game_id}/${selectedPlay.event_id}.mp4`;
+        let publicVideoPath = `videos/${selectedPoint.game_id}/${selectedPoint.event_id}.mp4`;
 
         // Try to fetch from public folder first
-        const checkPublic = await fetch(publicPath, { method: 'HEAD' }).catch(() => ({
+        const checkPublicVideo = await fetch(publicVideoPath, { method: 'HEAD' }).catch(() => ({
           ok: false,
         }));
 
-        if (checkPublic.ok) {
-          setPlayDetails({ videoURL: publicPath });
-        } else {
+        const resDetails = await fetch(
+          `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}/details`,
+        );
+        if (!resDetails.ok) throw new Error();
+        const playDetails = await resDetails.json();
+
+        if (!checkPublicVideo.ok) {
           const res = await fetch(
-            `${BASE_URL}/plays/${selectedPlay.game_id}/${selectedPlay.event_id}/video`,
+            `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}/video`,
           );
           const arrayBuffer = await res.arrayBuffer();
           const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
-          const videoURL = URL.createObjectURL(blob);
-          setPlayDetails({ videoURL });
+          publicVideoPath = URL.createObjectURL(blob);
         }
+
+        const offenseTeam = teams.find(
+          (team) => String(team.teamid) === String(playDetails.possession_team_id),
+        );
+        setPlayDetails({ ...playDetails, videoURL: publicVideoPath, offenseTeam });
       } catch (error) {
         console.error('Failed to fetch play details:', error);
+        // TODO update UI
+        throw Error(`Failed to fetch play details: ${error}`);
       } finally {
-        seIsLoadingVideo(false);
+        seIsLoadingPlayDetails(false);
       }
     };
 
     fetchPlayDetails();
-  }, [selectedPlay]);
+  }, [selectedPoint]);
 
-  if (!selectedPlay) {
+  if (!selectedPoint) {
     return (
       <Card className="gap-4 border-none pt-1 shadow-none">
         <CardHeader>
@@ -249,46 +271,58 @@ export default function PlayView() {
     }
   };
 
+  if (isLoadingPlayDetails) {
+    return <PlayDetailsSkeleton />;
+  }
+
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
       <CardHeader>
         <CardTitle>Selected Play Details</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isLoadingVideo ? (
-          <Skeleton className="mb-4 h-52 w-full" />
-        ) : (
-          playDetails?.videoURL && (
-            <video
-              key={playDetails.videoURL} // Force remount component on change
-              controls
-              autoPlay
-              disablePictureInPicture
-              disableRemotePlayback
-              loop
-              muted
-            >
-              <source src={playDetails.videoURL} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          )
+        {playDetails?.videoURL && (
+          <video
+            key={playDetails.videoURL} // Force remount component on change
+            controls
+            autoPlay
+            disablePictureInPicture
+            disableRemotePlayback
+            loop
+            muted
+          >
+            <source src={playDetails.videoURL} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         )}
         <div className="divide-y divide-solid text-sm">
-          {selectedPlay.game_date && (
-            <div className="flex gap-4 py-1">
-              <span className="shrink-0">Game Date:</span>
-              <span className="flex-1 text-right">
-                {selectedPlay.game_date ? selectedPlay.game_date : 'N/A'}
-              </span>
-            </div>
-          )}
-          <div className="flex gap-4 py-1">
-            <span className="shrink-0">Description Home:</span>
-            <span className="flex-1 text-right">{selectedPlay.event_desc_home}</span>
+          <div className="flex gap-4 pb-1">
+            <span className="shrink-0">Offense Team</span>
+            <span className="flex-1 text-right">{playDetails?.offenseTeam?.name}</span>
+          </div>
+          <div className="flex gap-4 pb-1">
+            <span className="shrink-0">Outcome</span>
+            <span className="flex-1 text-right">
+              {playDetails?.event_type ? EventType[playDetails.event_type] : 'N/A'}
+            </span>
+          </div>
+          <div className="flex gap-4 pb-1">
+            <span className="shrink-0">Game Date</span>
+            <span className="flex-1 text-right">
+              {playDetails?.game_id ?? selectedPoint.game_id}
+            </span>
+          </div>
+          <div className="flex gap-4 pb-1">
+            <span className="shrink-0">Period</span>
+            <span className="flex-1 text-right">{playDetails?.period || 'N/A'}</span>
           </div>
           <div className="flex gap-4 py-1">
-            <span className="shrink-0">Description Away:</span>
-            <span className="flex-1 text-right">{selectedPlay.event_desc_away}</span>
+            <span className="shrink-0">Description Home</span>
+            <span className="flex-1 text-right">{playDetails?.event_desc_home}</span>
+          </div>
+          <div className="flex gap-4 py-1">
+            <span className="shrink-0">Description Away</span>
+            <span className="flex-1 text-right">{playDetails?.event_desc_away}</span>
           </div>
         </div>
       </CardContent>
@@ -297,7 +331,7 @@ export default function PlayView() {
           id="play_cluster"
           label="Play Cluster"
           placeholder="Set Cluster ID..."
-          value={selectedPlay.cluster}
+          value={selectedPoint.cluster}
           onSave={handleClusterChange}
         />
         <EditableField
@@ -308,7 +342,7 @@ export default function PlayView() {
           onSave={(newNote) => {
             console.log('Play Note saved:', newNote);
             // TODO: Implement saving logic for play note (update store, API call)
-            // Example: if (selectedPlay) { updateSelectedPlayNote(newNote); }
+            // Example: if (selectedPoint) { updateSelectedPlayNote(newNote); }
           }}
         />
 

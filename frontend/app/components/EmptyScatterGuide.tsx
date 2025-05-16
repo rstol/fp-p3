@@ -2,10 +2,12 @@ import { Link, NavLink, useLoaderData } from 'react-router';
 import { clientLoader } from '~/routes/_index';
 import type { Team } from '~/types/data';
 import { Button } from './ui/button';
+import { TeamIDs } from '~/lib/const';
 
 export default function EmptyScatterGuide() {
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
+  const filteredTeams = teams.filter((team) => TeamIDs.includes(team.teamid));
   return (
     <div className="flex h-full w-full flex-col items-center justify-center p-6">
       <h2 className="mb-2 text-xl font-medium">Select a Team to View Play Data</h2>
@@ -15,7 +17,7 @@ export default function EmptyScatterGuide() {
       </p>
 
       <div className="flex flex-wrap justify-center">
-        {teams.map((team) => (
+        {filteredTeams.map((team) => (
           <TeamThumbnail key={team.teamid} team={team} isSelected={false} />
         ))}
       </div>
