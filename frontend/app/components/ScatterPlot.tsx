@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Circle, Info, Minus, Plus, RefreshCcw } from 'lucide-react';
+import { Circle, GrabIcon, Info, Minus, Move, Plus, RefreshCcw, ZoomIn } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import type { clientLoader } from '~/routes/_index';
@@ -126,7 +126,50 @@ function InfoBar() {
           </Tooltip>
         </TooltipProvider>
       </div>
-      <div className="text-xs text-gray-500">Powered by D3.js</div>
+      {/* Control hints */}
+      <div className="flex items-center gap-3">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <GrabIcon className="h-3 w-3" />
+                <span>Drag points</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Drag points to reassign clusters</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Move className="h-3 w-3" />
+                <span>Pan</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Drag the background to pan</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <ZoomIn className="h-3 w-3" />
+                <span>Zoom</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Use mouse wheel to zoom</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
     </div>
   );
 }
@@ -141,7 +184,6 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const updatePoint = useDashboardStore((state) => state.updatePoint);
   const resetPoint = useDashboardStore((state) => state.resetPoint);
 
-  const [searchParams] = useSearchParams();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
@@ -160,16 +202,33 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
   const color = d3.scaleOrdinal(d3.schemeCategory10);
 
-  const zoomBehavior = useMemo(
-    () =>
-      d3
-        .zoom<SVGSVGElement, unknown>()
-        .scaleExtent([0.5, 20])
-        .on('zoom', (event) => {
-          setCurrentTransform(event.transform);
-        }),
-    [],
+  const zoomed = useCallback(
+    ({ transform }: d3.D3ZoomEvent<Element, unknown> | { transform: d3.ZoomTransform }) => {
+      setCurrentTransform(transform);
+
+      const container = d3.select(svgRef.current).select('g');
+      container.attr('transform', transform as any);
+
+      // Keep point radius and stroke width constant
+      container
+        .selectAll('circle')
+        .attr('r', function (d: any) {
+          const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+          return isSelected ? 8 / transform.k : 5 / transform.k;
+        })
+        .attr('stroke', function (d: any) {
+          const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+          return isSelected ? 'black' : 'white';
+        })
+        .attr('stroke-width', function (d: any) {
+          const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+          return isSelected ? 2 / transform.k : 1 / transform.k;
+        });
+      container.selectAll('path').attr('stroke-width', 0.8 / transform.k); // contour
+    },
+    [selectedPoint],
   );
+  const zoom = d3.zoom().scaleExtent([1, 50]).on('zoom', zoomed);
 
   const zoomIntoCluster = useCallback(
     (clusterId: string) => {
@@ -201,31 +260,16 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
       const tx = viewBoxWidth / 2 - (k * (xScale(xExtent[0]) + xScale(xExtent[1]))) / 2;
       const ty = viewBoxHeight / 2 - (k * (yScale(yExtent[0]) + yScale(yExtent[1]))) / 2;
+      const transform = d3.zoomIdentity.translate(tx, ty).scale(k);
 
       svg
         .transition()
         .duration(750)
-        .call(zoomBehavior.transform as any, d3.zoomIdentity.translate(tx, ty).scale(k));
+        .call(zoom.transform as any, transform);
       setZoomedCluster(clusterId);
     },
-    [plotData, zoomBehavior],
+    [plotData, zoom],
   );
-
-  const reset = useCallback(() => {
-    setZoomedCluster(null);
-    d3.select(svgRef.current)
-      .transition()
-      .duration(750)
-      .call(zoomBehavior.transform as any, d3.zoomIdentity);
-  }, [zoomBehavior]);
-
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    (svg as any).zoomIn = () => zoomBehavior.scaleBy(d3.select(svg), 1.2);
-    (svg as any).zoomOut = () => zoomBehavior.scaleBy(d3.select(svg), 0.8);
-    (svg as any).zoomReset = reset;
-  }, [zoomBehavior, reset]);
 
   const handlePointDrag = (selection: d3.Selection<any, Point, any, any>) => {
     function dragstarted(
@@ -263,7 +307,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     svg.selectAll('*').remove();
 
     const container = svg.append('g').attr('class', 'all-content');
-    svg.call(zoomBehavior as any).on('dblclick.zoom', null);
+    svg.call(zoom as any).on('dblclick.zoom', null);
 
     const xScale = d3
       .scaleLinear()
@@ -283,6 +327,20 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .on('click', () => {
         // if (resetPoint) resetPoint();
       });
+
+    function reset() {
+      setZoomedCluster(null);
+      svg
+        .transition()
+        .duration(750)
+        .call(zoom.transform as any, d3.zoomIdentity);
+    }
+
+    Object.assign(svg.node() as {}, {
+      zoomIn: () => svg.transition().call(zoom.scaleBy as any, 2),
+      zoomOut: () => svg.transition().call(zoom.scaleBy as any, 0.5),
+      zoomReset: reset,
+    });
 
     const uniqueClusters = Array.from(new Set(plotData.map((d) => d.cluster)));
     for (const clusterId of uniqueClusters) {
@@ -363,21 +421,11 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         container.selectAll('circle').attr('opacity', 1);
         return tooltip?.style('visibility', 'hidden');
       });
-
-    const g = d3.select(svgRef.current).select('g.all-content');
-    if (g.node()) {
-      g.attr('transform', currentTransform.toString());
-    }
-  }, [plotData, selectedPoint, svgRef, updatePoint, zoomBehavior, currentTransform, resetPoint]);
+  }, [plotData, selectedPoint, svgRef.current, updatePoint, resetPoint]);
 
   useEffect(() => {
-    if (svgRef.current) {
-      const g = d3.select(svgRef.current).select('g.all-content');
-      if (g.node()) {
-        g.attr('transform', currentTransform.toString());
-      }
-    }
-  }, [currentTransform]);
+    zoomed({ transform: currentTransform });
+  }, [plotData, selectedPoint, currentTransform]);
 
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
