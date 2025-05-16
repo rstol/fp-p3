@@ -1,112 +1,153 @@
-import { Check, Edit } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { useFetcher, useLoaderData } from 'react-router';
-import { BASE_URL, EventType } from '~/lib/const';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { type Tag, TagInput } from 'emblor';
+import { Check } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { useFetcher, useLoaderData, useSubmit } from 'react-router';
+import { z } from 'zod';
+import { BASE_URL, EventType, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
+import type { clientLoader } from '~/routes/_index';
+import type { Team } from '~/types/data';
 import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import type { clientLoader } from '~/routes/_index';
-import type { Team } from '~/types/data';
-
+import { clientAction } from '../routes/resources/update-play';
 interface ClientActionResult {
   success: boolean;
   error?: string;
   message?: string;
   data?: any; // Consider a more specific type for 'data' if known
 }
+const FormSchema = z.object({
+  clusters: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+    }),
+  ),
+  note: z.string().optional(),
+});
 
-function EditableField({
-  id,
-  label,
-  value: initialValue,
-  placeholder,
-  isTextarea = false,
-  onSave,
-}: {
-  id: string;
-  label: string;
-  value?: string | number;
-  placeholder: string;
-  isTextarea?: boolean;
-  onSave: (newValue: string) => void;
-}) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [currentValue, setCurrentValue] = useState(
-    initialValue !== undefined ? String(initialValue) : '',
+function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
+  const data = useLoaderData<typeof clientLoader>();
+  const clusterData = data?.scatterData?.points ?? [];
+  const clusters = Array.from(new Set(clusterData.map((d) => String(d.cluster)))).sort();
+  const stageSelectedPlayClusterUpdate = useDashboardStore(
+    (state) => state.stageSelectedPlayClusterUpdate,
   );
+  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
+  // TODO temporary transform: use data schema
+  const initialCluster = {
+    id: String(selectedPoint?.cluster),
+    text: String(selectedPoint?.cluster),
+  };
+  const initialTags = [...clusters].map((c) => ({ id: c, text: c }));
+  const form = useForm<z.infer<typeof FormSchema>>({
+    resolver: zodResolver(FormSchema),
+    defaultValues: {
+      clusters: [initialCluster],
+      note: '', //playDetails.note TODO
+    },
+  });
+  const [tags, setTags] = useState<Tag[]>([initialCluster]);
+  const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
+  const { setValue } = form;
+  let submit = useSubmit();
 
-  const inputRef = useRef<null | (HTMLTextAreaElement & HTMLInputElement)>(null);
+  function onSubmit(data: z.infer<typeof FormSchema>) {
+    console.log('submit', data);
+    // TODO save in backend instead of frontend
+    // submit(
+    //   {
+    //  action: PlayActions.UpdatePlayFields,
+    //  data
+    // },
+    //   { action: "/resources/play", method: "post" }
+    // );
+    handleClusterChange(data.clusters[0].text);
+  }
 
-  useEffect(() => {
-    setCurrentValue(initialValue !== undefined ? String(initialValue) : '');
-  }, [initialValue]);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
+  // TODO remove
+  const handleClusterChange = (newClusterValue: string) => {
+    const newClusterId = parseInt(newClusterValue, 10);
+    if (!isNaN(newClusterId)) {
+      stageSelectedPlayClusterUpdate(newClusterId);
+    } else {
+      console.warn('Invalid Play Cluster ID entered, not a number:', newClusterValue);
     }
-  }, [isEditing]);
-
-  function handleSaveInternal() {
-    setIsEditing(false);
-    onSave(currentValue);
-  }
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    handleSaveInternal();
-  }
+  };
+  //TODO define this
+  // const maxClusterId = Math.max(...clusters);
+  // const generateTagId = () => {
+  //   return String(maxClusterId + 1);
+  // };
 
   return (
-    <div className="grid w-full items-center gap-1">
-      <Label htmlFor={id} className="text-sm">
-        {label}
-      </Label>
-      {!isEditing ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-between border bg-gray-50 px-3! py-1! text-gray-700"
-          onClick={() => setIsEditing(true)}
-        >
-          {currentValue ? currentValue : <span className="text-gray-400">{placeholder}</span>}
-          <Edit size={6} />
-        </Button>
-      ) : (
-        <form className="flex gap-2" onSubmit={handleSubmit}>
-          {isTextarea ? (
-            <Textarea
-              id={id}
-              placeholder={placeholder}
-              value={currentValue}
-              onChange={(e) => setCurrentValue(e.target.value)}
-              className="flex-1"
-              rows={1}
-              ref={inputRef}
-              onBlur={handleSaveInternal}
-            />
-          ) : (
-            <Input
-              id={id}
-              type="text"
-              placeholder={placeholder}
-              value={currentValue}
-              onChange={(e) => setCurrentValue(e.target.value)}
-              className="flex-1"
-              ref={inputRef}
-              onBlur={handleSaveInternal}
-            />
-          )}
-          <Button type="submit" size="sm" className="h-9">
-            <Check size={6} />
-          </Button>
+    <>
+      <Form {...form}>
+        <form className="grid w-full items-center gap-2" onSubmit={form.handleSubmit(onSubmit)}>
+          <FormField
+            control={form.control}
+            name="clusters"
+            render={({ field }) => (
+              <FormItem className="flex flex-col items-start">
+                <FormLabel className="text-sm">Play Cluster</FormLabel>
+                <div className="flex w-full gap-2">
+                  <FormControl>
+                    <TagInput
+                      {...field}
+                      autocompleteOptions={initialTags}
+                      maxTags={1}
+                      tags={tags}
+                      inlineTags
+                      addTagsOnBlur
+                      styleClasses={{
+                        input: 'focus-visible:outline-none shadow-none w-full',
+                        tag: { body: 'h-7' },
+                      }}
+                      // generateTagId={generateTagId}
+                      enableAutocomplete
+                      placeholder="Select or create cluster"
+                      setTags={(newTags) => {
+                        setTags(newTags);
+                        setValue('clusters', newTags as [Tag, ...Tag[]]);
+                      }}
+                      activeTagIndex={activeTagIndex}
+                      setActiveTagIndex={setActiveTagIndex}
+                    />
+                  </FormControl>
+                  <Button onClick={form.handleSubmit(onSubmit)} size="sm" className="h-9 w-10">
+                    <Check size={6} />
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="note"
+            render={({ field }) => (
+              <FormItem className="flex flex-col items-start">
+                <FormLabel className="text-sm">Play Note</FormLabel>
+                <div className="flex w-full gap-2">
+                  <FormControl>
+                    <Input type="text" placeholder="Add a note..." {...field} />
+                  </FormControl>
+                  <Button type="submit" size="sm" className="h-9 w-10">
+                    <Check size={6} />
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </form>
-      )}
-    </div>
+      </Form>
+    </>
   );
 }
 
@@ -125,9 +166,6 @@ export type PlayDetails = {
 
 export default function PlayView() {
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
-  const stageSelectedPlayClusterUpdate = useDashboardStore(
-    (state) => state.stageSelectedPlayClusterUpdate,
-  );
   const stagedChangesCount = useDashboardStore((state) => state.stagedChangesCount);
   const pendingClusterUpdates = useDashboardStore((state) => state.pendingClusterUpdates);
   const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
@@ -136,18 +174,10 @@ export default function PlayView() {
   const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
-  const fetcher = useFetcher<ClientActionResult>();
-
-  useEffect(() => {
-    if (fetcher.state === 'idle' && fetcher.data) {
-      const result = fetcher.data;
-      if (result.success) {
-        clearPendingClusterUpdates();
-      } else if (result.error) {
-        console.error('[PlayView.tsx] Fetcher submission error:', result.error);
-      }
-    }
-  }, [fetcher.state, fetcher.data, clearPendingClusterUpdates]);
+  let submit = useSubmit();
+  const clusterDataFetcher = useFetcher<typeof clientAction>();
+  // TODO loader during updating the clusters
+  const isUpdating = clusterDataFetcher.state !== 'idle';
 
   useEffect(() => {
     if (!selectedPoint) return;
@@ -207,14 +237,7 @@ export default function PlayView() {
   }
 
   const onClickApplyChanges = async () => {
-    if (!selectedTeamId) {
-      console.error('[PlayView.tsx] No team selected. Cannot apply changes.');
-      return;
-    }
-    if (pendingClusterUpdates.size === 0) {
-      return;
-    }
-
+    // TODO change this
     const updatesToSend: { gameid: string; playid: number; cluster: number }[] = [];
     pendingClusterUpdates.forEach((newCluster, playIdKey) => {
       const parts = playIdKey.split('-');
@@ -251,24 +274,14 @@ export default function PlayView() {
       return;
     }
 
-    const payload = {
-      teamId: selectedTeamId,
-      updates: updatesToSend,
-    };
-
-    fetcher.submit(payload, {
-      method: 'POST',
-      encType: 'application/json',
-    });
-  };
-
-  const handleClusterChange = (newClusterValue: string) => {
-    const newClusterId = parseInt(newClusterValue, 10);
-    if (!isNaN(newClusterId)) {
-      stageSelectedPlayClusterUpdate(newClusterId);
-    } else {
-      console.warn('Invalid Play Cluster ID entered, not a number:', newClusterValue);
-    }
+    submit(
+      {
+        data: { teamId: selectedTeamId, updates: updatesToSend },
+        action: PlayActions.UpdateClusterAssignment,
+      },
+      { action: '/resources/play', method: 'post' },
+    );
+    clearPendingClusterUpdates();
   };
 
   if (isLoadingPlayDetails) {
@@ -327,27 +340,9 @@ export default function PlayView() {
         </div>
       </CardContent>
       <CardFooter className="flex-col items-start gap-2">
-        <EditableField
-          id="play_cluster"
-          label="Play Cluster"
-          placeholder="Set Cluster ID..."
-          value={selectedPoint.cluster}
-          onSave={handleClusterChange}
-        />
-        <EditableField
-          id="play_note"
-          label="Play Note"
-          placeholder="Add a note..."
-          isTextarea={true}
-          onSave={(newNote) => {
-            console.log('Play Note saved:', newNote);
-            // TODO: Implement saving logic for play note (update store, API call)
-            // Example: if (selectedPoint) { updateSelectedPlayNote(newNote); }
-          }}
-        />
-
+        <PlayForm playDetails={playDetails} />
         {stagedChangesCount > 0 && (
-          <div className="mt-6 flex w-full items-center justify-end border-t pt-4">
+          <div className="mt-6 flex w-full items-center justify-end">
             <Button
               size="sm"
               disabled={stagedChangesCount === 0 || !selectedTeamId}

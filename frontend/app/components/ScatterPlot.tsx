@@ -128,7 +128,7 @@ function InfoBar() {
       </div>
       {/* Control hints */}
       <div className="flex items-center gap-3">
-        <TooltipProvider>
+        {/* <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex items-center gap-1 text-xs text-gray-500">
@@ -140,7 +140,7 @@ function InfoBar() {
               <p>Drag points to reassign clusters</p>
             </TooltipContent>
           </Tooltip>
-        </TooltipProvider>
+        </TooltipProvider> */}
 
         <TooltipProvider>
           <Tooltip>
@@ -176,7 +176,7 @@ function InfoBar() {
 
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const loaderData = useLoaderData<typeof clientLoader>();
-  const rawPointsFromLoader = loaderData?.scatterData?.points ?? [];
+  const clusterData = loaderData?.scatterData?.points ?? [];
   const games = loaderData?.games ?? [];
   const { timeframe } = loaderData;
 
@@ -187,8 +187,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
-
-  const [plotData, setPlotData] = useState<Point[]>(rawPointsFromLoader);
+  const [plotData, setPlotData] = useState<Point[]>(clusterData);
 
   useEffect(() => {
     if (selectedPoint) {
@@ -429,7 +428,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
-  const clustersForLegend = Array.from(new Set(plotData.map((d) => String(d.cluster)))).sort();
+  const clusters = Array.from(new Set(plotData.map((d) => String(d.cluster)))).sort();
 
   return (
     <div className="flex flex-col">
@@ -441,7 +440,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         <div className="relative">
           <Filters teamID={teamID} />
           <Legend
-            clusters={clustersForLegend}
+            clusters={clusters}
             color={color}
             zoomedCluster={zoomedCluster}
             onSelectCluster={zoomIntoCluster}

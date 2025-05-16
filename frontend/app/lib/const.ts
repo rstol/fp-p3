@@ -26,3 +26,8 @@ export const EventType: Record<number, string> = {
   12: 'start_period',
   13: 'end_period',
 };
+
+export enum PlayActions {
+  UpdatePlayFields = 'UpdatePlayFields',
+  UpdateClusterAssignment = 'UpdateClusterAssignment',
+}

@@ -232,7 +232,7 @@ export function PlaysTable({ title }: { title: string }) {
   // Action handlers
   function handleEditTag(play: Play) {
     setSelectedPlay(play);
-    setEditTag(play.clusterId);
+    setEditTag(String(play.clusterId));
     setTagDialogOpen(true);
   }
 
@@ -254,7 +254,7 @@ export function PlaysTable({ title }: { title: string }) {
     // Use the tag from the first play as initial value, or empty string if plays have different tags
     const firstTag = plays[0]?.clusterId || '';
     const allSameTag = plays.every((play) => play.clusterId === firstTag);
-    setEditTag(allSameTag ? firstTag : '');
+    setEditTag(String(allSameTag ? firstTag : ''));
     setTagDialogOpen(true);
   }
 
@@ -483,15 +483,15 @@ export function PlaysTable({ title }: { title: string }) {
       <div className="flex items-center justify-between py-4">
         <div className="flex gap-2">
           <Input
-            placeholder="Filter by tag..."
-            value={(table.getColumn('playTag')?.getFilterValue() as string) ?? ''}
-            onChange={(event) => table.getColumn('playTag')?.setFilterValue(event.target.value)}
+            placeholder="Filter by note..."
+            value={(table.getColumn('playNote')?.getFilterValue() as string) ?? ''}
+            onChange={(event) => table.getColumn('playNote')?.setFilterValue(event.target.value)}
             className="max-w-sm"
           />
           <Input
             placeholder="Filter by team..."
-            value={(table.getColumn('homeTeam')?.getFilterValue() as string) ?? ''}
-            onChange={(event) => table.getColumn('homeTeam')?.setFilterValue(event.target.value)}
+            value={(table.getColumn('awayTeam')?.getFilterValue() as string) ?? ''}
+            onChange={(event) => table.getColumn('awayTeam')?.setFilterValue(event.target.value)}
             className="max-w-sm"
           />
         </div>

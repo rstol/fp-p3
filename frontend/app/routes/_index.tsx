@@ -28,59 +28,6 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export async function clientAction({ request }: ActionFunctionArgs) {
-  if (request.method !== 'POST') {
-    return { success: false, error: 'Invalid request method - expected POST', status: 405 };
-  }
-
-  try {
-    const payload = await request.json();
-    const { teamId, updates } = payload;
-
-    if (!teamId || typeof teamId !== 'string') {
-      return { success: false, error: 'Missing or invalid teamId in payload', status: 400 };
-    }
-    if (!Array.isArray(updates) || updates.length === 0) {
-      return { success: false, error: 'Missing or empty updates array in payload', status: 400 };
-    }
-
-    // Construct the full backend API URL using BASE_URL from constants
-    const backendApiUrl = `${BASE_URL}/teams/${teamId}/plays/scatter`;
-
-    const backendResponse = await fetch(backendApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ updates }),
-    });
-
-    if (!backendResponse.ok) {
-      const errorData = await backendResponse
-        .json()
-        .catch(() => ({ message: 'Backend returned an error without JSON body' }));
-      console.error(
-        `[_index.clientAction] Backend API error: ${backendResponse.status}`,
-        errorData,
-      );
-      return {
-        success: false,
-        error: errorData.message || 'Failed to apply changes via backend',
-        status: backendResponse.status,
-      };
-    }
-
-    const responseData = await backendResponse.json();
-    return { success: true, data: responseData, message: 'Changes applied successfully.' };
-  } catch (error) {
-    console.error('[_index.clientAction] Error processing request:', error);
-    if (error instanceof SyntaxError) {
-      return { success: false, error: 'Invalid JSON payload provided', status: 400 };
-    }
-    return { success: false, error: 'An unexpected server error occurred', status: 500 };
-  }
-}
-
 export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   purgeCacheIfNeeded();
   const url = new URL(request.url);
