@@ -49,66 +49,72 @@ import {
 // Define the Play type
 export type Play = {
   id: string;
-  playTag: string;
+  clusterId: number;
   gameDate: Date;
   quarter: number;
   gameClock: string;
   homeTeam: string;
   awayTeam: string;
   playNote: string;
+  playVideoUrl: string;
 };
 
 // Sample data for demonstration
 const data: Play[] = [
   {
     id: 'play1',
-    playTag: 'Isolation',
+    clusterId: 1,
     gameDate: new Date('2025-04-01'),
     quarter: 1,
     gameClock: '10:45',
     homeTeam: 'Lakers',
     awayTeam: 'Celtics',
     playNote: '',
+    playVideoUrl: 'videos/0021500615/95.mp4',
   },
   {
     id: 'play2',
-    playTag: '',
+    clusterId: 1,
     gameDate: new Date('2025-04-01'),
     quarter: 2,
     gameClock: '5:22',
     homeTeam: 'Lakers',
     awayTeam: 'Warriors',
     playNote: 'Curry isolation floater',
+    playVideoUrl: 'videos/0021500615/95.mp4',
   },
   {
     id: 'play3',
-    playTag: 'Isolation',
+    clusterId: 1,
     gameDate: new Date('2025-04-03'),
     quarter: 4,
     gameClock: '2:15',
     homeTeam: 'Lakers',
     awayTeam: 'Bucks',
     playNote: 'Middleton isolation jump-ball two-pointer',
+    playVideoUrl: 'videos/0021500615/95.mp4',
   },
   {
     id: 'play4',
-    playTag: '',
+    clusterId: 1,
     gameDate: new Date('2025-04-05'),
     quarter: 3,
     gameClock: '7:33',
     homeTeam: 'Lakers',
     awayTeam: 'Nuggets',
     playNote: 'Jokić Isolation against Davis',
+    playVideoUrl: 'videos/0021500615/95.mp4',
   },
   {
     id: 'play5',
-    playTag: '',
+    clusterId: 1,
     gameDate: new Date('2025-04-05'),
     quarter: 4,
     gameClock: '0:45',
     homeTeam: 'Lakers',
     awayTeam: 'Suns',
     playNote: 'Durant three-pointer',
+    playVideoUrl: 'videos/0021500615/95.mp4',
   },
 ];
 
@@ -226,7 +232,7 @@ export function PlaysTable({ title }: { title: string }) {
   // Action handlers
   function handleEditTag(play: Play) {
     setSelectedPlay(play);
-    setEditTag(play.playTag);
+    setEditTag(play.clusterId);
     setTagDialogOpen(true);
   }
 
@@ -246,8 +252,8 @@ export function PlaysTable({ title }: { title: string }) {
     const plays = selectedRows.map((row) => row.original);
     setSelectedPlays(plays);
     // Use the tag from the first play as initial value, or empty string if plays have different tags
-    const firstTag = plays[0]?.playTag || '';
-    const allSameTag = plays.every((play) => play.playTag === firstTag);
+    const firstTag = plays[0]?.clusterId || '';
+    const allSameTag = plays.every((play) => play.clusterId === firstTag);
     setEditTag(allSameTag ? firstTag : '');
     setTagDialogOpen(true);
   }
@@ -298,19 +304,33 @@ export function PlaysTable({ title }: { title: string }) {
       enableHiding: false,
     },
     {
-      accessorKey: 'playTag',
+      accessorKey: 'similarityScore',
       header: ({ column }) => (
         <Button
           variant="ghost"
           className="px-0.5!"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
         >
-          Play Tag
+          Similarity Score
           <ArrowUpDown size={4} />
         </Button>
       ),
-      cell: ({ row }) => <div>{row.getValue('playTag')}</div>,
+      cell: ({ row }) => <div>{row.getValue('similarityScore')}</div>,
     },
+    // {
+    //   accessorKey: 'clusterId',
+    //   header: ({ column }) => (
+    //     <Button
+    //       variant="ghost"
+    //       className="px-0.5!"
+    //       onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+    //     >
+    //       Cluster
+    //       <ArrowUpDown size={4} />
+    //     </Button>
+    //   ),
+    //   cell: ({ row }) => <div>{row.getValue('clusterId')}</div>,
+    // },
     {
       accessorKey: 'gameDate',
       header: ({ column }) => (
@@ -357,21 +377,34 @@ export function PlaysTable({ title }: { title: string }) {
       cell: ({ row }) => <div>{row.getValue('gameClock')}</div>,
     },
     {
-      accessorKey: 'homeTeam',
-      header: 'Home Team',
-      cell: ({ row }) => <div>{row.getValue('homeTeam')}</div>,
-    },
-    {
       accessorKey: 'awayTeam',
-      header: 'Away Team',
+      header: 'Opponent Team',
       cell: ({ row }) => <div>{row.getValue('awayTeam')}</div>,
     },
     {
       accessorKey: 'playNote',
       header: 'Play Note',
       cell: ({ row }) => (
-        <div className="max-w-[220px] truncate" title={row.getValue('playNote')}>
+        <div className="w-[150px] whitespace-break-spaces" title={row.getValue('playNote')}>
           {row.getValue('playNote')}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'playVideoUrl',
+      header: 'Play Video',
+      cell: ({ row }) => (
+        <div className="max-w-[250px] min-w-[200px] truncate" title={row.getValue('playVideoUrl')}>
+          <video
+            key={row.getValue('playVideoUrl')} // Force remount component on change
+            controls
+            disablePictureInPicture
+            disableRemotePlayback
+            muted
+          >
+            <source src={row.getValue('playVideoUrl')} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
       ),
     },
@@ -393,7 +426,7 @@ export function PlaysTable({ title }: { title: string }) {
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => handleEditTag(play)}>
                 <Edit className="mr-2 h-4 w-4" />
-                Edit tag
+                Edit Cluster
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleEditNote(play)}>
                 <Edit className="mr-2 h-4 w-4" />
