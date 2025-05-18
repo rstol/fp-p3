@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.distributions.laplace import Laplace
 from torch.optim.lr_scheduler import OneCycleLR
 
@@ -124,7 +124,7 @@ class PlayTransformer(pl.LightningModule):
         # P_loss = loss_.view(-1, 6 , self.F) #[B,A,F]
         # joint_loss = torch.sum(P_loss,dim=1) #[B,F]
         joint_loss = torch.sum(loss_, dim=0)  # [F]
-        joint_loss_ = torch.min(joint_loss)  #
+        joint_loss_ = torch.min(joint_loss)
         # joint_loss_ = torch.mean(joint_loss_)
 
         summary_loss = marginal_loss_ + 0.1 * joint_loss_
@@ -218,7 +218,7 @@ class PlayTransformer(pl.LightningModule):
         # P_loss = loss_.view(-1, 6 , self.F) #[B,A,F]
         # joint_loss = torch.sum(P_loss,dim=1) #[B,F]
         joint_loss = torch.sum(loss_, dim=0)  # [F]
-        joint_loss_ = torch.min(joint_loss)  #
+        joint_loss_ = torch.min(joint_loss)
         # joint_loss_ = torch.mean(joint_loss_)
 
         summary_loss = marginal_loss_ + 0.1 * joint_loss_

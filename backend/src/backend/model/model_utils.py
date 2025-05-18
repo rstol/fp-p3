@@ -1,7 +1,7 @@
 import math
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class View(nn.Module):
@@ -59,7 +59,7 @@ class SelfAttLayer_Enc(nn.Module):
     def forward(self, x, batch_mask, padding_mask=None, hidden_mask=None):
         # print(hidden_mask)
         A, T, D = x.shape
-        assert T == self.time_steps and D == self.feature_dim
+        assert self.time_steps == T and self.feature_dim == D
         A_, A__ = batch_mask.shape
         assert A == A_ and A == A__
         A___, T_ = padding_mask.shape
@@ -69,7 +69,7 @@ class SelfAttLayer_Enc(nn.Module):
 
         if self.across_time:
             q_ = x_.permute(1, 0, 2)  # [L,N,E] : [A,T,D]->[T,A,D]
-            k, v = x_.permute(1, 0, 2), x_.permute(1, 0, 2)  # [S,N,E] : [A,T,D]->[T,A,D]
+            k, v = (x_.permute(1, 0, 2), x_.permute(1, 0, 2))  # [S,N,E] : [A,T,D]->[T,A,D]
 
             key_padding_mask = padding_mask  # [N,S] : [A,T]
             attn_mask = None
@@ -124,7 +124,7 @@ class SelfAttLayer_Dec(nn.Module):
 
     def forward(self, x, batch_mask, padding_mask=None, hidden_mask=None):
         F, A, T, D = x.shape
-        assert T == self.time_steps and D == self.feature_dim
+        assert self.time_steps == T and self.feature_dim == D
         A_, A__ = batch_mask.shape
         assert A == A_ and A == A__
         # A___,T_ = padding_mask.shape

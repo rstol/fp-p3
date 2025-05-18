@@ -1,7 +1,7 @@
 # TODO implement Transformer with VAE bottleneck and (contrastive) loss?
 import einops as EO
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 # TODO @rstol model does not work yet
@@ -19,11 +19,7 @@ class Baller2Play(nn.Module):
         self.seq_len = seq_len
 
         self.input_proj = nn.Linear(in_features=input_dim, out_features=hidden_dim, bias=False)
-        self.cls_token = nn.Parameter(
-            torch.randn(
-                hidden_dim,
-            )
-        )
+        self.cls_token = nn.Parameter(torch.randn(hidden_dim))
 
         # Transformer Encoder
         encoder_layer = nn.TransformerEncoderLayer(

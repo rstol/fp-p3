@@ -15,6 +15,7 @@ class DatasetManager:
 
         self.teams = pl.read_ndjson(f"{self.data_dir}/teams.jsonl")
         self.games = pl.read_ndjson(f"{self.data_dir}/games.jsonl")
+        self.games_data: dict[str, Game] = {}
 
     def get_teams(self) -> list[dict[str, str | int | list[dict[str, str | int]]]]:
         return self.teams.to_dicts()
@@ -43,8 +44,8 @@ class DatasetManager:
     def get_plays_for_game(
         self, game_id: str, as_dicts: bool = True
     ) -> list[dict[str, str]] | DataFrame:
-        plays = self._load_game_plays(game_id)
-        return plays.to_dicts() if as_dicts else plays
+        game = self._get_game(game_id)
+        return game.data_df.to_dicts() if as_dicts else game.data_df
 
     def get_play_raw_data(self, game_id: str, play_id: str) -> dict[str, str] | None:
         plays = self._load_game_plays(game_id).fill_null("").fill_nan(0)

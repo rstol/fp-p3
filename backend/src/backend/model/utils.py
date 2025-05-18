@@ -14,8 +14,7 @@ def get_game_time(game_clock: float, quarter: int) -> float:
     """
     if quarter <= 4:
         return (quarter - 1) * 720 + (720 - game_clock)
-    else:
-        return 4 * 720 + (quarter - 5) * 300 + (300 - game_clock)
+    return 4 * 720 + (quarter - 5) * 300 + (300 - game_clock)
 
 
 def split_list_by_velocity(agent_velocities: torch.Tensor):

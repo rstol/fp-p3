@@ -1,4 +1,4 @@
-import torch.nn as nn
+from torch import nn
 
 from backend.model.model_utils import (
     Permute4Batchnorm,

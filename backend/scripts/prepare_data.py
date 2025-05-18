@@ -5,6 +5,7 @@
 #     "polars",
 #     "py7zr",
 # ]
+# ///
 import argparse
 import os
 from pathlib import Path
@@ -90,35 +91,32 @@ def process_dataset(dataset: Dataset, output_path: Path) -> None:
     play_ids = list(embedding_ids["game_id"] + "_" + embedding_ids["event_id"])
 
     dataset = dataset.with_format("polars")
+
+    def filter_pair_id(df):
+        return (
+            df.with_columns(
+                [
+                    (
+                        pl.col("gameid").cast(str)
+                        + "_"
+                        + pl.col("event_info").struct.field("id").cast(str)
+                    ).alias("pair_id")
+                ]
+            )
+            .filter(
+                pl.col("pair_id").is_in(play_ids)
+                & pl.col("home").struct.field("teamid").cast(str).is_in(TEAM_IDS_SAMPLE)
+            )
+            .drop("pair_id")
+        )
+
     dataset = dataset.map(
-        lambda df: df.with_columns(
-            [
-                (
-                    pl.col("gameid").cast(str)
-                    + "_"
-                    + pl.col("event_info").struct.field("id").cast(str)
-                ).alias("pair_id")
-            ]
-        )
-        .filter(
-            pl.col("pair_id").is_in(play_ids)
-            & pl.col("home").struct.field("teamid").is_in(TEAM_IDS_SAMPLE)
-        )
-        .drop("pair_id"),
-        batched=True,
-        desc="Filtering dataset",
-        num_proc=NUM_PROCESSES,
+        filter_pair_id, batched=True, desc="Filtering dataset", num_proc=NUM_PROCESSES
     )
     dataset = dataset.with_format(None)  # Back to default dict format
 
     dataset_plays = dataset.select_columns(
-        [
-            "gameid",
-            "primary_info",
-            "secondary_info",
-            "event_info",
-            "moments",
-        ]
+        ["gameid", "primary_info", "secondary_info", "event_info", "moments"]
     )
     dataset_plays = dataset_plays.map(
         process_play,
@@ -159,26 +157,13 @@ def process_dataset(dataset: Dataset, output_path: Path) -> None:
         game_dataset.to_polars(batched=False).write_parquet(output_file)
 
     # Extract game and team info
-    dataset_info = dataset.select_columns(
-        [
-            "gameid",
-            "gamedate",
-            "home",
-            "visitor",
-        ]
-    )
+    dataset_info = dataset.select_columns(["gameid", "gamedate", "home", "visitor"])
     dataset_info = dataset_info.map(
-        extract_game_and_team_info,
-        remove_columns=dataset_info.column_names,
+        extract_game_and_team_info, remove_columns=dataset_info.column_names
     )
 
     dataset_game = dataset_info.select_columns(
-        [
-            "game_id",
-            "game_date",
-            "home_team_id",
-            "visitor_team_id",
-        ]
+        ["game_id", "game_date", "home_team_id", "visitor_team_id"]
     )
     df_game = dataset_game.to_polars()
     df_game = df_game.unique(subset=["game_id"], keep="first")

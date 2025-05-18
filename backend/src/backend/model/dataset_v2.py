@@ -31,7 +31,7 @@ def collate_batch(batch: list[Possession]):
     sample_freq = 5  # downsample
     sequence_length = int(24 * 25 / sample_freq + 1)  # 24s sequence length
     list_24s = [
-        i * (1 / sample_freq) for i in range(0, sequence_length)
+        i * (1 / sample_freq) for i in range(sequence_length)
     ]  # sequence_length coressponding to game clock
     list_24s.reverse()  # Reverse, change from 24s to 0s
 
@@ -100,7 +100,7 @@ def collate_batch(batch: list[Possession]):
 
         # mask process #according Velocity masking
         states_hidden_BP = np.ones((len(states_feat), time_steps)).astype(np.bool_)  # True为hidden
-        current_step = len(time_24s)  #
+        current_step = len(time_24s)
         # states_hidden_BP[:,:current_step] = False #Actual trajectory is False
 
         flag = random.choice(["A", "B"])

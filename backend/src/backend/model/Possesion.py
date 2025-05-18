@@ -78,8 +78,7 @@ class Possession:
             coords = np.stack((agent.x, agent.y), axis=1)
             if len(coords) < 2:
                 continue
-            else:
-                v = self.velocity(coords)
-                agent.v = np.append(v, v[-1])
+            v = self.velocity(coords)
+            agent.v = np.append(v, v[-1])
 
         return agents_list

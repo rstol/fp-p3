@@ -52,11 +52,7 @@ def create_umap_projection(embeddings, play_ids: list[str], y, n_neighbors=15, m
 
     # Create DataFrame with results
     result_df = pd.DataFrame(
-        {
-            "x": embedding_2d[:, 0],
-            "y": embedding_2d[:, 1],
-            "play_id": play_ids,
-        }
+        {"x": embedding_2d[:, 0], "y": embedding_2d[:, 1], "play_id": play_ids}
     )
 
     return result_df, reducer
@@ -117,11 +113,7 @@ def load_embeddings_and_play_ids(team_ids: set[str]):
 
 
 def find_similar_plays(
-    play_id,
-    projection_df: pd.DataFrame,
-    embeddings: list[np.ndarray],
-    n=10,
-    use_projected=False,
+    play_id, projection_df: pd.DataFrame, embeddings: list[np.ndarray], n=10, use_projected=False
 ):
     """Find similar plays to a given play ID"""
     # Find the index of the target play
@@ -162,7 +154,7 @@ def find_similar_plays(
 
 
 TEAM_IDS_SAMPLE = {
-    "1610612741",
+    "1610612741"
     # "1610612748",
     # "1610612752",
     # "1610612754",

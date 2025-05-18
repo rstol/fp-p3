@@ -666,19 +666,18 @@ def normalize_play(
     T = play.shape[0]
     if T < 30:
         return None  # Too short after downsampling
-    elif T < target_len:
+    if target_len > T:
         # Pad with last frame
         pad_len = target_len - T
         padding = np.repeat(play[-1:, :], pad_len, axis=0)
         return [np.concatenate([play, padding], axis=0)]
-    elif T == target_len:
+    if target_len == T:
         return [play]
-    else:
-        # Too long → split into chunks of target_len
-        overlap = target_len // 4  # 25% overlap
-        if overlap == 0:
-            overlap = 1
-        return [play[i : i + target_len] for i in range(0, T - target_len + 1, overlap)]
+    # Too long → split into chunks of target_len
+    overlap = target_len // 4  # 25% overlap
+    if overlap == 0:
+        overlap = 1
+    return [play[i : i + target_len] for i in range(0, T - target_len + 1, overlap)]
 
 
 def save_batched_features(
@@ -783,10 +782,7 @@ if __name__ == "__main__":
         )
 
     dataset = dataset.map(
-        filter_plays,
-        batched=True,
-        num_proc=NUM_PROCESSES,
-        desc="Filtering dataset",
+        filter_plays, batched=True, num_proc=NUM_PROCESSES, desc="Filtering dataset"
     )
 
     playerid_to_idx = build_player_index_map(dataset)
@@ -797,8 +793,4 @@ if __name__ == "__main__":
         pickle.dump(playerid_to_idx, f)
         print(f"Saved player ID mapping with {len(playerid_to_idx)} players")
 
-    save_batched_features(
-        dataset,
-        playerid_to_idx,
-        GAMES_DIR,
-    )
+    save_batched_features(dataset, playerid_to_idx, GAMES_DIR)

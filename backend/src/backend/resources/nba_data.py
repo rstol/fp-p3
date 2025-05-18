@@ -48,7 +48,7 @@ class PlayRawDataResource(Resource):
         try:
             play = dataset_manager.get_play_raw_data(game_id, play_id)
             if play:
-                return jsonify(play)
+                return jsonify(play.get_play_details())
             return {"error": "Play not found"}, 404
         except ValueError:
             return {"error": "Invalid play ID format"}, 400

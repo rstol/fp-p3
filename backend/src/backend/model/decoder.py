@@ -1,6 +1,6 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as FU
+from torch import nn
 
 from backend.model.model_utils import Permute4Batchnorm, SelfAttLayer_Dec, init_xavier_glorot
 
@@ -50,7 +50,7 @@ class Decoder(nn.Module):
 
     def forward(self, state_feat, batch_mask, padding_mask, hidden_mask=None):
         A, T, D = state_feat.shape
-        assert T == self.time_steps and D == self.feature_dim
+        assert self.time_steps == T and self.feature_dim == D
         # state_feat = state_feat.reshape((A,T,-1,self.F))
         # x = state_feat.permute(3,0,1,2)
 

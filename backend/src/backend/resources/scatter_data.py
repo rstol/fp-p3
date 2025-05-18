@@ -1,9 +1,8 @@
 import logging
-import os
 
 import numpy as np
-import pandas as pd
 import polars as pl
+import umap
 from flask import request
 from flask_restful import Resource
 from sklearn.cluster import KMeans
@@ -11,29 +10,11 @@ from sklearn.cluster import KMeans
 from backend.resources.dataset_manager import DatasetManager
 from backend.settings import TRACKING_DIR
 
+from .play_clustering import PlayClustering
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class DatasetResource(Resource):
-    """dataset resource."""
-
-    data_root = os.path.join(".", "data")
-
-    def get(self, name):
-        path_name = os.path.join(self.data_root, f"dataset_{name}.csv")
-        data = pd.read_csv(path_name)
-
-        # process the data, e.g. find the clusters
-        kmeans = KMeans(n_clusters=2, n_init=10, random_state=0).fit(data)
-        labels = kmeans.labels_.tolist()
-
-        # Add cluster to data
-        data["cluster"] = labels
-
-        # Convert to dictionary
-        return data.to_dict(orient="records")
 
 
 class TeamPlaysScatterResource(Resource):
@@ -42,39 +23,26 @@ class TeamPlaysScatterResource(Resource):
     def __init__(self):
         self.dataset_manager = DatasetManager(TRACKING_DIR)
 
-        self.play_centroids = {
-            0: (20, 20),
-            1: (80, 80),
-            2: (40, 20),
-            3: (60, 40),
-            4: (60, 40),
-            5: (80, 80),
-            6: (20, 60),
-            7: (40, 60),
-            8: (40, 20),
-            9: (20, 40),
-        }
+        self.umap_model = umap.UMAP(n_neighbors=5)
 
-        self.cluster_std_dev = 25
-
-    def _prepare_scatter_data_for_response(self, team_id_str: str, timeframe_str: str):
-        logger.info(f"Prep scatter data: team {team_id_str}, timeframe {timeframe_str}")
+    def _prepare_scatter_data_for_response(self, team_id: str, timeframe_str: str):
+        logger.info(f"Prep scatter data: team {team_id}, timeframe {timeframe_str}")
 
         try:
-            # Ensure splitting timeframe_str and accessing index [1] is safe
             parts = timeframe_str.split("_")
             if len(parts) < 2 or not parts[1].isdigit():
-                raise ValueError("Timeframe format error")
+                msg = "Timeframe format error"
+                raise ValueError(msg)  # noqa: TRY301
             num_games = int(parts[1])
         except ValueError:
-            logger.error(f"Invalid timeframe format: {timeframe_str}")
+            logger.exception(f"Invalid timeframe format: {timeframe_str}")
             return {"error": "Invalid timeframe format"}, 400
         logger.info(f"Using timeframe: {timeframe_str} (limiting to {num_games} games)")
 
         try:
-            team_id = int(team_id_str)
+            team_id = int(team_id)
         except ValueError:
-            logger.error(f"Invalid team_id format: {team_id_str}")
+            logger.exception(f"Invalid team_id format: {team_id}")
             return {"error": "Invalid team ID format"}, 400
 
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
@@ -89,8 +57,7 @@ class TeamPlaysScatterResource(Resource):
 
         if games.is_empty():
             logger.warning(
-                f"No games for team {team_id_str} (timeframe: {timeframe_str})."
-                " Returning empty points."
+                f"No games for team {team_id} (timeframe: {timeframe_str}). Returning empty points."
             )
             return {"total_games": total_games, "points": []}, 200
 
@@ -99,8 +66,7 @@ class TeamPlaysScatterResource(Resource):
         if plays.is_empty():
             return {"total_games": total_games, "points": []}, 200
 
-        scatter_data_df = self._generate_scatter_data(plays)
-        scatter_data_df = self._apply_clustering(scatter_data_df)
+        scatter_data_df = self._generate_scatter_data(plays, team_id)
 
         final_columns = [
             "x",
@@ -118,14 +84,11 @@ class TeamPlaysScatterResource(Resource):
         current_cols = scatter_data_df.columns
         for col_name in final_columns:
             if col_name not in current_cols:
-                # Determine dtype for pl.lit carefully
                 if col_name in ["x", "y", "cluster", "event_type"]:
-                    # Numeric columns
                     scatter_data_df = scatter_data_df.with_columns(
                         pl.lit(None, dtype=pl.Float64).alias(col_name)
                     )
                 else:
-                    # String columns
                     scatter_data_df = scatter_data_df.with_columns(
                         pl.lit(None, dtype=pl.String).alias(col_name)
                     )
@@ -137,7 +100,6 @@ class TeamPlaysScatterResource(Resource):
 
     def get(self, team_id):
         """Get scatter plot data for a team's plays."""
-        # logger.info(f"Fetching scatter data for team_id: {team_id}")
         timeframe = request.args.get("timeframe", "last_3")
         data, status_code = self._prepare_scatter_data_for_response(team_id, timeframe)
         return data, status_code
@@ -151,7 +113,7 @@ class TeamPlaysScatterResource(Resource):
             return {"error": "No data provided for update"}, 400
 
         logger.info(f"Cluster update data for team_id {team_id}: {updated_plays_data}")
-        # TODO: Implement the actual logic to process these updates in the data source.
+        # TODO(mboss): Implement the actual logic to process these updates in the data source.
 
         # For now, return the original/current scatter data for this team.
         timeframe_for_refresh = request.args.get("timeframe", "last_3")
@@ -179,24 +141,40 @@ class TeamPlaysScatterResource(Resource):
         if len(all_plays_list) == 0:
             return pl.DataFrame()
 
-        # TODO: check this?
-        plays = pl.concat(all_plays_list, how="diagonal_relaxed")
+        # TODO(mboss): check this?
+        return pl.concat(all_plays_list, how="diagonal_relaxed")
 
-        return plays
-
-    def _generate_scatter_data(self, plays):
-        x_centroids = {k: v[0] for k, v in self.play_centroids.items()}
-        y_centroids = {k: v[1] for k, v in self.play_centroids.items()}
-
-        plays = plays.with_columns(
-            x=pl.col("event_type").mod(10).replace(x_centroids),
-            y=pl.col("event_type").mod(10).replace(y_centroids),
+    def _generate_scatter_data(self, plays: pl.DataFrame, team_id: int) -> pl.DataFrame:
+        # TODO(mboss): the play are filtered differently that in the embeddings,
+        # offensive_team_id != home_team_id or the other one?
+        play_clustering = PlayClustering(
+            team_id=team_id, game_ids=plays["game_id"].unique().to_list()
+        )
+        initial_clusters, cluster_assignments, team_embedding_ids = (
+            play_clustering.get_initial_clusters()
         )
 
-        num_rows = plays.shape[0]
+        y = np.full(len(play_clustering.team_embeddings), -1)
+        for cluster in initial_clusters:
+            for play in cluster.plays:
+                y[play.index] = cluster.id
+
+        xys = self.umap_model.fit_transform(play_clustering.team_embeddings, y=cluster_assignments)
+
+        plays = plays.with_columns(
+            pl.col("game_id").cast(pl.Int64), pl.col("event_id").cast(pl.Int64)
+        ).join(
+            team_embedding_ids.drop("index").with_row_index("ids_index"),
+            on=["game_id", "event_id"],
+            how="inner",
+        )
+        plays_index = plays["ids_index"].to_numpy()
+        plays = plays.drop("ids_index")
+
         return plays.with_columns(
-            x=pl.col("x") + pl.Series(np.random.normal(0, self.cluster_std_dev, num_rows)),
-            y=pl.col("y") + pl.Series(np.random.normal(0, self.cluster_std_dev, num_rows)),
+            x=pl.lit(xys[plays_index, 0]),
+            y=pl.lit(xys[plays_index, 1]),
+            cluster=pl.lit(cluster_assignments[plays_index]).cast(pl.Int32),
         )
 
     def _apply_clustering(self, data_points):
@@ -211,8 +189,8 @@ class TeamPlaysScatterResource(Resource):
             data_points = data_points.with_columns(
                 pl.Series(clusters, dtype=pl.Int32).alias("cluster")
             )
-        except (AttributeError, TypeError, ValueError) as e:
-            logger.error(f"Error during clustering: {e}")
+        except (AttributeError, TypeError, ValueError):
+            logger.exception("Error during clustering")
             for i, point in enumerate(data_points):
                 point["cluster"] = i % n_clusters
 
