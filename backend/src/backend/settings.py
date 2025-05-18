@@ -8,7 +8,7 @@ RAW_DATA_HZ = 25
 TRACKING_DIR = os.getenv("TRACKING_DIR")
 GAMES_DIR = os.getenv("GAMES_DIR")
 DATA_DIR = os.getenv("DATA_DIR")
-VIDEO_DATA_DIR = f"{DATA_DIR}/videos"
+VIDEO_DATA_DIR = os.getenv("VIDEO_DATA_DIR", f"{DATA_DIR}/videos")
 EXPERIMENTS_DIR = os.getenv("EXPERIMENTS_DIR")
 EMBEDDINGS_DIR = os.getenv("EMBEDDINGS_DIR", f"{DATA_DIR}/embeddings")
 

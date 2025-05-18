@@ -3,7 +3,7 @@ from pathlib import Path
 import polars as pl
 from polars import DataFrame
 
-from backend.model.game import Game
+from backend.resources.game import Game
 from backend.settings import VIDEO_DATA_DIR
 from backend.video.event import Event
 
@@ -17,6 +17,7 @@ class DatasetManager:
 
         self.teams = pl.read_ndjson(f"{self.data_dir}/teams.jsonl")
         self.games = pl.read_ndjson(f"{self.data_dir}/games.jsonl")
+        self.plays = pl.scan_parquet(f"{self.data_dir}/plays/*")
         self.games_data: dict[str, Game] = {}
 
     def get_teams(self) -> list[dict[str, str | int | list[dict[str, str | int]]]]:
@@ -46,8 +47,8 @@ class DatasetManager:
     def get_plays_for_game(
         self, game_id: str, as_dicts: bool = True
     ) -> list[dict[str, str]] | DataFrame:
-        game = self._get_game(game_id)
-        return game.data_df.to_dicts() if as_dicts else game.data_df
+        game = self._load_game_plays(game_id)
+        return game.to_dicts() if as_dicts else game
 
     def get_play_raw_data(self, game_id: str, play_id: str) -> dict[str, str] | None:
         plays = self._load_game_plays(game_id).fill_null("").fill_nan(0)
@@ -80,7 +81,4 @@ class DatasetManager:
             return event.generate_mp4()
 
     def _load_game_plays(self, game_id: str) -> DataFrame:
-        try:
-            return pl.read_parquet(f"{self.data_dir}/plays/{game_id}.parquet")
-        except FileNotFoundError:
-            return pl.DataFrame()
+        return self.plays.filter(pl.col("game_id") == game_id).collect()

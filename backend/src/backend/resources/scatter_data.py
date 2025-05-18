@@ -1,14 +1,15 @@
 import logging
+import pickle
+from pathlib import Path
 
 import numpy as np
 import polars as pl
 import umap
 from flask import request
 from flask_restful import Resource
-from sklearn.cluster import KMeans
 
 from backend.resources.dataset_manager import DatasetManager
-from backend.settings import TRACKING_DIR
+from backend.settings import DATA_DIR, TRACKING_DIR
 
 from .play_clustering import PlayClustering
 
@@ -23,6 +24,40 @@ class TeamPlaysScatterResource(Resource):
     def __init__(self):
         self.dataset_manager = DatasetManager(TRACKING_DIR)
 
+        if not Path(f"{DATA_DIR}/plays_by_team.pkl").exists():
+            self.plays_by_team = {
+                teamid: self.dataset_manager.get_games_for_team(teamid, as_dicts=False)
+                for teamid in self.dataset_manager.teams["teamid"]
+            }
+            for teamid, games in self.plays_by_team.items():
+                games = games.sort("game_date", descending=True)
+                games = games.limit(3)
+                plays = self._concat_plays_from_games(games)
+                play_clustering = PlayClustering(
+                    team_id=teamid, game_ids=plays["game_id"].unique().to_list()
+                )
+                initial_clusters, cluster_assignments, team_embedding_ids = (
+                    play_clustering.get_initial_clusters()
+                )
+                plays = plays.with_columns(
+                    pl.col("game_id").cast(pl.Int64), pl.col("event_id").cast(pl.Int64)
+                ).join(
+                    team_embedding_ids.drop("index").with_row_index("ids_index"),
+                    on=["game_id", "event_id"],
+                    how="inner",
+                )
+                plays_index = plays["ids_index"].to_numpy()
+                plays = plays.with_columns(
+                    team_embeddings=pl.lit(play_clustering.team_embeddings[plays_index]),
+                    cluster=pl.lit(cluster_assignments[plays_index]).cast(pl.Int32),
+                )
+                self.plays_by_team[teamid] = {"initial_clusters": initial_clusters, "plays": plays}
+
+            with Path(f"{DATA_DIR}/plays_by_team.pkl").open("wb") as f:
+                pickle.dump(self.plays_by_team, f)
+        else:
+            with Path(f"{DATA_DIR}/plays_by_team.pkl").open("rb") as f:
+                self.plays_by_team = pickle.load(f)
         self.umap_model = umap.UMAP(n_neighbors=5)
 
     def _prepare_scatter_data_for_response(self, team_id: str, timeframe_str: str):
@@ -45,28 +80,11 @@ class TeamPlaysScatterResource(Resource):
             logger.exception(f"Invalid team_id format: {team_id}")
             return {"error": "Invalid team ID format"}, 400
 
-        games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
-        logger.info(f"Found {len(games)} games for team {team_id}")
-        total_games = len(games)
+        plays_of_team = self.plays_by_team.get(team_id, pl.DataFrame())
 
-        if not games.is_empty() and "game_date" in games.columns:
-            games = games.sort("game_date", descending=True)
-
-        games = games.limit(num_games)
-        logger.info(f"Limited to {len(games)} games for timeframe {timeframe_str}")
-
-        if games.is_empty():
-            logger.warning(
-                f"No games for team {team_id} (timeframe: {timeframe_str}). Returning empty points."
-            )
-            return {"total_games": total_games, "points": []}, 200
-
-        plays = self._concat_plays_from_games(games)
-        logger.info(f"Collected {len(plays)} plays.")
-        if plays.is_empty():
-            return {"total_games": total_games, "points": []}, 200
-
-        scatter_data_df = self._generate_scatter_data(plays, team_id)
+        scatter_data_df = self._generate_scatter_data(
+            plays_of_team["plays"], initial_clusters=plays_of_team["initial_clusters"]
+        )
 
         final_columns = [
             "x",
@@ -96,7 +114,7 @@ class TeamPlaysScatterResource(Resource):
         # Select only the final columns in the specified order
         scatter_data_df = scatter_data_df.select(final_columns)
 
-        return {"total_games": total_games, "points": scatter_data_df.to_dicts()}, 200
+        return {"points": scatter_data_df.to_dicts()}, 200
 
     def get(self, team_id):
         """Get scatter plot data for a team's plays."""
@@ -144,54 +162,12 @@ class TeamPlaysScatterResource(Resource):
         # TODO(mboss): check this?
         return pl.concat(all_plays_list, how="diagonal_relaxed")
 
-    def _generate_scatter_data(self, plays: pl.DataFrame, team_id: int) -> pl.DataFrame:
-        # TODO(mboss): the play are filtered differently that in the embeddings,
-        # offensive_team_id != home_team_id or the other one?
-        play_clustering = PlayClustering(
-            team_id=team_id, game_ids=plays["game_id"].unique().to_list()
-        )
-        initial_clusters, cluster_assignments, team_embedding_ids = (
-            play_clustering.get_initial_clusters()
-        )
-
-        y = np.full(len(play_clustering.team_embeddings), -1)
+    def _generate_scatter_data(self, plays: pl.DataFrame, initial_clusters: list) -> pl.DataFrame:
+        y = np.full(len(plays["team_embeddings"]), -1)
         for cluster in initial_clusters:
             for play in cluster.plays:
                 y[play.index] = cluster.id
 
-        xys = self.umap_model.fit_transform(play_clustering.team_embeddings, y=cluster_assignments)
+        xys = self.umap_model.fit_transform(plays["team_embeddings"], y=y)
 
-        plays = plays.with_columns(
-            pl.col("game_id").cast(pl.Int64), pl.col("event_id").cast(pl.Int64)
-        ).join(
-            team_embedding_ids.drop("index").with_row_index("ids_index"),
-            on=["game_id", "event_id"],
-            how="inner",
-        )
-        plays_index = plays["ids_index"].to_numpy()
-        plays = plays.drop("ids_index")
-
-        return plays.with_columns(
-            x=pl.lit(xys[plays_index, 0]),
-            y=pl.lit(xys[plays_index, 1]),
-            cluster=pl.lit(cluster_assignments[plays_index]).cast(pl.Int32),
-        )
-
-    def _apply_clustering(self, data_points):
-        coords = data_points.select(["x", "y"]).to_numpy()
-
-        n_clusters = 3 if len(data_points) >= 9 else min(len(data_points) // 3, 2)
-        n_clusters = max(2, n_clusters)
-
-        try:
-            kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
-            clusters = kmeans.fit_predict(coords)
-            data_points = data_points.with_columns(
-                pl.Series(clusters, dtype=pl.Int32).alias("cluster")
-            )
-        except (AttributeError, TypeError, ValueError):
-            logger.exception("Error during clustering")
-            for i, point in enumerate(data_points):
-                point["cluster"] = i % n_clusters
-
-        return data_points
+        return plays.with_columns(x=pl.lit(xys[:, 0]), y=pl.lit(xys[:, 1]))

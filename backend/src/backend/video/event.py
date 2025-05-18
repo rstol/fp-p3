@@ -2,19 +2,19 @@ import os
 import tempfile
 from functools import lru_cache
 
-import matplotlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib.animation import FFMpegWriter
 
 from backend.settings import RAW_DATA_HZ, SAMPLING_RATE, VIDEO_DATA_DIR
-from backend.video.Constant import Constant
-from backend.video.Moment import Moment
+from backend.video.constant import Constant
+from backend.video.moment import Moment
 
 FPS = RAW_DATA_HZ / SAMPLING_RATE
 
 # Set matplotlib to use a non-interactive backend
-matplotlib.use("Agg")
+mpl.use("Agg")
 
 OFFENSE_COLOR = "#008348"
 DEFENSE_COLOR = "#006BB6"

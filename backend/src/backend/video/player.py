@@ -1,4 +1,4 @@
-from backend.video.Team import Team
+from backend.video.team import Team
 
 
 class Player:

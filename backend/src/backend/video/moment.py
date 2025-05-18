@@ -1,5 +1,5 @@
-from backend.video.Ball import Ball
-from backend.video.Player import Player
+from backend.video.ball import Ball
+from backend.video.player import Player
 
 
 class Moment:
