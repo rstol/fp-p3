@@ -153,14 +153,7 @@ class Event:
         court_path = os.path.join(script_dir, "court.png")
         court = plt.imread(court_path)
         plt.imshow(
-            court,
-            zorder=0,
-            extent=[
-                Constant.X_MIN,
-                Constant.X_MAX,
-                Constant.Y_MIN,
-                Constant.Y_MAX,
-            ],
+            court, zorder=0, extent=[Constant.X_MIN, Constant.X_MAX, Constant.Y_MIN, Constant.Y_MAX]
         )
 
         return fig, anim
