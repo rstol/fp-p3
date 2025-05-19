@@ -185,7 +185,7 @@ export default function PlayView() {
     seIsLoadingPlayDetails(true);
     const fetchPlayDetails = async () => {
       try {
-        let publicVideoPath = `videos/${selectedPoint.game_id}/${selectedPoint.event_id}.mp4`;
+        let publicVideoPath = `videos/00${selectedPoint.game_id}/${selectedPoint.event_id}.mp4`;
 
         // Try to fetch from public folder first
         const checkPublicVideo = await fetch(publicVideoPath, { method: 'HEAD' }).catch(() => ({
@@ -193,14 +193,14 @@ export default function PlayView() {
         }));
 
         const resDetails = await fetch(
-          `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}/details`,
+          `${BASE_URL}/plays/00${selectedPoint.game_id}/${selectedPoint.event_id}/details`,
         );
         if (!resDetails.ok) throw new Error();
         const playDetails = await resDetails.json();
 
         if (!checkPublicVideo.ok) {
           const res = await fetch(
-            `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}/video`,
+            `${BASE_URL}/plays/00${selectedPoint.game_id}/${selectedPoint.event_id}/video`,
           );
           const arrayBuffer = await res.arrayBuffer();
           const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
