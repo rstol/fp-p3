@@ -124,7 +124,7 @@ class TeamPlaysScatterResource(Resource):
 
         scatter_data_df = self._generate_scatter_data(plays_of_team["plays"])
 
-        final_columns = [
+        scatter_data_df = scatter_data_df.select(
             "x",
             "y",
             "cluster",
@@ -134,25 +134,18 @@ class TeamPlaysScatterResource(Resource):
             "event_desc_away",
             "game_date",
             "event_type",
-        ]
+            "isTagged",
+        )
 
-        # Ensure all final_columns exist, adding them with nulls if not present
-        current_cols = scatter_data_df.columns
-        for col_name in final_columns:
-            if col_name not in current_cols:
-                if col_name in ["x", "y", "cluster", "event_type"]:
-                    scatter_data_df = scatter_data_df.with_columns(
-                        pl.lit(None, dtype=pl.Float64).alias(col_name)
-                    )
-                else:
-                    scatter_data_df = scatter_data_df.with_columns(
-                        pl.lit(None, dtype=pl.String).alias(col_name)
-                    )
+        cluster_dicts = (
+            scatter_data_df.with_columns(pl.struct(pl.exclude("cluster")).alias("points"))
+            .select("cluster", "points")
+            .group_by("cluster")
+            .agg(pl.col("points"))
+            .to_dicts()
+        )
 
-        # Select only the final columns in the specified order
-        scatter_data_df = scatter_data_df.select(final_columns)
-
-        return {"points": scatter_data_df.to_dicts()}, 200
+        return cluster_dicts, 200
 
     def get(self, team_id):
         """Get scatter plot data for a team's plays."""
