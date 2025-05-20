@@ -1,4 +1,4 @@
-import * as React from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
 import type {
   ColumnDef,
   ColumnFiltersState,
@@ -13,12 +13,15 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ChevronDown, MoreHorizontal, Edit, Eye, Tag, Save, X } from 'lucide-react';
+import { type Tag as TagType, TagInput } from 'emblor';
+import { ArrowUpDown, ChevronDown, Edit, Eye, MoreHorizontal, Tag } from 'lucide-react';
+import * as React from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -31,12 +34,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
-import { Textarea } from '~/components/ui/textarea';
 import {
   Table,
   TableBody,
@@ -45,6 +45,8 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
+import { useDashboardStore } from '~/lib/stateStore';
 
 // Define the Play type
 export type Play = {
@@ -118,109 +120,179 @@ const data: Play[] = [
   },
 ];
 
+const EditTagFormSchema = z.object({
+  clusters: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+    }),
+  ),
+});
+
 // Component for editing tags
 function EditTagDialog({
   open,
   onOpenChange,
   selectedPlays,
-  editTag,
-  setEditTag,
-  saveTag,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedPlays: any[];
-  editTag: string;
-  setEditTag: (value: string) => void;
-  saveTag: () => void;
 }) {
+  const initialCluster = { id: '', text: '' };
+  const initialTags = [initialCluster];
+  const form = useForm<z.infer<typeof EditTagFormSchema>>({
+    resolver: zodResolver(EditTagFormSchema),
+    defaultValues: {
+      clusters: [initialCluster],
+    },
+  });
+  const { setValue } = form;
+  const [tags, setTags] = React.useState<TagType[]>([initialCluster]);
+  const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
+  function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
+    console.log('submit', data);
+    onOpenChange(false);
+  }
+
+  const generateTagId = () => {
+    const generatedId = Math.random() * 16;
+    return `new_cluster_${generatedId}`;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {selectedPlays.length > 1
-              ? `Edit tag for ${selectedPlays.length} plays`
-              : 'Edit play tag'}
-          </DialogTitle>
-          <DialogDescription>
-            {selectedPlays.length > 1
-              ? 'This will update the tag for all selected plays.'
-              : 'Update the tag for this play.'}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="tag">Tag</Label>
-            <Input
-              id="tag"
-              value={editTag}
-              onChange={(e) => setEditTag(e.target.value)}
-              placeholder="Enter play tag"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={saveTag}>Save</Button>
-        </DialogFooter>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <DialogHeader>
+              <DialogTitle>
+                {selectedPlays.length > 1
+                  ? `Assign ${selectedPlays.length} plays to a cluster`
+                  : 'Assign play to a cluster'}
+              </DialogTitle>
+              <DialogDescription>
+                {selectedPlays.length > 1
+                  ? 'This will update the cluster for all selected plays.'
+                  : 'Update the cluster for this play.'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <FormField
+                control={form.control}
+                name="clusters"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col items-start">
+                    <FormLabel className="text-sm">Play Cluster</FormLabel>
+                    <div className="flex w-full gap-2">
+                      <FormControl>
+                        <TagInput
+                          {...field}
+                          autocompleteOptions={initialTags}
+                          maxTags={1}
+                          tags={tags}
+                          inlineTags
+                          addTagsOnBlur
+                          styleClasses={{
+                            input: 'focus-visible:outline-none shadow-none w-full',
+                            tag: { body: 'h-7' },
+                          }}
+                          generateTagId={generateTagId}
+                          enableAutocomplete
+                          placeholder="Select or create cluster"
+                          setTags={(newTags) => {
+                            setTags(newTags);
+                            setValue('clusters', newTags as [Tag, ...Tag[]]);
+                          }}
+                          activeTagIndex={activeTagIndex}
+                          setActiveTagIndex={setActiveTagIndex}
+                        />
+                      </FormControl>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)} variant="outline">
+                Cancel
+              </Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
 }
 
-// Component for editing notes
+const EditNoteFormSchema = z.object({
+  note: z.string().optional(),
+});
+
 function EditNoteDialog({
   open,
   onOpenChange,
-  editNote,
-  setEditNote,
-  saveNote,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  editNote: string;
-  setEditNote: (value: string) => void;
-  saveNote: () => void;
 }) {
+  const form = useForm<z.infer<typeof EditNoteFormSchema>>({
+    resolver: zodResolver(EditNoteFormSchema),
+    defaultValues: {
+      note: '', // playDetails.note TODO
+    },
+  });
+
+  function onSubmit(data: z.infer<typeof EditNoteFormSchema>) {
+    console.log('submit', data);
+    onOpenChange(false);
+  }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit play note</DialogTitle>
-          <DialogDescription>Update the note for this play.</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="note">Note</Label>
-            <Textarea
-              id="note"
-              value={editNote}
-              onChange={(e) => setEditNote(e.target.value)}
-              placeholder="Enter play note"
-              rows={4}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={saveNote}>Save</Button>
-        </DialogFooter>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <DialogHeader>
+              <DialogTitle>Edit play note</DialogTitle>
+              <DialogDescription>Update the note for this play.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <FormField
+                control={form.control}
+                name="note"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col items-start">
+                    <FormLabel className="text-sm">Play Note</FormLabel>
+                    <FormControl>
+                      <Input type="text" placeholder="Add a note..." {...field} />
+                    </FormControl>
+
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
 }
 
-export function PlaysTable({ title }: { title: string }) {
+export function PlaysTable() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
-
+  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   // Dialog states
   const [tagDialogOpen, setTagDialogOpen] = React.useState(false);
   const [noteDialogOpen, setNoteDialogOpen] = React.useState(false);
@@ -228,6 +300,9 @@ export function PlaysTable({ title }: { title: string }) {
   const [selectedPlays, setSelectedPlays] = React.useState<Play[]>([]);
   const [editTag, setEditTag] = React.useState('');
   const [editNote, setEditNote] = React.useState('');
+
+  // TODO use scatter data for this list or another endpoint
+  // Loading // Hide if no Play is selected!
 
   // Action handlers
   function handleEditTag(play: Play) {
@@ -256,27 +331,6 @@ export function PlaysTable({ title }: { title: string }) {
     const allSameTag = plays.every((play) => play.clusterId === firstTag);
     setEditTag(String(allSameTag ? firstTag : ''));
     setTagDialogOpen(true);
-  }
-
-  function saveTag() {
-    if (selectedPlay) {
-      console.log(`Saving tag "${editTag}" for play: ${selectedPlay.id}`);
-      // Update tag logic for single play here
-    } else if (selectedPlays.length > 0) {
-      console.log(
-        `Saving tag "${editTag}" for plays: ${selectedPlays.map((p) => p.id).join(', ')}`,
-      );
-      // Update tag logic for multiple plays here
-    }
-    setTagDialogOpen(false);
-  }
-
-  function saveNote() {
-    if (selectedPlay) {
-      console.log(`Saving note "${editNote}" for play: ${selectedPlay.id}`);
-      // Update note logic here
-    }
-    setNoteDialogOpen(false);
   }
 
   // Define columns
@@ -425,8 +479,8 @@ export function PlaysTable({ title }: { title: string }) {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => handleEditTag(play)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Cluster
+                <Tag className="h-4 w-4" />
+                Assign different cluster
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleEditNote(play)}>
                 <Edit className="mr-2 h-4 w-4" />
@@ -462,6 +516,8 @@ export function PlaysTable({ title }: { title: string }) {
     },
   });
 
+  const title = `Similar plays in cluster ${selectedPoint?.cluster ?? ''}`;
+
   return (
     <div className="w-full">
       <h2 className="text-lg font-semibold">{title}</h2>
@@ -469,17 +525,8 @@ export function PlaysTable({ title }: { title: string }) {
         open={tagDialogOpen}
         onOpenChange={setTagDialogOpen}
         selectedPlays={selectedPlays}
-        editTag={editTag}
-        setEditTag={setEditTag}
-        saveTag={saveTag}
       />
-      <EditNoteDialog
-        open={noteDialogOpen}
-        onOpenChange={setNoteDialogOpen}
-        editNote={editNote}
-        setEditNote={setEditNote}
-        saveNote={saveNote}
-      />
+      <EditNoteDialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen} />
       <div className="flex items-center justify-between py-4">
         <div className="flex gap-2">
           <Input
@@ -503,7 +550,7 @@ export function PlaysTable({ title }: { title: string }) {
               className="flex items-center gap-1"
             >
               <Tag className="h-4 w-4" />
-              Tag Selected ({table.getFilteredSelectedRowModel().rows.length})
+              Assign selected plays to a cluster ({table.getFilteredSelectedRowModel().rows.length})
             </Button>
           ) : null}
           <DropdownMenu>

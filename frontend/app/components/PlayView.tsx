@@ -55,7 +55,7 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       clusters: [initialCluster],
-      note: '', //playDetails.note TODO
+      note: '', // playDetails.note TODO
     },
   });
   const [tags, setTags] = useState<Tag[]>([initialCluster]);
@@ -67,12 +67,16 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
     console.log('submit', data);
     const payload = {
       action: PlayActions.UpdatePlayFields,
-      data: JSON.stringify({ eventId: selectedPoint?.event_id, gameId: selectedPoint?.game_id, ...data }),
+      data: JSON.stringify({
+        eventId: selectedPoint?.event_id,
+        gameId: selectedPoint?.game_id,
+        ...data,
+      }),
     };
 
     submit(payload, {
       action: '/play',
-      method: 'post'
+      method: 'post',
     });
 
     stageSelectedPlayClusterUpdate(data.clusters[0].id); // TODO

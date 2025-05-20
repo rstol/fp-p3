@@ -87,7 +87,7 @@ export default function Home() {
         </ResizablePanelGroup>
       </div>
       <div className="mt-12 mb-16 space-y-10">
-        <PlaysTable title="More plays of the current cluster" />
+        <PlaysTable />
         {/* <TeamsTable />
         <GamesTable /> */}
       </div>
