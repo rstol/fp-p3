@@ -7,16 +7,10 @@ from backend.resources.playid import PlayId
 @dataclass(slots=True, frozen=True)
 class Play:
     play_id: PlayId
-    play_data: dict[str, Any]
-
-    def get_play_details(self) -> dict[str, Any]:
-        # TODO return details as dict for frontend
-        return self.play_data
-
-    def get_ppp(self) -> float:
-        # TODO calc point per possession
-        raise NotImplementedError
-
-    def get_video(self) -> bytes:
-        # TODO animate and return video of play
-        raise NotImplementedError
+    event_type: int
+    event_score: str
+    event_score_margin: str
+    possession_team_id: str
+    event_desc_home: dict[str, Any]
+    event_desc_away: dict[str, Any]
+    note: str | None = None

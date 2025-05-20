@@ -25,8 +25,6 @@ class Cluster:
     created_by: str
     confidence: float = 1.0  # 0-1 value representing cluster cohesion
 
-    # TODO store with pickle protocol
-
     # TODO helper methods
     def sort_plays_by_cluster_distance(self):
         pass

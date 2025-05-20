@@ -102,7 +102,7 @@ class PlayClustering:
         for i, cluster_play in enumerate(cluster_plays):
             timestamp = time.time()
             cluster = Cluster(
-                id=i,
+                id=str(i),
                 label=f"Cluster {i + 1}",
                 centroid=centroids[i],
                 plays=[cluster_play],

@@ -8,10 +8,10 @@ import umap
 from flask import request
 from flask_restful import Resource
 
+from backend.resources.cluster import Cluster
 from backend.resources.dataset_manager import DatasetManager
+from backend.resources.play_clustering import PlayClustering
 from backend.settings import DATA_DIR, TRACKING_DIR
-
-from .play_clustering import PlayClustering
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -162,7 +162,9 @@ class TeamPlaysScatterResource(Resource):
         # TODO(mboss): check this?
         return pl.concat(all_plays_list, how="diagonal_relaxed")
 
-    def _generate_scatter_data(self, plays: pl.DataFrame, initial_clusters: list) -> pl.DataFrame:
+    def _generate_scatter_data(
+        self, plays: pl.DataFrame, initial_clusters: list[Cluster]
+    ) -> pl.DataFrame:
         y = np.full(len(plays["team_embeddings"]), -1)
         for cluster in initial_clusters:
             for play in cluster.plays:
