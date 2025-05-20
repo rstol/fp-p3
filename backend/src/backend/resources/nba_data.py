@@ -77,15 +77,12 @@ class PlayDetailsResource(Resource):
         super().__init__()
 
         self.play_details_schema = {
-            "game_id": pl.String,
-            "event_id": pl.String,
-            "cluster_id": pl.String,
+            "game_id": pl.Int64,
+            "event_id": pl.Int64,
+            "cluster": pl.String,
             "cluster_name": pl.String,
             "note": pl.String,
         }
-        if not Path(f"{DATA_DIR}/plays_details.parquet").exists():
-            play_details = pl.DataFrame(schema=self.play_details_schema)
-            play_details.write_parquet(f"{DATA_DIR}/plays_details.parquet")
 
     def get(self, game_id: str, event_id: str):
         try:
@@ -100,8 +97,9 @@ class PlayDetailsResource(Resource):
 
     def post(self, game_id: str, event_id: str):
         update_play_data = request.get_json()
-        update_play_data["game_id"] = game_id
-        update_play_data["event_id"] = event_id
+        update_play_data["cluster"] = update_play_data.pop("cluster_id")
+        update_play_data["game_id"] = int(game_id)
+        update_play_data["event_id"] = int(event_id)
 
         try:
             df_update = pl.DataFrame(update_play_data, schema=self.play_details_schema)
