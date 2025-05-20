@@ -122,22 +122,6 @@ class TeamPlaysScatterResource(Resource):
         data, status_code = self._prepare_scatter_data_for_response(team_id, timeframe)
         return data, status_code
 
-    def post(self, team_id):
-        logger.info(f"Received cluster update POST request for team_id: {team_id}")
-        updated_plays_data = request.get_json()
-
-        if not updated_plays_data:
-            logger.warning(f"No data provided in cluster update for team_id: {team_id}")
-            return {"error": "No data provided for update"}, 400
-
-        logger.info(f"Cluster update data for team_id {team_id}: {updated_plays_data}")
-        # TODO(mboss): Implement the actual logic to process these updates in the data source.
-
-        # For now, return the original/current scatter data for this team.
-        timeframe_for_refresh = request.args.get("timeframe", "last_3")
-        data, status_code = self._prepare_scatter_data_for_response(team_id, timeframe_for_refresh)
-        return data, status_code
-
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
         all_plays_list: list[pl.DataFrame] = []
         for game_row in games.rows(named=True):

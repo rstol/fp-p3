@@ -1,7 +1,8 @@
-from flask import Response, jsonify
+from flask import Response, jsonify, request
 from flask_restful import Resource
 
 from backend.resources.dataset_manager import DatasetManager
+from backend.resources.playid import PlayId
 from backend.settings import TRACKING_DIR
 
 dataset_manager = DatasetManager(TRACKING_DIR)
@@ -76,6 +77,17 @@ class PlayDetailsResource(Resource):
         except ValueError as err:
             print(err)
             return {"error": "Invalid play ID format"}, 400
+
+    def post(self, game_id: str, event_id: str):
+        play_id = PlayId(game_id, event_id)
+        update_play_data = request.get_json()  # cluster_id, cluster_name, note
+
+        cluster_id = update_play_data["cluster_id"]
+        # TODO create new cluster if cluster id id not set
+
+        # TODO Store updated data
+
+        return {}  # success
 
 
 if __name__ == "__main__":

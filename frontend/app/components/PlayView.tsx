@@ -188,7 +188,7 @@ export default function PlayView() {
         }));
 
         const resDetails = await fetch(
-          `${BASE_URL}/plays/00${selectedPoint.game_id}/${selectedPoint.event_id}/details`,
+          `${BASE_URL}/plays/00${selectedPoint.game_id}/${selectedPoint.event_id}`,
         );
         if (!resDetails.ok) throw new Error();
         const playDetails = await resDetails.json();
