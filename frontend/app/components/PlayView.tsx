@@ -70,20 +70,10 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
       data: { eventId: selectedPoint?.event_id, gameId: selectedPoint?.game_id, ...data },
     };
     submit(payload, { action: '/resources/play', method: 'post' });
-    handleClusterChange(data.clusters[0].text);
+    stageSelectedPlayClusterUpdate(data.clusters[0].id); // TODO
   }
 
-  // TODO remove
-  const handleClusterChange = (newClusterValue: string) => {
-    const newClusterId = parseInt(newClusterValue, 10);
-    if (!isNaN(newClusterId)) {
-      stageSelectedPlayClusterUpdate(newClusterId);
-    } else {
-      console.warn('Invalid Play Cluster ID entered, not a number:', newClusterValue);
-    }
-  };
-
-  //TODO define for to new cluster data
+  //TODO define for to new cluster data format
   const generateTagId = () => {
     const generatedId = Math.random() * 16;
     return `new_cluster_${generatedId}`;

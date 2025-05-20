@@ -4,7 +4,7 @@ import { getPointId } from './utils';
 
 type State = {
   selectedPoint: Point | null;
-  pendingClusterUpdates: Map<string, number>;
+  pendingClusterUpdates: Map<string, string>;
   stagedChangesCount: number;
   selectedTeamId: string | null;
 };
@@ -12,14 +12,14 @@ type State = {
 type Action = {
   updatePoint: (point: Point) => void;
   resetPoint: () => void;
-  stageSelectedPlayClusterUpdate: (clusterId: number) => void;
+  stageSelectedPlayClusterUpdate: (clusterId: string) => void;
   clearPendingClusterUpdates: () => void;
   setSelectedTeamId: (teamId: string | null) => void;
 };
 
 export const useDashboardStore = create<State & Action>((set) => ({
   selectedPoint: null,
-  pendingClusterUpdates: new Map<string, number>(),
+  pendingClusterUpdates: new Map<string, string>(),
   stagedChangesCount: 0,
   selectedTeamId: null,
   updatePoint: (selectedPoint) => set(() => ({ selectedPoint })),
@@ -45,7 +45,7 @@ export const useDashboardStore = create<State & Action>((set) => ({
     }),
   clearPendingClusterUpdates: () =>
     set(() => ({
-      pendingClusterUpdates: new Map<string, number>(),
+      pendingClusterUpdates: new Map<string, string>(),
       stagedChangesCount: 0,
     })),
   setSelectedTeamId: (teamId) => {

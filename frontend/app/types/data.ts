@@ -54,7 +54,7 @@ export interface PlayDetail {
 export interface PointData {
   x: number;
   y: number;
-  cluster: number;
+  cluster: string;
   event_id: string;
   game_id: string;
   event_desc_home: string | null;

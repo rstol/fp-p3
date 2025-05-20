@@ -14,3 +14,4 @@ class Play:
     event_desc_home: dict[str, Any]
     event_desc_away: dict[str, Any]
     note: str | None = None
+    is_tagged: bool = False
