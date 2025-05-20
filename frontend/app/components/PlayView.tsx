@@ -15,19 +15,16 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
-// interface ClientActionResult {
-//   success: boolean;
-//   error?: string;
-//   message?: string;
-//   data?: any; // Consider a more specific type for 'data' if known
-// }
+
 const FormSchema = z.object({
-  clusters: z.array(
-    z.object({
-      id: z.string(),
-      text: z.string(),
-    }),
-  ),
+  clusters: z
+    .array(
+      z.object({
+        id: z.string(),
+        text: z.string(),
+      }),
+    )
+    .length(1),
   note: z.string().optional(),
 });
 
@@ -170,7 +167,6 @@ export type PlayDetails = {
 export default function PlayView() {
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const stagedChangesCount = useDashboardStore((state) => state.stagedChangesCount);
-  const pendingClusterUpdates = useDashboardStore((state) => state.pendingClusterUpdates);
   const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
   const [playDetails, setPlayDetails] = useState<PlayDetails | null>(null);

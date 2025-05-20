@@ -25,7 +25,7 @@ export default function ClusterView() {
 
   const isLoading = false; // TODO fetching data
   if (isLoading) return <ClusterDetailsSkeleton />;
-  if (selectedPoint) {
+  if (!selectedPoint) {
     return (
       <Card className="gap-4 border-none pt-1 shadow-none">
         <CardHeader>

@@ -1,23 +1,23 @@
 import * as d3 from 'd3';
-import { Circle, GrabIcon, Info, Minus, Move, Plus, RefreshCcw, ZoomIn } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
+import { Circle, Info, Minus, Move, Plus, RefreshCcw, ZoomIn } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLoaderData, useNavigation } from 'react-router';
+import { Label } from '~/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
+import { useDashboardStore } from '~/lib/stateStore';
+import { getPointId } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
 import type { Point } from '~/types/data';
 import Filters from './Filters';
 import { ScatterPlotSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { useDashboardStore } from '~/lib/stateStore';
-import { getPointId } from '~/lib/utils';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '~/components/ui/select';
-import { Label } from '~/components/ui/label';
 
 const defaultDimensions = { width: 500, height: 400 };
 const margin = { top: 40, right: 10, bottom: 10, left: 10 };

@@ -1,10 +1,8 @@
 import { create } from 'zustand';
 import type { Point } from '~/types/data';
-import { getPointId } from './utils';
 
 type State = {
   selectedPoint: Point | null;
-  pendingClusterUpdates: Map<string, string>;
   stagedChangesCount: number;
   selectedTeamId: string | null;
 };
@@ -19,7 +17,6 @@ type Action = {
 
 export const useDashboardStore = create<State & Action>((set) => ({
   selectedPoint: null,
-  pendingClusterUpdates: new Map<string, string>(),
   stagedChangesCount: 0,
   selectedTeamId: null,
   updatePoint: (selectedPoint) => set(() => ({ selectedPoint })),
@@ -29,23 +26,19 @@ export const useDashboardStore = create<State & Action>((set) => ({
     })),
   stageSelectedPlayClusterUpdate: (clusterId) =>
     set((state) => {
-      const { selectedPoint, pendingClusterUpdates } = state;
-      if (selectedPoint) {
-        const playId = getPointId(selectedPoint);
-        const newPendingUpdates = new Map(pendingClusterUpdates);
-        newPendingUpdates.set(playId, clusterId);
+      const { selectedPoint, stagedChangesCount } = state;
+      if (!selectedPoint) return state;
 
-        return {
-          selectedPoint: { ...selectedPoint, cluster: clusterId },
-          pendingClusterUpdates: newPendingUpdates,
-          stagedChangesCount: newPendingUpdates.size,
-        };
-      }
-      return state;
+      // TODO only count if cluster assignment changed
+      if (selectedPoint.cluster === clusterId) return state;
+
+      return {
+        selectedPoint: { ...selectedPoint, cluster: clusterId },
+        stagedChangesCount: stagedChangesCount + 1,
+      };
     }),
   clearPendingClusterUpdates: () =>
     set(() => ({
-      pendingClusterUpdates: new Map<string, string>(),
       stagedChangesCount: 0,
     })),
   setSelectedTeamId: (teamId) => {

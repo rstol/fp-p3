@@ -121,12 +121,14 @@ const data: Play[] = [
 ];
 
 const EditTagFormSchema = z.object({
-  clusters: z.array(
-    z.object({
-      id: z.string(),
-      text: z.string(),
-    }),
-  ),
+  clusters: z
+    .array(
+      z.object({
+        id: z.string(),
+        text: z.string(),
+      }),
+    )
+    .length(1),
 });
 
 // Component for editing tags
@@ -139,6 +141,9 @@ function EditTagDialog({
   onOpenChange: (open: boolean) => void;
   selectedPlays: any[];
 }) {
+  const stageSelectedPlayClusterUpdate = useDashboardStore(
+    (state) => state.stageSelectedPlayClusterUpdate,
+  );
   const initialCluster = { id: '', text: '' };
   const initialTags = [initialCluster];
   const form = useForm<z.infer<typeof EditTagFormSchema>>({
@@ -151,7 +156,13 @@ function EditTagDialog({
   const [tags, setTags] = React.useState<TagType[]>([initialCluster]);
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
   function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
+    const updatedCluster = data.clusters[0];
+    const defaultCluster = form.formState.defaultValues?.clusters?.[0];
     console.log('submit', data);
+    if (updatedCluster.text !== defaultCluster?.text && updatedCluster.id !== defaultCluster?.id) {
+      // Submit
+      stageSelectedPlayClusterUpdate(updatedCluster.id);
+    }
     onOpenChange(false);
   }
 
@@ -202,7 +213,7 @@ function EditTagDialog({
                           placeholder="Select or create cluster"
                           setTags={(newTags) => {
                             setTags(newTags);
-                            setValue('clusters', newTags as [Tag, ...Tag[]]);
+                            setValue('clusters', newTags as [TagType, ...TagType[]]);
                           }}
                           activeTagIndex={activeTagIndex}
                           setActiveTagIndex={setActiveTagIndex}
@@ -247,6 +258,9 @@ function EditNoteDialog({
 
   function onSubmit(data: z.infer<typeof EditNoteFormSchema>) {
     console.log('submit', data);
+    if (form.formState.defaultValues?.note !== form.formState.defaultValues?.note) {
+      // TODO submit
+    }
     onOpenChange(false);
   }
   return (
@@ -479,15 +493,15 @@ export function PlaysTable() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => handleEditTag(play)}>
-                <Tag className="h-4 w-4" />
+                <Tag className="mr-1 h-4 w-4" />
                 Assign different cluster
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleEditNote(play)}>
-                <Edit className="mr-2 h-4 w-4" />
+                <Edit className="mr-1 h-4 w-4" />
                 Edit play note
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleViewPreview(play.id)}>
-                <Eye className="mr-2 h-4 w-4" />
+                <Eye className="mr-1 h-4 w-4" />
                 Preview Play in Plot
               </DropdownMenuItem>
             </DropdownMenuContent>
