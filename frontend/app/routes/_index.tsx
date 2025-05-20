@@ -1,9 +1,4 @@
-import localforage from 'localforage';
-import {
-  useSearchParams,
-  type ClientLoaderFunctionArgs,
-  type ActionFunctionArgs,
-} from 'react-router';
+import { useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import { PlaysTable } from '~/components/PlaysTable';
@@ -12,9 +7,13 @@ import ScatterPlot from '~/components/ScatterPlot';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
 import { Separator } from '~/components/ui/separator';
 import { BASE_URL, GameFilter } from '~/lib/const';
+import {
+  fetchWithCache,
+  purgeCacheOnGitCommitChange,
+  purgeScatterDataCache,
+} from '~/lib/fetchCache';
 import type { Game, Point, Team } from '~/types/data';
 import type { Route } from './+types/_index';
-import { fetchWithCache, purgeCacheIfNeeded } from '~/lib/fetchCache';
 
 interface ScatterDataResponse {
   total_games: number;
@@ -29,10 +28,11 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
-  purgeCacheIfNeeded();
+  await purgeCacheOnGitCommitChange();
   const url = new URL(request.url);
   const teamID = url.searchParams.get('teamid');
   const timeframeUrl = url.searchParams.get('timeframe');
+  const fetchScatter = url.searchParams.get('fetch_scatter');
   let timeframe =
     isNaN(Number(timeframeUrl)) || timeframeUrl === null
       ? GameFilter.LAST3
@@ -44,6 +44,8 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 
   const totalGames = games?.length ?? 0;
   timeframe = Math.min(totalGames, timeframe);
+
+  if (fetchScatter) await purgeScatterDataCache(teamID);
 
   const fetchPromises: [Promise<Team[]>, Promise<ScatterDataResponse | null>] = [
     fetchWithCache<Team[]>(`${BASE_URL}/teams`),

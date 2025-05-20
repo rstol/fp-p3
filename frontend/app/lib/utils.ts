@@ -1,12 +1,12 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { Play } from '~/types/data';
+import type { Point } from '~/types/data';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function getPlayId(play: Play | null): string {
-  if (!play) return '';
-  return `${play.game_id}-${play.event_id}`;
+export function getPointId(point: Point | null): string {
+  if (!point) return '';
+  return `${point.game_id}-${point.event_id}`;
 }

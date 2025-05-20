@@ -9,7 +9,7 @@ import { ScatterPlotSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDashboardStore } from '~/lib/stateStore';
-import { getPlayId } from '~/lib/utils';
+import { getPointId } from '~/lib/utils';
 import {
   Select,
   SelectTrigger,
@@ -193,7 +193,9 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     if (selectedPoint) {
       setPlotData((currentPlotData) =>
         currentPlotData.map((p) =>
-          getPlayId(p) === getPlayId(selectedPoint) ? { ...p, cluster: selectedPoint.cluster } : p,
+          getPointId(p) === getPointId(selectedPoint)
+            ? { ...p, cluster: selectedPoint.cluster }
+            : p,
         ),
       );
     }
@@ -212,15 +214,15 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       container
         .selectAll('circle')
         .attr('r', function (d: any) {
-          const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+          const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
           return isSelected ? 8 / transform.k : 5 / transform.k;
         })
         .attr('stroke', function (d: any) {
-          const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+          const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
           return isSelected ? 'black' : 'white';
         })
         .attr('stroke-width', function (d: any) {
-          const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+          const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
           return isSelected ? 2 / transform.k : 1 / transform.k;
         });
       container.selectAll('path').attr('stroke-width', 0.8 / transform.k); // contour
@@ -375,7 +377,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .data(plotData)
       .join('circle')
       .attr('r', (d) => {
-        const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+        const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
         return isSelected ? 8 : 5;
       })
       .attr('cx', (d) => xScale(d.x))
@@ -383,17 +385,17 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .attr('class', (d) => `cluster-${d.cluster}`)
       .attr('fill', (d) => color(String(d.cluster)))
       .attr('stroke', (d) => {
-        const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+        const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
         return isSelected ? 'black' : 'white';
       })
       .attr('stroke-width', (d) => {
-        const isSelected = selectedPoint && getPlayId(selectedPoint) === getPlayId(d);
+        const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
         return isSelected ? 2 : 1;
       })
       .attr('cursor', 'pointer')
       .on('click', (event, play) => {
         event.stopPropagation();
-        if (!selectedPoint || getPlayId(selectedPoint) !== getPlayId(play)) {
+        if (!selectedPoint || getPointId(selectedPoint) !== getPointId(play)) {
           updatePoint(play);
         }
       })

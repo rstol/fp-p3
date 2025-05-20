@@ -51,7 +51,7 @@ export interface PlayDetail {
   game_date?: string;
 }
 
-export interface PlayData {
+export interface PointData {
   x: number;
   y: number;
   cluster: number;
@@ -63,6 +63,4 @@ export interface PlayData {
   event_type: number;
 }
 
-export type Point = PlayData;
-
-export type Play = Point;
+export type Point = PointData;
