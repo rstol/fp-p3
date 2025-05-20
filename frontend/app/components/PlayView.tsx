@@ -9,12 +9,12 @@ import { BASE_URL, EventType, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
 import type { Team } from '~/types/data';
-import { clientAction } from '../routes/play';
 import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
+import type { clientAction } from '~/routes/resources.play';
 
 const FormSchema = z.object({
   clusters: z
@@ -26,6 +26,9 @@ const FormSchema = z.object({
     )
     .length(1),
   note: z.string().optional(),
+  eventId: z.string(),
+  gameId: z.string(),
+  _action: z.string(),
 });
 
 export type PlayPayload = {
@@ -53,6 +56,9 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
     defaultValues: {
       clusters: [initialCluster],
       note: '', // playDetails.note TODO
+      eventId: selectedPoint?.event_id,
+      gameId: selectedPoint?.game_id,
+      _action: PlayActions.UpdateAllPlayFields,
     },
   });
   const [tags, setTags] = useState<Tag[]>([initialCluster]);
@@ -61,27 +67,24 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
   let submit = useSubmit();
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
-    console.log('submit', data);
-    const payload = {
-      action: PlayActions.UpdatePlayFields,
-      data: JSON.stringify({
-        eventId: selectedPoint?.event_id,
-        gameId: selectedPoint?.game_id,
-        ...data,
-      }),
-    };
+    const updatedCluster = data.clusters[0];
+    const defaultCluster = form.formState.defaultValues?.clusters?.[0];
+    if (updatedCluster.text !== defaultCluster?.text && updatedCluster.id !== defaultCluster?.id) {
+      stageSelectedPlayClusterUpdate(data.clusters[0].id); // TODO
+    }
 
-    submit(payload, {
-      action: '/play',
-      method: 'post',
-    });
-
-    stageSelectedPlayClusterUpdate(data.clusters[0].id); // TODO
+    submit(
+      { ...data, clusters: JSON.stringify(data.clusters) },
+      {
+        action: '/resources/play',
+        method: 'post',
+      },
+    );
   }
 
   //TODO define for to new cluster data format
   const generateTagId = () => {
-    const generatedId = Math.random() * 16;
+    const generatedId = Math.random().toString();
     return `new_cluster_${generatedId}`;
   };
 

@@ -28,6 +28,7 @@ export const EventType: Record<number, string> = {
 };
 
 export enum PlayActions {
-  UpdatePlayFields = 'UpdatePlayFields',
-  UpdateClusterAssignment = 'UpdateClusterAssignment',
+  UpdateAllPlayFields = 'UpdateAllPlayFields',
+  UpdatePlayNote = 'UpdatePlayNote',
+  UpdatePlayCluster = 'UpdatePlayCluster',
 }

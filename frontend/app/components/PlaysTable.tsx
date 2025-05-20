@@ -17,6 +17,7 @@ import { type Tag as TagType, TagInput } from 'emblor';
 import { ArrowUpDown, ChevronDown, Edit, Eye, MoreHorizontal, Tag } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
+import { useSubmit } from 'react-router';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -45,8 +46,9 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
+import { PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 
 // Define the Play type
 export type Play = {
@@ -129,6 +131,9 @@ const EditTagFormSchema = z.object({
       }),
     )
     .length(1),
+  eventId: z.string(),
+  gameId: z.string(),
+  _action: z.string(),
 });
 
 // Component for editing tags
@@ -150,19 +155,29 @@ function EditTagDialog({
     resolver: zodResolver(EditTagFormSchema),
     defaultValues: {
       clusters: [initialCluster],
+      eventId: 'sdf', //TODO
+      gameId: 'sdf', // TODO,
+      _action: PlayActions.UpdatePlayCluster,
     },
   });
   const { setValue } = form;
   const [tags, setTags] = React.useState<TagType[]>([initialCluster]);
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
+  let submit = useSubmit();
+
   function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
     const updatedCluster = data.clusters[0];
     const defaultCluster = form.formState.defaultValues?.clusters?.[0];
-    console.log('submit', data);
     if (updatedCluster.text !== defaultCluster?.text && updatedCluster.id !== defaultCluster?.id) {
-      // Submit
       stageSelectedPlayClusterUpdate(updatedCluster.id);
     }
+    submit(
+      { ...data, clusters: JSON.stringify(data.clusters) },
+      {
+        action: '/resources/play',
+        method: 'post',
+      },
+    );
     onOpenChange(false);
   }
 
@@ -240,6 +255,9 @@ function EditTagDialog({
 
 const EditNoteFormSchema = z.object({
   note: z.string().optional(),
+  eventId: z.string(),
+  gameId: z.string(),
+  _action: z.string(),
 });
 
 function EditNoteDialog({
@@ -249,18 +267,23 @@ function EditNoteDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  let submit = useSubmit();
   const form = useForm<z.infer<typeof EditNoteFormSchema>>({
     resolver: zodResolver(EditNoteFormSchema),
     defaultValues: {
       note: '', // playDetails.note TODO
+      eventId: '', //TODO
+      gameId: '', // TODO,
+      _action: PlayActions.UpdatePlayNote,
     },
   });
 
   function onSubmit(data: z.infer<typeof EditNoteFormSchema>) {
     console.log('submit', data);
-    if (form.formState.defaultValues?.note !== form.formState.defaultValues?.note) {
-      // TODO submit
-    }
+    submit(data, {
+      action: '/resources/play',
+      method: 'post',
+    });
     onOpenChange(false);
   }
   return (

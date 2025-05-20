@@ -8,9 +8,11 @@ import { Check } from 'lucide-react';
 import { Button } from './ui/button';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from './ui/form';
 import { Input } from './ui/input';
+import { useSubmit } from 'react-router';
 
 const FormSchema = z.object({
   clusterLabel: z.string(),
+  clusterId: z.string(),
 });
 
 export default function ClusterView() {
@@ -20,8 +22,10 @@ export default function ClusterView() {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       clusterLabel: selectedPoint?.cluster,
+      clusterId: selectedPoint?.cluster, // TODO change this
     },
   });
+  let submit = useSubmit();
 
   const isLoading = false; // TODO fetching data
   if (isLoading) return <ClusterDetailsSkeleton />;
@@ -40,7 +44,10 @@ export default function ClusterView() {
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
     console.log('submit', data);
-    // TODO change cluster label
+    submit(data, {
+      action: '/resources/cluster',
+      method: 'post',
+    });
   }
 
   return (
