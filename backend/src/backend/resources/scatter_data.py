@@ -8,7 +8,6 @@ import umap
 from flask import request
 from flask_restful import Resource
 
-from backend.resources.cluster import Cluster
 from backend.resources.dataset_manager import DatasetManager
 from backend.resources.play_clustering import PlayClustering
 from backend.settings import DATA_DIR, TRACKING_DIR
@@ -24,11 +23,20 @@ class TeamPlaysScatterResource(Resource):
     def __init__(self):
         self.dataset_manager = DatasetManager(TRACKING_DIR)
 
+        self.user_updates_schema = {
+            "game_id": pl.Int64,
+            "event_id": pl.Int64,
+            "cluster": pl.String,
+            "cluster_name": pl.String,
+            "note": pl.String,
+        }
+
         if not Path(f"{DATA_DIR}/plays_by_team.pkl").exists():
             self.plays_by_team = {
                 teamid: self.dataset_manager.get_games_for_team(teamid, as_dicts=False)
                 for teamid in self.dataset_manager.teams["teamid"]
             }
+            initial_clusters_update = pl.DataFrame(schema=self.user_updates_schema)
             for teamid, games in self.plays_by_team.items():
                 games = games.sort("game_date", descending=True)
                 games = games.limit(3)
@@ -51,7 +59,39 @@ class TeamPlaysScatterResource(Resource):
                     team_embeddings=pl.lit(play_clustering.team_embeddings[plays_index]),
                     cluster=pl.lit(cluster_assignments[plays_index]).cast(pl.Int32),
                 )
-                self.plays_by_team[teamid] = {"initial_clusters": initial_clusters, "plays": plays}
+                self.plays_by_team[teamid] = plays.select(
+                    "cluster",
+                    "event_id",
+                    "game_id",
+                    "event_desc_home",
+                    "event_desc_away",
+                    "game_date",
+                    "event_type",
+                    "ids_index",
+                    "team_embeddings",
+                )
+
+                initial_clusters_update_dicts = [
+                    {
+                        "game_id": cluster.plays[0].play_id.game_id,
+                        "event_id": cluster.plays[0].play_id.event_id,
+                        "cluster": cluster.id,
+                        "cluster_name": cluster.label,
+                        "note": "",
+                    }
+                    for cluster in initial_clusters
+                ]
+                initial_clusters_update = initial_clusters_update.update(
+                    pl.from_dicts(initial_clusters_update_dicts, schema=self.user_updates_schema),
+                    on=["game_id", "event_id"],
+                    how="full",
+                )
+
+            if not Path(f"{DATA_DIR}/user_updates.parquet").exists():
+                user_updates = pl.DataFrame(schema=self.user_updates_schema)
+                user_updates.write_parquet(f"{DATA_DIR}/user_updates.parquet")
+
+            initial_clusters_update.write_parquet(f"{DATA_DIR}/initial_clusters_update.parquet")
 
             with Path(f"{DATA_DIR}/plays_by_team.pkl").open("wb") as f:
                 pickle.dump(self.plays_by_team, f)
@@ -82,11 +122,22 @@ class TeamPlaysScatterResource(Resource):
 
         plays_of_team = self.plays_by_team.get(team_id, pl.DataFrame())
 
-        scatter_data_df = self._generate_scatter_data(
-            plays_of_team["plays"], initial_clusters=plays_of_team["initial_clusters"]
-        )
+        def apply_user_updates(plays: pl.DataFrame) -> pl.DataFrame:
+            user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates.parquet")
+            initial_clusters_update = pl.read_parquet(f"{DATA_DIR}/initial_clusters_update.parquet")
+            user_updates = initial_clusters_update.update(
+                user_updates, on=["game_id", "event_id"], how="full"
+            )
 
-        final_columns = [
+            plays = plays.with_columns(pl.lit(value=False).alias("isTagged"))
+            user_updates = user_updates.with_columns(pl.lit(value=True).alias("isTagged"))
+            return plays.update(user_updates, on=["game_id", "event_id"], how="left")
+
+        plays_of_team = apply_user_updates(plays_of_team)
+
+        scatter_data_df = self._generate_scatter_data(plays_of_team)
+
+        scatter_data_df = scatter_data_df.select(
             "x",
             "y",
             "cluster",
@@ -96,25 +147,18 @@ class TeamPlaysScatterResource(Resource):
             "event_desc_away",
             "game_date",
             "event_type",
-        ]
+            "isTagged",
+        )
 
-        # Ensure all final_columns exist, adding them with nulls if not present
-        current_cols = scatter_data_df.columns
-        for col_name in final_columns:
-            if col_name not in current_cols:
-                if col_name in ["x", "y", "cluster", "event_type"]:
-                    scatter_data_df = scatter_data_df.with_columns(
-                        pl.lit(None, dtype=pl.Float64).alias(col_name)
-                    )
-                else:
-                    scatter_data_df = scatter_data_df.with_columns(
-                        pl.lit(None, dtype=pl.String).alias(col_name)
-                    )
+        cluster_dicts = (
+            scatter_data_df.with_columns(pl.struct(pl.exclude("cluster")).alias("points"))
+            .select("cluster", "points")
+            .group_by("cluster")
+            .agg(pl.col("points"))
+            .to_dicts()
+        )
 
-        # Select only the final columns in the specified order
-        scatter_data_df = scatter_data_df.select(final_columns)
-
-        return {"points": scatter_data_df.to_dicts()}, 200
+        return cluster_dicts, 200
 
     def get(self, team_id):
         """Get scatter plot data for a team's plays."""
@@ -146,13 +190,11 @@ class TeamPlaysScatterResource(Resource):
         # TODO(mboss): check this?
         return pl.concat(all_plays_list, how="diagonal_relaxed")
 
-    def _generate_scatter_data(
-        self, plays: pl.DataFrame, initial_clusters: list[Cluster]
-    ) -> pl.DataFrame:
+    def _generate_scatter_data(self, plays: pl.DataFrame) -> pl.DataFrame:
         y = np.full(len(plays["team_embeddings"]), -1)
-        for cluster in initial_clusters:
-            for play in cluster.plays:
-                y[play.index] = cluster.id
+        y_plays = plays.filter(pl.col("isTagged") & pl.col("ids_index").is_not_null())
+        y_play_ids = y_plays["ids_index"].to_numpy()
+        y[y_play_ids] = y_plays["cluster"].to_numpy()
 
         xys = self.umap_model.fit_transform(plays["team_embeddings"], y=y)
 
