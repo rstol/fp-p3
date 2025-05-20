@@ -1,9 +1,12 @@
+from pathlib import Path
+
+import polars as pl
 from flask import Response, jsonify, request
 from flask_restful import Resource
+from loguru import logger
 
 from backend.resources.dataset_manager import DatasetManager
-from backend.resources.playid import PlayId
-from backend.settings import TRACKING_DIR
+from backend.settings import DATA_DIR, TRACKING_DIR
 
 dataset_manager = DatasetManager(TRACKING_DIR)
 
@@ -50,9 +53,10 @@ class PlayRawDataResource(Resource):
             play = dataset_manager.get_play_raw_data(game_id, play_id)
             if play:
                 return jsonify(play)
-            return {"error": "Play not found"}, 404
         except ValueError:
             return {"error": "Invalid play ID format"}, 400
+
+        return {"error": "Play not found"}, 404
 
 
 class PlayVideoResource(Resource):
@@ -61,36 +65,59 @@ class PlayVideoResource(Resource):
             video = dataset_manager.get_play_video(game_id, event_id)
             if video:
                 return Response(video, mimetype="application/octet-stream")
-            return {"error": "Play not found"}, 404
         except ValueError as err:
-            print(err)
+            logger.error(err)
             return {"error": "Invalid play ID format"}, 400
+
+        return {"error": "Play not found"}, 404
 
 
 class PlayDetailsResource(Resource):
+    def __init__(self):
+        super().__init__()
+
+        self.play_details_schema = {
+            "game_id": pl.String,
+            "event_id": pl.String,
+            "cluster_id": pl.String,
+            "cluster_name": pl.String,
+            "note": pl.String,
+        }
+        if not Path(f"{DATA_DIR}/plays_details.parquet").exists():
+            play_details = pl.DataFrame(schema=self.play_details_schema)
+            play_details.write_parquet(f"{DATA_DIR}/plays_details.parquet")
+
     def get(self, game_id: str, event_id: str):
         try:
             play = dataset_manager.get_play_details(game_id, event_id)
-            if play:
+            if play is not None:
                 return jsonify(play)
-            return {"error": "Play not found"}, 404
         except ValueError as err:
-            print(err)
+            logger.error(err)
             return {"error": "Invalid play ID format"}, 400
 
+        return {"error": "Play not found"}, 404
+
     def post(self, game_id: str, event_id: str):
-        play_id = PlayId(game_id, event_id)
-        update_play_data = request.get_json()  # cluster_id, cluster_name, note
+        update_play_data = request.get_json()
+        update_play_data["game_id"] = game_id
+        update_play_data["event_id"] = event_id
 
-        cluster_id = update_play_data["cluster_id"]
-        # TODO create new cluster if cluster id id not set
+        try:
+            df_update = pl.DataFrame(update_play_data, schema=self.play_details_schema)
+        except ValueError as err:
+            logger.error(err)
+            return {"error": "Invalid play ID format"}, 400
 
-        # TODO Store updated data
+        play_details = pl.read_parquet(f"{DATA_DIR}/plays_details.parquet")
+        play_details = play_details.update(df_update, on=["game_id", "event_id"], how="full")
 
-        return {}  # success
+        play_details.write_parquet(f"{DATA_DIR}/plays_details.parquet")
+
+        return {"message": "Play updated successfully"}, 200
 
 
 if __name__ == "__main__":
     """Use for debugging"""
-    play_video = PlayVideoResource()
-    video = play_video.get("0021500019", "7")
+    play_video = PlayDetailsResource()
+    video = play_video.post(game_id="0021500019", event_id="484")
