@@ -8,13 +8,15 @@ import { z } from 'zod';
 import { BASE_URL, EventType, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
-import type { Team } from '~/types/data';
+import type { clientAction } from '~/routes/resources.play';
 import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
-import type { clientAction } from '~/routes/resources.play';
+import type { PlayDetail, Team } from '~/types/data';
+
+type PlayDetailState = { videoURL?: string; offenseTeam?: Team } & PlayDetail;
 
 const FormSchema = z.object({
   clusters: z
@@ -36,7 +38,7 @@ export type PlayPayload = {
   action: PlayActions;
 };
 
-function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
+function PlayForm({ playDetails }: { playDetails: PlayDetail | null }) {
   const data = useLoaderData<typeof clientLoader>();
   const clusterData = data?.scatterData?.points ?? [];
   const clusters = Array.from(new Set(clusterData.map((d) => String(d.cluster)))).sort();
@@ -154,30 +156,16 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
   );
 }
 
-export type PlayDetails = {
-  game_id: string;
-  event_id: string;
-  event_type?: number;
-  event_score?: string;
-  possession_team_id?: number;
-  event_desc_home?: string;
-  event_desc_away?: string;
-  period?: number;
-  videoURL?: string;
-  offenseTeam?: Team;
-};
-
 export default function PlayView() {
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const stagedChangesCount = useDashboardStore((state) => state.stagedChangesCount);
   const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
-  const [playDetails, setPlayDetails] = useState<PlayDetails | null>(null);
+  const [playDetails, setPlayDetails] = useState<PlayDetailState | null>(null);
   const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
   const [_, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
-  let submit = useSubmit();
   const clusterDataFetcher = useFetcher<typeof clientAction>();
   // TODO loader during updating the clusters
   const isUpdating = clusterDataFetcher.state !== 'idle';

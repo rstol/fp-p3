@@ -49,6 +49,8 @@ export interface PlayDetail {
   event_desc_away: string | null;
 
   game_date?: string;
+  event_score?: string;
+  period?: number;
 }
 
 export interface PointData {
