@@ -9,7 +9,7 @@ import { BASE_URL, EventType, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
 import type { Team } from '~/types/data';
-import { clientAction } from '../routes/resources/play';
+import { clientAction } from '../routes/play';
 import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
@@ -65,11 +65,16 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
     console.log('submit', data);
-    const payload: PlayPayload = {
+    const payload = {
       action: PlayActions.UpdatePlayFields,
-      data: { eventId: selectedPoint?.event_id, gameId: selectedPoint?.game_id, ...data },
+      data: JSON.stringify({ eventId: selectedPoint?.event_id, gameId: selectedPoint?.game_id, ...data }),
     };
-    submit(payload, { action: '/resources/play', method: 'post' });
+
+    submit(payload, {
+      action: '/play',
+      method: 'post'
+    });
+
     stageSelectedPlayClusterUpdate(data.clusters[0].id); // TODO
   }
 

@@ -5,29 +5,42 @@ import { BASE_URL, PlayActions } from '~/lib/const';
 import type { PlayPayload } from '~/components/PlayView';
 
 export async function clientAction({ request }: ActionFunctionArgs) {
-  invariant(request.method.toLowerCase() !== 'post', 'Invalid request method - expected POST');
+  invariant(request.method.toLowerCase() === 'post', 'Invalid request method - expected POST');
 
   console.log(request);
-  const requestPayload = (await request.json()) as PlayPayload;
+  // const requestPayload = (await request.json()) as PlayPayload;
+
+  const requestPayload = await request.formData();
+
   console.log(requestPayload);
-  switch (requestPayload.action) {
+
+
+  switch (requestPayload.get('action')) {
     case PlayActions.UpdatePlayFields:
-      const { eventId, gameId, ...postPayload } = requestPayload.data;
-      invariant(!eventId || typeof eventId !== 'string', 'Missing or invalid eventId in payload');
-      invariant(!gameId || typeof gameId !== 'string', 'Missing or invalid gameId in payload');
+
+      const data = JSON.parse(requestPayload.get('data') as string);
+      console.log("data", data)
+      const eventId = data.eventId;
+      const gameId = data.gameId;
+      const clusters = data.clusters;
+      const note = data.note;
+
+      invariant(eventId && typeof eventId === 'number', 'Missing or invalid eventId in payload');
+      invariant(gameId && typeof gameId === 'number', 'Missing or invalid gameId in payload');
       invariant(
-        !Array.isArray(postPayload.clusters) || postPayload.clusters.length === 0,
+        Array.isArray(clusters) && clusters.length > 0,
         'Missing or invalid clusters in payload',
       );
 
       // Set cluster id to null for new cluster
-      const cluster = postPayload.clusters[0];
+      const cluster = clusters[0];
       const payload = {
         cluster_id: cluster.id.startsWith('new_cluster') ? null : cluster.id,
         cluster_name: cluster.text,
-        note: postPayload.note,
+        note: note,
       };
 
+      console.log(`${BASE_URL}/plays/${gameId}/${eventId}`)
       const backendResponse = await fetch(`${BASE_URL}/plays/${gameId}/${eventId}`, {
         method: 'POST',
         headers: {
@@ -35,6 +48,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
         },
         body: JSON.stringify(payload),
       });
+      console.log("getttttttttttttting there")
       return backendResponse; // No actual data just 200 or 40x
 
     case PlayActions.UpdateClusterAssignment:
