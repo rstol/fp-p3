@@ -9,18 +9,18 @@ import { BASE_URL, EventType, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
 import type { Team } from '~/types/data';
+import { clientAction } from '../routes/resources/play';
 import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
-import { clientAction } from '../routes/resources/update-play';
-interface ClientActionResult {
-  success: boolean;
-  error?: string;
-  message?: string;
-  data?: any; // Consider a more specific type for 'data' if known
-}
+// interface ClientActionResult {
+//   success: boolean;
+//   error?: string;
+//   message?: string;
+//   data?: any; // Consider a more specific type for 'data' if known
+// }
 const FormSchema = z.object({
   clusters: z.array(
     z.object({
@@ -31,6 +31,8 @@ const FormSchema = z.object({
   note: z.string().optional(),
 });
 
+export type PlayPayload = z.infer<typeof FormSchema>;
+
 function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
   const data = useLoaderData<typeof clientLoader>();
   const clusterData = data?.scatterData?.points ?? [];
@@ -38,6 +40,7 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
   const stageSelectedPlayClusterUpdate = useDashboardStore(
     (state) => state.stageSelectedPlayClusterUpdate,
   );
+
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   // TODO temporary transform: use data schema
   const initialCluster = {
@@ -45,7 +48,7 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
     text: String(selectedPoint?.cluster),
   };
   const initialTags = [...clusters].map((c) => ({ id: c, text: c }));
-  const form = useForm<z.infer<typeof FormSchema>>({
+  const form = useForm<PlayPayload>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
       clusters: [initialCluster],
@@ -57,16 +60,16 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
   const { setValue } = form;
   let submit = useSubmit();
 
-  function onSubmit(data: z.infer<typeof FormSchema>) {
+  function onSubmit(data: PlayPayload) {
     console.log('submit', data);
     // TODO save in backend instead of frontend
-    // submit(
-    //   {
-    //  action: PlayActions.UpdatePlayFields,
-    //  data
-    // },
-    //   { action: "/resources/play", method: "post" }
-    // );
+    submit(
+      {
+        action: PlayActions.UpdatePlayFields,
+        data,
+      },
+      { action: '/resources/play', method: 'post' },
+    );
     handleClusterChange(data.clusters[0].text);
   }
 
@@ -79,11 +82,12 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
       console.warn('Invalid Play Cluster ID entered, not a number:', newClusterValue);
     }
   };
-  //TODO define this
-  // const maxClusterId = Math.max(...clusters);
-  // const generateTagId = () => {
-  //   return String(maxClusterId + 1);
-  // };
+
+  //TODO define for to new cluster data
+  const generateTagId = () => {
+    const generatedId = Math.random() * 16;
+    return `new_cluster_${generatedId}`;
+  };
 
   return (
     <>
@@ -108,7 +112,7 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
                         input: 'focus-visible:outline-none shadow-none w-full',
                         tag: { body: 'h-7' },
                       }}
-                      // generateTagId={generateTagId}
+                      generateTagId={generateTagId}
                       enableAutocomplete
                       placeholder="Select or create cluster"
                       setTags={(newTags) => {
@@ -237,50 +241,50 @@ export default function PlayView() {
   }
 
   const onClickApplyChanges = async () => {
-    // TODO change this
-    const updatesToSend: { gameid: string; playid: number; cluster: number }[] = [];
-    pendingClusterUpdates.forEach((newCluster, playIdKey) => {
-      const parts = playIdKey.split('-');
+    // TODO fetch from index with query param fetch_scatter set
+    // const updatesToSend: { gameid: string; playid: number; cluster: number }[] = [];
+    // pendingClusterUpdates.forEach((newCluster, playIdKey) => {
+    //   const parts = playIdKey.split('-');
 
-      if (parts.length === 2) {
-        const gameId = parts[0];
-        const playIdStr = parts[1];
-        const playIdNum = parseInt(playIdStr, 10);
+    //   if (parts.length === 2) {
+    //     const gameId = parts[0];
+    //     const playIdStr = parts[1];
+    //     const playIdNum = parseInt(playIdStr, 10);
 
-        if (isNaN(playIdNum)) {
-          console.error(
-            `[PlayView.tsx] Failed to parse playId '${playIdStr}' to number for key '${playIdKey}'`,
-          );
-        } else {
-          updatesToSend.push({
-            gameid: gameId,
-            playid: playIdNum,
-            cluster: newCluster,
-          });
-        }
-      } else {
-        console.error(
-          `[PlayView.tsx] Invalid playIdKey format: '${playIdKey}'. Expected 'GAMEID-PLAYID'.`,
-        );
-      }
-    });
+    //     if (isNaN(playIdNum)) {
+    //       console.error(
+    //         `[PlayView.tsx] Failed to parse playId '${playIdStr}' to number for key '${playIdKey}'`,
+    //       );
+    //     } else {
+    //       updatesToSend.push({
+    //         gameid: gameId,
+    //         playid: playIdNum,
+    //         cluster: newCluster,
+    //       });
+    //     }
+    //   } else {
+    //     console.error(
+    //       `[PlayView.tsx] Invalid playIdKey format: '${playIdKey}'. Expected 'GAMEID-PLAYID'.`,
+    //     );
+    //   }
+    // });
 
-    if (updatesToSend.length === 0) {
-      if (pendingClusterUpdates.size > 0) {
-        console.error(
-          '[PlayView.tsx] Changes were staged, but none could be parsed into valid updates. Aborting POST.',
-        );
-      }
-      return;
-    }
+    // if (updatesToSend.length === 0) {
+    //   if (pendingClusterUpdates.size > 0) {
+    //     console.error(
+    //       '[PlayView.tsx] Changes were staged, but none could be parsed into valid updates. Aborting POST.',
+    //     );
+    //   }
+    //   return;
+    // }
 
-    submit(
-      {
-        data: { teamId: selectedTeamId, updates: updatesToSend },
-        action: PlayActions.UpdateClusterAssignment,
-      },
-      { action: '/resources/play', method: 'post' },
-    );
+    // submit(
+    //   {
+    //     data: { teamId: selectedTeamId, updates: updatesToSend },
+    //     action: PlayActions.UpdateClusterAssignment,
+    //   },
+    //   { action: '/resources/play', method: 'post' },
+    // );
     clearPendingClusterUpdates();
   };
 

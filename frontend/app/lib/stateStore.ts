@@ -1,8 +1,6 @@
 import { create } from 'zustand';
-import type { Point, Play } from '~/types/data';
-
-// Helper to generate a unique ID for a play
-const getPlayId = (play: Play | Point): string => `${play.game_id}-${play.event_id}`;
+import type { Point } from '~/types/data';
+import { getPointId } from './utils';
 
 type State = {
   selectedPoint: Point | null;
@@ -33,7 +31,7 @@ export const useDashboardStore = create<State & Action>((set) => ({
     set((state) => {
       const { selectedPoint, pendingClusterUpdates } = state;
       if (selectedPoint) {
-        const playId = getPlayId(selectedPoint);
+        const playId = getPointId(selectedPoint);
         const newPendingUpdates = new Map(pendingClusterUpdates);
         newPendingUpdates.set(playId, clusterId);
 
