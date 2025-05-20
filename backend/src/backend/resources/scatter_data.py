@@ -36,11 +36,7 @@ class TeamPlaysScatterResource(Resource):
                 teamid: self.dataset_manager.get_games_for_team(teamid, as_dicts=False)
                 for teamid in self.dataset_manager.teams["teamid"]
             }
-            if not Path(f"{DATA_DIR}/user_updates.parquet").exists():
-                user_updates = pl.DataFrame(schema=self.user_updates_schema)
-            else:
-                user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates.parquet")
-
+            user_updates = pl.DataFrame(schema=self.user_updates_schema)
             for teamid, games in self.plays_by_team.items():
                 games = games.sort("game_date", descending=True)
                 games = games.limit(3)
@@ -81,6 +77,9 @@ class TeamPlaysScatterResource(Resource):
                     how="full",
                 )
 
+            if Path(f"{DATA_DIR}/user_updates.parquet").exists():
+                user_updates_original = pl.read_parquet(f"{DATA_DIR}/user_updates.parquet")
+                user_updates.update(user_updates_original, on=["game_id", "event_id"], how="full")
             user_updates.write_parquet(f"{DATA_DIR}/user_updates.parquet")
 
             with Path(f"{DATA_DIR}/plays_by_team.pkl").open("wb") as f:
