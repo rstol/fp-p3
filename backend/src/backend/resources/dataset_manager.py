@@ -50,6 +50,9 @@ class DatasetManager:
         game = self._load_game_plays(game_id)
         return game.to_dicts() if as_dicts else game
 
+    def get_plays_for_games(self, game_ids: list[str]) -> DataFrame:
+        return self.plays.filter(pl.col("game_id").is_in(game_ids))
+
     def get_play_raw_data(self, game_id: str, play_id: str) -> dict[str, str] | None:
         plays = self._load_game_plays(game_id).fill_null("").fill_nan(0)
         play_dicts = plays.filter(pl.col("event_id") == play_id).head(1).to_dicts()

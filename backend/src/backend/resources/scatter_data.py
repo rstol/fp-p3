@@ -41,6 +41,7 @@ class TeamPlaysScatterResource(Resource):
                 games = games.sort("game_date", descending=True)
                 games = games.limit(3)
                 plays = self._concat_plays_from_games(games)
+                logger.info(f"Plays for team {teamid}: {plays.height}")
                 play_clustering = PlayClustering(
                     team_id=teamid, game_ids=plays["game_id"].unique().to_list()
                 )
@@ -167,28 +168,16 @@ class TeamPlaysScatterResource(Resource):
         return data, status_code
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
-        all_plays_list: list[pl.DataFrame] = []
-        for game_row in games.rows(named=True):
-            game_id = game_row["game_id"]
-            current_game_date = game_row.get("game_date")
-            logger.info(f"Processing game {game_id}")
-
-            plays_df = self.dataset_manager.get_plays_for_game(game_id, as_dicts=False)
-            if isinstance(plays_df, pl.DataFrame) and not plays_df.is_empty():
-                if current_game_date:
-                    plays_df = plays_df.with_columns(pl.lit(current_game_date).alias("game_date"))
-                else:
-                    plays_df = plays_df.with_columns(
-                        pl.lit(None, dtype=pl.String).alias("game_date")
-                    )
-
-                all_plays_list.append(plays_df)
-
-        if len(all_plays_list) == 0:
+        if games.height == 0:
             return pl.DataFrame()
 
-        # TODO(mboss): check this?
-        return pl.concat(all_plays_list, how="diagonal_relaxed")
+        game_ids = games["game_id"].to_list()
+        game_dates = games.select(["game_id", "game_date"])
+
+        plays_df = self.dataset_manager.get_plays_for_games(game_ids).collect()
+
+        return plays_df.join(game_dates, on="game_id", how="left")
+
 
     def _generate_scatter_data(self, plays: pl.DataFrame) -> pl.DataFrame:
         y = np.full(len(plays["team_embeddings"]), -1)
