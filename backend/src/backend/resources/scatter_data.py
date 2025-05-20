@@ -36,7 +36,7 @@ class TeamPlaysScatterResource(Resource):
                 teamid: self.dataset_manager.get_games_for_team(teamid, as_dicts=False)
                 for teamid in self.dataset_manager.teams["teamid"]
             }
-            user_updates = pl.DataFrame(schema=self.user_updates_schema)
+            initial_clusters_update = pl.DataFrame(schema=self.user_updates_schema)
             for teamid, games in self.plays_by_team.items():
                 games = games.sort("game_date", descending=True)
                 games = games.limit(3)
@@ -59,9 +59,19 @@ class TeamPlaysScatterResource(Resource):
                     team_embeddings=pl.lit(play_clustering.team_embeddings[plays_index]),
                     cluster=pl.lit(cluster_assignments[plays_index]).cast(pl.Int32),
                 )
-                self.plays_by_team[teamid] = {"initial_clusters": initial_clusters, "plays": plays}
+                self.plays_by_team[teamid] = plays.select(
+                    "cluster",
+                    "event_id",
+                    "game_id",
+                    "event_desc_home",
+                    "event_desc_away",
+                    "game_date",
+                    "event_type",
+                    "ids_index",
+                    "team_embeddings",
+                )
 
-                user_update_dicts = [
+                initial_clusters_update_dicts = [
                     {
                         "game_id": cluster.plays[0].play_id.game_id,
                         "event_id": cluster.plays[0].play_id.event_id,
@@ -71,16 +81,17 @@ class TeamPlaysScatterResource(Resource):
                     }
                     for cluster in initial_clusters
                 ]
-                user_updates = user_updates.update(
-                    pl.from_dicts(user_update_dicts, schema=self.user_updates_schema),
+                initial_clusters_update = initial_clusters_update.update(
+                    pl.from_dicts(initial_clusters_update_dicts, schema=self.user_updates_schema),
                     on=["game_id", "event_id"],
                     how="full",
                 )
 
-            if Path(f"{DATA_DIR}/user_updates.parquet").exists():
-                user_updates_original = pl.read_parquet(f"{DATA_DIR}/user_updates.parquet")
-                user_updates.update(user_updates_original, on=["game_id", "event_id"], how="full")
-            user_updates.write_parquet(f"{DATA_DIR}/user_updates.parquet")
+            if not Path(f"{DATA_DIR}/user_updates.parquet").exists():
+                user_updates = pl.DataFrame(schema=self.user_updates_schema)
+                user_updates.write_parquet(f"{DATA_DIR}/user_updates.parquet")
+
+            initial_clusters_update.write_parquet(f"{DATA_DIR}/initial_clusters_update.parquet")
 
             with Path(f"{DATA_DIR}/plays_by_team.pkl").open("wb") as f:
                 pickle.dump(self.plays_by_team, f)
@@ -111,17 +122,20 @@ class TeamPlaysScatterResource(Resource):
 
         plays_of_team = self.plays_by_team.get(team_id, pl.DataFrame())
 
-        def apply_user_updates(plays: pl.DataFrame, user_updates: pl.DataFrame) -> pl.DataFrame:
+        def apply_user_updates(plays: pl.DataFrame) -> pl.DataFrame:
+            user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates.parquet")
+            initial_clusters_update = pl.read_parquet(f"{DATA_DIR}/initial_clusters_update.parquet")
+            user_updates = initial_clusters_update.update(
+                user_updates, on=["game_id", "event_id"], how="full"
+            )
+
             plays = plays.with_columns(pl.lit(value=False).alias("isTagged"))
             user_updates = user_updates.with_columns(pl.lit(value=True).alias("isTagged"))
             return plays.update(user_updates, on=["game_id", "event_id"], how="left")
 
-        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates.parquet")
-        plays_of_team["plays"] = apply_user_updates(
-            plays=plays_of_team["plays"], user_updates=user_updates
-        )
+        plays_of_team = apply_user_updates(plays_of_team)
 
-        scatter_data_df = self._generate_scatter_data(plays_of_team["plays"])
+        scatter_data_df = self._generate_scatter_data(plays_of_team)
 
         scatter_data_df = scatter_data_df.select(
             "x",
