@@ -7,11 +7,7 @@ import ScatterPlot from '~/components/ScatterPlot';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
 import { Separator } from '~/components/ui/separator';
 import { BASE_URL, GameFilter } from '~/lib/const';
-import {
-  fetchWithCache,
-  purgeCacheOnGitCommitChange,
-  purgeScatterDataCache,
-} from '~/lib/fetchCache';
+import { fetchWithCache, purgeCacheOnGitCommitChange } from '~/lib/fetchCache';
 import type { Game, Point, Team } from '~/types/data';
 import type { Route } from './+types/_index';
 
@@ -45,7 +41,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const totalGames = games?.length ?? 0;
   timeframe = Math.min(totalGames, timeframe);
 
-  if (fetchScatter) await purgeScatterDataCache(teamID);
+  console.log(fetchScatter);
 
   const fetchPromises: [Promise<Team[]>, Promise<ScatterDataResponse | null>] = [
     fetchWithCache<Team[]>(`${BASE_URL}/teams`),
@@ -53,6 +49,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
       ? fetchWithCache<ScatterDataResponse>(
           `${BASE_URL}/teams/${teamID}/plays/scatter${timeframe ? `?timeframe=last_${timeframe}` : ''}`,
           true,
+          Boolean(fetchScatter),
         )
       : Promise.resolve(null),
   ];

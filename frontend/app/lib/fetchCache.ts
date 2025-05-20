@@ -25,22 +25,33 @@ export const purgeScatterDataCache = async (teamID: string | null) => {
   if (!teamID) return;
   const keys = await localforage.keys();
   keys.forEach((key) => {
-    if (key.startsWith(`${BASE_URL}/teams/${teamID}/plays/scatter`))
+    if (key.startsWith(`${BASE_URL}/teams/${teamID}/plays/scatter`)) {
+      console.log('Purging cache key: ', key);
       localforage
         .removeItem(key)
         .then()
         .catch((err) => console.log(err));
+    }
   });
 };
 
-export async function fetchWithCache<T>(url: string, includeSearch: boolean = false): Promise<T> {
+export async function fetchWithCache<T>(
+  url: string,
+  includeSearch: boolean = false,
+  bypass = false,
+): Promise<T> {
   const key = createCacheKey(url, includeSearch);
-  const cached = await localforage.getItem<T>(key);
-  if (cached) {
-    console.log(`Cache hit for ${key}`);
-    return cached;
+
+  if (!bypass) {
+    const cached = await localforage.getItem<T>(key);
+    if (cached) {
+      console.log(`Cache hit for ${key}`);
+      return cached;
+    }
+    console.log(`Cache miss for ${key}`);
+  } else {
+    console.log('Bypass cache');
   }
-  console.log(`Cache miss for ${key}`);
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch from ${url}`);

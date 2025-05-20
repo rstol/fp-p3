@@ -3,7 +3,7 @@ import { type Tag, TagInput } from 'emblor';
 import { Check } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useFetcher, useLoaderData, useSubmit } from 'react-router';
+import { useFetcher, useLoaderData, useSearchParams, useSubmit } from 'react-router';
 import { z } from 'zod';
 import { BASE_URL, EventType, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
@@ -31,7 +31,10 @@ const FormSchema = z.object({
   note: z.string().optional(),
 });
 
-export type PlayPayload = z.infer<typeof FormSchema>;
+export type PlayPayload = {
+  data: z.infer<typeof FormSchema> & { eventId?: string; gameId?: string };
+  action: PlayActions;
+};
 
 function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
   const data = useLoaderData<typeof clientLoader>();
@@ -48,7 +51,7 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
     text: String(selectedPoint?.cluster),
   };
   const initialTags = [...clusters].map((c) => ({ id: c, text: c }));
-  const form = useForm<PlayPayload>({
+  const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
       clusters: [initialCluster],
@@ -60,16 +63,13 @@ function PlayForm({ playDetails }: { playDetails: PlayDetails | null }) {
   const { setValue } = form;
   let submit = useSubmit();
 
-  function onSubmit(data: PlayPayload) {
+  function onSubmit(data: z.infer<typeof FormSchema>) {
     console.log('submit', data);
-    // TODO save in backend instead of frontend
-    submit(
-      {
-        action: PlayActions.UpdatePlayFields,
-        data,
-      },
-      { action: '/resources/play', method: 'post' },
-    );
+    const payload: PlayPayload = {
+      action: PlayActions.UpdatePlayFields,
+      data: { eventId: selectedPoint?.event_id, gameId: selectedPoint?.game_id, ...data },
+    };
+    submit(payload, { action: '/resources/play', method: 'post' });
     handleClusterChange(data.clusters[0].text);
   }
 
@@ -176,6 +176,7 @@ export default function PlayView() {
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
   const [playDetails, setPlayDetails] = useState<PlayDetails | null>(null);
   const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
+  const [_, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
   let submit = useSubmit();
@@ -241,50 +242,12 @@ export default function PlayView() {
   }
 
   const onClickApplyChanges = async () => {
-    // TODO fetch from index with query param fetch_scatter set
-    // const updatesToSend: { gameid: string; playid: number; cluster: number }[] = [];
-    // pendingClusterUpdates.forEach((newCluster, playIdKey) => {
-    //   const parts = playIdKey.split('-');
-
-    //   if (parts.length === 2) {
-    //     const gameId = parts[0];
-    //     const playIdStr = parts[1];
-    //     const playIdNum = parseInt(playIdStr, 10);
-
-    //     if (isNaN(playIdNum)) {
-    //       console.error(
-    //         `[PlayView.tsx] Failed to parse playId '${playIdStr}' to number for key '${playIdKey}'`,
-    //       );
-    //     } else {
-    //       updatesToSend.push({
-    //         gameid: gameId,
-    //         playid: playIdNum,
-    //         cluster: newCluster,
-    //       });
-    //     }
-    //   } else {
-    //     console.error(
-    //       `[PlayView.tsx] Invalid playIdKey format: '${playIdKey}'. Expected 'GAMEID-PLAYID'.`,
-    //     );
-    //   }
-    // });
-
-    // if (updatesToSend.length === 0) {
-    //   if (pendingClusterUpdates.size > 0) {
-    //     console.error(
-    //       '[PlayView.tsx] Changes were staged, but none could be parsed into valid updates. Aborting POST.',
-    //     );
-    //   }
-    //   return;
-    // }
-
-    // submit(
-    //   {
-    //     data: { teamId: selectedTeamId, updates: updatesToSend },
-    //     action: PlayActions.UpdateClusterAssignment,
-    //   },
-    //   { action: '/resources/play', method: 'post' },
-    // );
+    // Fetch with query param fetch_scatter set to bypass cache
+    setSearchParams((prev) => {
+      prev.set('fetch_scatter', 'True');
+      return prev;
+    });
+    // TODO fix cluster update hook
     clearPendingClusterUpdates();
   };
 
