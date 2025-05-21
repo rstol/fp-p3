@@ -1,5 +1,9 @@
 import os
 
+import polars as pl
+
+API = "/api/v1/"
+
 SAMPLING_RATE = 3  # RAW_DATA_HZ / SAMPLING_RATE ≈ 8.33 Hz
 
 (COURT_WIDTH, COURT_LENGTH) = (50, 94)
@@ -13,3 +17,11 @@ EXPERIMENTS_DIR = os.getenv("EXPERIMENTS_DIR")
 EMBEDDINGS_DIR = os.getenv("EMBEDDINGS_DIR", f"{DATA_DIR}/embeddings")
 
 TEAM_IDS_SAMPLE = {1610612748, 1610612752, 1610612755}
+
+UPDATE_PLAY_SCHEMA = {
+    "game_id": pl.String,
+    "event_id": pl.String,
+    "cluster_id": pl.String,
+    "cluster_name": pl.String,
+    "note": pl.String,
+}

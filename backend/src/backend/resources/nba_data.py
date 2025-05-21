@@ -1,12 +1,10 @@
-from pathlib import Path
-
 import polars as pl
 from flask import Response, jsonify, request
 from flask_restful import Resource
 from loguru import logger
 
 from backend.resources.dataset_manager import DatasetManager
-from backend.settings import DATA_DIR, TRACKING_DIR
+from backend.settings import DATA_DIR, TRACKING_DIR, UPDATE_PLAY_SCHEMA
 
 dataset_manager = DatasetManager(TRACKING_DIR)
 
@@ -76,14 +74,6 @@ class PlayDetailsResource(Resource):
     def __init__(self):
         super().__init__()
 
-        self.play_details_schema = {
-            "game_id": pl.Int64,
-            "event_id": pl.Int64,
-            "cluster": pl.String,
-            "cluster_name": pl.String,
-            "note": pl.String,
-        }
-
     def get(self, game_id: str, event_id: str):
         try:
             play = dataset_manager.get_play_details(game_id, event_id)
@@ -97,25 +87,21 @@ class PlayDetailsResource(Resource):
 
     def post(self, game_id: str, event_id: str):
         update_play_data = request.get_json()
-        update_play_data["cluster"] = update_play_data.pop("cluster_id")
-        update_play_data["game_id"] = int(game_id)
-        update_play_data["event_id"] = int(event_id)
+        update_play_data["event_id"] = event_id
+        update_play_data["game_id"] = game_id
 
         try:
-            df_update = pl.DataFrame(update_play_data, schema=self.play_details_schema)
+            df_update = pl.DataFrame(update_play_data, schema=UPDATE_PLAY_SCHEMA)
         except ValueError as err:
             logger.error(err)
             return {"error": "Invalid play ID format"}, 400
 
-        play_details = pl.read_parquet(f"{DATA_DIR}/plays_details.parquet")
-        play_details = play_details.update(df_update, on=["game_id", "event_id"], how="full")
-
-        play_details.write_parquet(f"{DATA_DIR}/plays_details.parquet")
+        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates.parquet")
+        user_updates = user_updates.update(df_update, on=["game_id", "event_id"], how="full")
+        user_updates.write_parquet(f"{DATA_DIR}/user_updates.parquet")
 
         return {"message": "Play updated successfully"}, 200
 
 
 if __name__ == "__main__":
     """Use for debugging"""
-    play_video = PlayDetailsResource()
-    video = play_video.post(game_id="0021500019", event_id="484")

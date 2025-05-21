@@ -10,7 +10,7 @@ from flask_restful import Resource
 
 from backend.resources.dataset_manager import DatasetManager
 from backend.resources.play_clustering import PlayClustering
-from backend.settings import DATA_DIR, TRACKING_DIR
+from backend.settings import DATA_DIR, TRACKING_DIR, UPDATE_PLAY_SCHEMA
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -23,20 +23,12 @@ class TeamPlaysScatterResource(Resource):
     def __init__(self):
         self.dataset_manager = DatasetManager(TRACKING_DIR)
 
-        self.user_updates_schema = {
-            "game_id": pl.Int64,
-            "event_id": pl.Int64,
-            "cluster": pl.String,
-            "cluster_name": pl.String,
-            "note": pl.String,
-        }
-
         if not Path(f"{DATA_DIR}/plays_by_team.pkl").exists():
             self.plays_by_team = {
                 teamid: self.dataset_manager.get_games_for_team(teamid, as_dicts=False)
                 for teamid in self.dataset_manager.teams["teamid"]
             }
-            initial_clusters_update = pl.DataFrame(schema=self.user_updates_schema)
+            initial_clusters_update = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
             for teamid, games in self.plays_by_team.items():
                 games = games.sort("game_date", descending=True)
                 games = games.limit(3)
@@ -48,9 +40,7 @@ class TeamPlaysScatterResource(Resource):
                 initial_clusters, cluster_assignments, team_embedding_ids = (
                     play_clustering.get_initial_clusters()
                 )
-                plays = plays.with_columns(
-                    pl.col("game_id").cast(pl.Int64), pl.col("event_id").cast(pl.Int64)
-                ).join(
+                plays = plays.with_columns(pl.col("game_id"), pl.col("event_id")).join(
                     team_embedding_ids.drop("index").with_row_index("ids_index"),
                     on=["game_id", "event_id"],
                     how="inner",
@@ -58,10 +48,10 @@ class TeamPlaysScatterResource(Resource):
                 plays_index = plays["ids_index"].to_numpy()
                 plays = plays.with_columns(
                     team_embeddings=pl.lit(play_clustering.team_embeddings[plays_index]),
-                    cluster=pl.lit(cluster_assignments[plays_index]).cast(pl.Int32),
+                    cluster_id=pl.lit(cluster_assignments[plays_index]).cast(pl.Int32),
                 )
                 self.plays_by_team[teamid] = plays.select(
-                    "cluster",
+                    "cluster_id",
                     "event_id",
                     "game_id",
                     "event_desc_home",
@@ -76,20 +66,20 @@ class TeamPlaysScatterResource(Resource):
                     {
                         "game_id": cluster.plays[0].play_id.game_id,
                         "event_id": cluster.plays[0].play_id.event_id,
-                        "cluster": cluster.id,
+                        "cluster_id": cluster.id,
                         "cluster_name": cluster.label,
                         "note": "",
                     }
                     for cluster in initial_clusters
                 ]
                 initial_clusters_update = initial_clusters_update.update(
-                    pl.from_dicts(initial_clusters_update_dicts, schema=self.user_updates_schema),
+                    pl.from_dicts(initial_clusters_update_dicts, schema=UPDATE_PLAY_SCHEMA),
                     on=["game_id", "event_id"],
                     how="full",
                 )
 
             if not Path(f"{DATA_DIR}/user_updates.parquet").exists():
-                user_updates = pl.DataFrame(schema=self.user_updates_schema)
+                user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
                 user_updates.write_parquet(f"{DATA_DIR}/user_updates.parquet")
 
             initial_clusters_update.write_parquet(f"{DATA_DIR}/initial_clusters_update.parquet")
@@ -99,28 +89,10 @@ class TeamPlaysScatterResource(Resource):
         else:
             with Path(f"{DATA_DIR}/plays_by_team.pkl").open("rb") as f:
                 self.plays_by_team = pickle.load(f)
-        self.umap_model = umap.UMAP(n_neighbors=5)
+        self.umap_model = umap.UMAP(n_neighbors=5, metric="cosine", verbose=True, low_memory=False)
 
-    def _prepare_scatter_data_for_response(self, team_id: str, timeframe_str: str):
-        logger.info(f"Prep scatter data: team {team_id}, timeframe {timeframe_str}")
-
-        try:
-            parts = timeframe_str.split("_")
-            if len(parts) < 2 or not parts[1].isdigit():
-                msg = "Timeframe format error"
-                raise ValueError(msg)  # noqa: TRY301
-            num_games = int(parts[1])
-        except ValueError:
-            logger.exception(f"Invalid timeframe format: {timeframe_str}")
-            return {"error": "Invalid timeframe format"}, 400
-        logger.info(f"Using timeframe: {timeframe_str} (limiting to {num_games} games)")
-
-        try:
-            team_id = int(team_id)
-        except ValueError:
-            logger.exception(f"Invalid team_id format: {team_id}")
-            return {"error": "Invalid team ID format"}, 400
-
+    def _prepare_scatter_data_for_response(self, team_id: int, timeframe: int):
+        logger.info(f"Prep scatter data: team {team_id}, timeframe {timeframe}")
         plays_of_team = self.plays_by_team.get(team_id, pl.DataFrame())
 
         def apply_user_updates(plays: pl.DataFrame) -> pl.DataFrame:
@@ -141,7 +113,7 @@ class TeamPlaysScatterResource(Resource):
         scatter_data_df = scatter_data_df.select(
             "x",
             "y",
-            "cluster",
+            "cluster_id",
             "event_id",
             "game_id",
             "event_desc_home",
@@ -152,9 +124,9 @@ class TeamPlaysScatterResource(Resource):
         )
 
         cluster_dicts = (
-            scatter_data_df.with_columns(pl.struct(pl.exclude("cluster")).alias("points"))
-            .select("cluster", "points")
-            .group_by("cluster")
+            scatter_data_df.with_columns(pl.struct(pl.exclude("cluster_id")).alias("points"))
+            .select("cluster_id", "points")
+            .group_by("cluster_id")
             .agg(pl.col("points"))
             .to_dicts()
         )
@@ -164,7 +136,23 @@ class TeamPlaysScatterResource(Resource):
     def get(self, team_id):
         """Get scatter plot data for a team's plays."""
         timeframe = request.args.get("timeframe", "last_3")
-        data, status_code = self._prepare_scatter_data_for_response(team_id, timeframe)
+        try:
+            parts = timeframe.split("_")
+            if len(parts) < 2 or not parts[1].isdigit():
+                msg = "Timeframe format error"
+                raise ValueError(msg)  # noqa: TRY301
+            last_games = int(parts[1])
+        except ValueError:
+            logger.exception(f"Invalid timeframe format: {timeframe}")
+            return {"error": "Invalid timeframe format"}, 400
+        logger.info(f"Using timeframe: {timeframe} (limiting to {last_games} games)")
+
+        try:
+            team_id = int(team_id)
+        except ValueError:
+            logger.exception(f"Invalid team_id format: {team_id}")
+            return {"error": "Invalid team ID format"}, 400
+        data, status_code = self._prepare_scatter_data_for_response(team_id, last_games)
         return data, status_code
 
     def _concat_plays_from_games(self, games: pl.DataFrame) -> pl.DataFrame:
@@ -178,13 +166,17 @@ class TeamPlaysScatterResource(Resource):
 
         return plays_df.join(game_dates, on="game_id", how="left")
 
-
     def _generate_scatter_data(self, plays: pl.DataFrame) -> pl.DataFrame:
         y = np.full(len(plays["team_embeddings"]), -1)
         y_plays = plays.filter(pl.col("isTagged") & pl.col("ids_index").is_not_null())
         y_play_ids = y_plays["ids_index"].to_numpy()
-        y[y_play_ids] = y_plays["cluster"].to_numpy()
+        y[y_play_ids] = y_plays["cluster_id"].to_numpy()
 
         xys = self.umap_model.fit_transform(plays["team_embeddings"], y=y)
 
         return plays.with_columns(x=pl.lit(xys[:, 0]), y=pl.lit(xys[:, 1]))
+
+
+if __name__ == "__main__":
+    resource = TeamPlaysScatterResource()
+    resource._prepare_scatter_data_for_response(1610612755, 3)

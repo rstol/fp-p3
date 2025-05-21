@@ -26,17 +26,18 @@ dependencies = [
     "umap-learn>=0.5.7",
     "matplotlib>=3.10.3",
     "loguru>=0.7.3",
+    "torch>=2.6.0",
+    "faiss-cpu>=1.11.0",
+    "scipy>=1.15.2",
 ]
 
 [dependency-groups]
 dev = ["ruff>=0.2.0", "pre-commit>=2.20.0"]
 train = [
-    "torch>=2.6.0",
     "torchvision>=0.21.0",
     "einops>=0.8.1",
     "pytorch-lightning>=2.5.1.post0",
     "tensorboard>=2.19.0",
-    "faiss-cpu>=1.11.0",
 ]
 
 [build-system]

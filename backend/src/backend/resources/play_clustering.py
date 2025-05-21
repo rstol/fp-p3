@@ -14,7 +14,7 @@ from backend.settings import EMBEDDINGS_DIR, TEAM_IDS_SAMPLE
 
 class PlayClustering:
     def __init__(
-        self, team_id: str, game_ids: list[str] | None = None, initial_k: int = 12
+        self, team_id: int, game_ids: list[str] | None = None, initial_k: int = 12
     ) -> None:
         self.team_id = team_id
         self.game_ids = game_ids
@@ -28,10 +28,13 @@ class PlayClustering:
         self._init()
 
     def _get_embedding_ids(self) -> pl.LazyFrame:
-        embeddings_sources_df = pl.scan_csv(Path(EMBEDDINGS_DIR) / "embedding_sources.csv")
+        embeddings_sources_df = pl.scan_csv(
+            Path(EMBEDDINGS_DIR) / "embedding_sources.csv",
+            schema={"game_id": pl.String, "event_id": pl.String, "offensive_team_id": pl.Int32},
+        )
         if self.game_ids is not None:
             embeddings_sources_df = embeddings_sources_df.filter(
-                pl.col("game_id").is_in([int(game_id) for game_id in self.game_ids])
+                pl.col("game_id").is_in(self.game_ids)
             )
         return embeddings_sources_df
 
@@ -64,7 +67,7 @@ class PlayClustering:
 
     def get_team_embedding_ids(self) -> pl.LazyFrame:
         return self.embedding_ids.with_row_index().filter(
-            pl.col("offensive_team_id").eq(int(self.team_id))
+            pl.col("offensive_team_id").eq(self.team_id)
         )
 
     def _set_team_embeddings(self, embeddings: np.ndarray) -> None:

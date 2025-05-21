@@ -1,8 +1,7 @@
 from flask_restful import Api
 
 import backend.resources as res
-
-API = "/api/v1/"
+from backend.settings import API
 
 
 def add_routes(app):

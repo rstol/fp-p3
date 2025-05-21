@@ -105,7 +105,7 @@ def process_dataset(dataset: Dataset, output_path: Path) -> None:
             )
             .filter(
                 pl.col("pair_id").is_in(play_ids)
-                & pl.col("home").struct.field("teamid").cast(str).is_in(TEAM_IDS_SAMPLE)
+                & pl.col("home").struct.field("teamid").is_in(TEAM_IDS_SAMPLE)
             )
             .drop("pair_id")
         )
