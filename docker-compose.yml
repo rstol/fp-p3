@@ -33,7 +33,7 @@ services:
       - DATA_DIR=/application_root/data
       - EMBEDDINGS_DIR=/application_root/data/embeddings
     volumes:
-      - ./backend/src/server:/application_root/server:cached
+      - ./backend/src/backend:/application_root/backend:cached
       - ./backend/data:/application_root/data:cached
     ports:
       - '8080:8080'
