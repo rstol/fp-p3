@@ -42,7 +42,7 @@ export interface PlayDetail {
 
   game_date?: string;
   event_score?: string;
-  period?: number;
+  quarter?: number;
 }
 
 export interface Point {
@@ -54,10 +54,17 @@ export interface Point {
   event_desc_away: string | null;
   game_date?: string;
   event_type: number;
-  isTagged: boolean;
+  is_tagged: boolean;
+  note: null | string;
+  score: string | number;
+  similarity_distance: number;
 }
 
-export type Cluster = {
+export interface ClusterMetadata {
   cluster_id: string;
+  cluster_label?: string;
+}
+
+export interface ClusterData extends ClusterMetadata {
   points: Array<Point>;
-};
+}

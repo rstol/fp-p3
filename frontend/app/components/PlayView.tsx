@@ -3,9 +3,9 @@ import { type Tag, TagInput } from 'emblor';
 import { Check } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useFetcher, useLoaderData, useSearchParams } from 'react-router';
+import { useLoaderData, useSearchParams } from 'react-router';
 import { z } from 'zod';
-import { BASE_URL, EventType, PlayActions } from '~/lib/const';
+import { BASE_URL, DefenseColor, EventType, OffenseColor, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
 import type { PlayDetail, Team } from '~/types/data';
@@ -15,7 +15,11 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
 
-type PlayDetailState = { videoURL?: string; offenseTeam?: Team } & PlayDetail;
+interface PlayDetailState extends PlayDetail {
+  videoURL?: string;
+  offenseTeam?: Team;
+  defenseTeam?: Team;
+}
 
 const FormSchema = z.object({
   clusters: z
@@ -27,9 +31,6 @@ const FormSchema = z.object({
     )
     .length(1),
   note: z.string().optional(),
-  eventId: z.string(),
-  gameId: z.string(),
-  _action: z.string(),
 });
 
 export type PlayPayload = {
@@ -37,33 +38,32 @@ export type PlayPayload = {
   action: PlayActions;
 };
 
-function PlayForm({ playDetails }: { playDetails: PlayDetail | null }) {
+function PlayForm() {
   const data = useLoaderData<typeof clientLoader>();
   const clusterData = data?.scatterData ?? [];
-  const clusters = clusterData.map((c) => c.cluster_id).sort();
+  const initialTags = clusterData
+    .map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' }))
+    .sort();
   const stageSelectedPlayClusterUpdate = useDashboardStore(
     (state) => state.stageSelectedPlayClusterUpdate,
   );
-  const selectedClusterId = useDashboardStore((state) => state.selectedClusterId);
+  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   // TODO temporary transform: use data schema
-  const initialCluster = selectedClusterId
+  const initialCluster = selectedCluster
     ? [
         {
-          id: selectedClusterId,
-          text: selectedClusterId,
+          id: selectedCluster.cluster_id,
+          text: selectedCluster.cluster_label ?? '',
         },
       ]
     : [];
-  const initialTags = [...clusters].map((c) => ({ id: c, text: c }));
+
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
       clusters: initialCluster,
-      note: '', // playDetails.note TODO
-      eventId: selectedPoint?.event_id,
-      gameId: selectedPoint?.game_id,
-      _action: PlayActions.UpdateAllPlayFields,
+      note: selectedPoint?.note ?? '',
     },
   });
   const [tags, setTags] = useState<Tag[]>(initialCluster);
@@ -73,17 +73,17 @@ function PlayForm({ playDetails }: { playDetails: PlayDetail | null }) {
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     const updatedCluster = data.clusters[0];
     const defaultCluster = form.formState.defaultValues?.clusters?.[0];
-    if (updatedCluster.text !== defaultCluster?.text && updatedCluster.id !== defaultCluster?.id) {
-      stageSelectedPlayClusterUpdate(data.clusters[0].id); // TODO
+    if (updatedCluster.id !== defaultCluster?.id) {
+      stageSelectedPlayClusterUpdate(data.clusters[0].id);
     }
 
     const payload = {
       cluster_id: updatedCluster.id.startsWith('new_cluster') ? null : updatedCluster.id,
-      cluster_name: updatedCluster.text,
+      cluster_label: updatedCluster.text,
       note: data.note,
     };
-    await fetch(`${BASE_URL}/plays/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
-      method: 'POST',
+    await fetch(`${BASE_URL}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
+      method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -172,6 +172,7 @@ export default function PlayView() {
   const [_, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
+  const games = data?.games ?? [];
   // TODO loader during submitting feedback & updating the clusters
 
   useEffect(() => {
@@ -191,7 +192,7 @@ export default function PlayView() {
           `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}`,
         );
         if (!resDetails.ok) throw new Error();
-        const playDetails = await resDetails.json();
+        const playDetails: PlayDetailState = await resDetails.json();
 
         if (!checkPublicVideo.ok) {
           const res = await fetch(
@@ -202,10 +203,14 @@ export default function PlayView() {
           publicVideoPath = URL.createObjectURL(blob);
         }
 
-        const offenseTeam = teams.find(
-          (team) => String(team.teamid) === String(playDetails.possession_team_id),
-        );
-        setPlayDetails({ ...playDetails, videoURL: publicVideoPath, offenseTeam });
+        const game = games.find((game) => game.game_id === playDetails.game_id);
+        const isHomePossession = playDetails.possession_team_id === game?.home_team_id;
+        const offenseTeamId = isHomePossession ? game?.home_team_id : game?.visitor_team_id;
+        const defenseTeamId = isHomePossession ? game?.visitor_team_id : game?.home_team_id;
+        console.log(game, offenseTeamId, defenseTeamId);
+        const offenseTeam = teams.find((team) => team.teamid === offenseTeamId);
+        const defenseTeam = teams.find((team) => team.teamid === defenseTeamId);
+        setPlayDetails({ ...playDetails, videoURL: publicVideoPath, offenseTeam, defenseTeam });
       } catch (error) {
         console.error('Failed to fetch play details:', error);
         // TODO update UI
@@ -244,6 +249,7 @@ export default function PlayView() {
   if (isLoadingPlayDetails) {
     return <PlayDetailsSkeleton />;
   }
+  console.log(playDetails);
 
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
@@ -266,38 +272,41 @@ export default function PlayView() {
           </video>
         )}
         <div className="divide-y divide-solid text-sm">
-          <div className="flex gap-4 pb-1">
+          <div className="flex gap-4 pb-1" style={{ color: OffenseColor }}>
             <span className="shrink-0">Offense Team</span>
             <span className="flex-1 text-right">{playDetails?.offenseTeam?.name}</span>
+          </div>
+          <div className="flex gap-4 pb-1" style={{ color: DefenseColor }}>
+            <span className="shrink-0">Defense Team</span>
+            <span className="flex-1 text-right">{playDetails?.defenseTeam?.name}</span>
           </div>
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Outcome</span>
             <span className="flex-1 text-right">
-              {playDetails?.event_type ? EventType[playDetails.event_type] : 'N/A'}
+              {playDetails?.event_type ? `${EventType[playDetails.event_type]}` : 'N/A'}
             </span>
           </div>
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Game Date</span>
             <span className="flex-1 text-right">
-              {playDetails?.game_id ?? selectedPoint.game_id}
+              {playDetails?.game_date ?? selectedPoint.game_date}
             </span>
           </div>
           <div className="flex gap-4 pb-1">
-            <span className="shrink-0">Period</span>
-            <span className="flex-1 text-right">{playDetails?.period || 'N/A'}</span>
+            <span className="shrink-0">Quarter</span>
+            <span className="flex-1 text-right">{playDetails?.quarter ?? 'N/A'}</span>
           </div>
           <div className="flex gap-4 py-1">
-            <span className="shrink-0">Description Home</span>
-            <span className="flex-1 text-right">{playDetails?.event_desc_home}</span>
-          </div>
-          <div className="flex gap-4 py-1">
-            <span className="shrink-0">Description Away</span>
-            <span className="flex-1 text-right">{playDetails?.event_desc_away}</span>
+            <span className="shrink-0">Description</span>
+            <span className="flex-1 text-right">
+              {playDetails?.event_desc_home !== 'nan' && playDetails?.event_desc_home}
+              {playDetails?.event_desc_away !== 'nan' && `${playDetails?.event_desc_away}`}
+            </span>
           </div>
         </div>
       </CardContent>
       <CardFooter className="flex-col items-start gap-2">
-        <PlayForm playDetails={playDetails} />
+        <PlayForm />
         {stagedChangesCount > 0 && (
           <div className="mt-6 flex w-full items-center justify-end">
             <Button size="sm" disabled={stagedChangesCount === 0} onClick={onClickApplyChanges}>

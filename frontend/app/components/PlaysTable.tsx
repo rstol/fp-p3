@@ -46,7 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { PlayActions } from '~/lib/const';
+import { BASE_URL, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 
@@ -156,9 +156,6 @@ function EditTagDialog({
     resolver: zodResolver(EditTagFormSchema),
     defaultValues: {
       clusters: [initialCluster],
-      eventId: 'sdf', //TODO
-      gameId: 'sdf', // TODO,
-      _action: PlayActions.UpdatePlayCluster,
     },
   });
   const { setValue } = form;
@@ -166,19 +163,24 @@ function EditTagDialog({
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
   let submit = useSubmit();
 
-  function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
+  async function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
     const updatedCluster = data.clusters[0];
     const defaultCluster = form.formState.defaultValues?.clusters?.[0];
-    if (updatedCluster.text !== defaultCluster?.text && updatedCluster.id !== defaultCluster?.id) {
+    if (updatedCluster.id !== defaultCluster?.id) {
       stageSelectedPlayClusterUpdate(updatedCluster.id);
     }
-    submit(
-      { ...data, clusters: JSON.stringify(data.clusters) },
-      {
-        action: '/resources/play',
-        method: 'post',
-      },
-    );
+    const payload = {
+      cluster_id: updatedCluster.id.startsWith('new_cluster') ? null : updatedCluster.id,
+      cluster_label: updatedCluster.text,
+    };
+    // TODO
+    // await fetch(`${BASE_URL}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
+    //   method: 'PUT',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify(payload),
+    // });
     onOpenChange(false);
   }
 
@@ -338,7 +340,7 @@ export function PlaysTable() {
   const [selectedPlays, setSelectedPlays] = React.useState<Play[]>([]);
   const [editTag, setEditTag] = React.useState('');
   const [editNote, setEditNote] = React.useState('');
-  const selectedClusterId = useDashboardStore((state) => state.selectedClusterId);
+  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   // TODO use scatter data for this list or another endpoint
   // Loading // Hide if no Play is selected!
 
@@ -554,7 +556,7 @@ export function PlaysTable() {
     },
   });
 
-  const title = `Similar plays in cluster ${selectedClusterId ?? ''}`;
+  const title = `Similar plays in cluster ${selectedCluster?.cluster_label ?? ''}`;
 
   return (
     <div className="w-full">

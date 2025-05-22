@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import type { Point } from '~/types/data';
+import type { ClusterMetadata, Point } from '~/types/data';
 
 type State = {
   selectedPoint: Point | null;
   stagedChangesCount: number;
-  selectedClusterId: string | null;
+  selectedCluster: ClusterMetadata | null;
 };
 
 type Action = {
@@ -12,29 +12,26 @@ type Action = {
   resetSelectedPoint: () => void;
   stageSelectedPlayClusterUpdate: (clusterId: string) => void;
   clearPendingClusterUpdates: () => void;
-  updateSelectedClusterId: (clusterId: string) => void;
+  updateSelectedCluster: (cluster: ClusterMetadata) => void;
 };
 
 export const useDashboardStore = create<State & Action>((set) => ({
   selectedPoint: null,
   stagedChangesCount: 0,
-  selectedClusterId: null,
+  selectedCluster: null,
   updateSelectedPoint: (selectedPoint) => set(() => ({ selectedPoint })),
-  updateSelectedClusterId: (selectedClusterId) => set(() => ({ selectedClusterId })),
+  updateSelectedCluster: ({ cluster_id, cluster_label }) =>
+    set(() => ({
+      selectedCluster: { cluster_id, cluster_label },
+    })),
   resetSelectedPoint: () =>
     set(() => ({
       selectedPoint: null,
     })),
   stageSelectedPlayClusterUpdate: (clusterId) =>
     set((state) => {
-      const { selectedPoint, stagedChangesCount } = state;
-      if (!selectedPoint) return state;
-
-      // TODO only count if cluster assignment changed
-      // if (selectedPoint.cluster === clusterId) return state;
-
+      const { stagedChangesCount } = state;
       return {
-        selectedPoint: { ...selectedPoint, cluster: clusterId },
         stagedChangesCount: stagedChangesCount + 1,
       };
     }),

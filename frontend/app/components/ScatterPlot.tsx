@@ -13,11 +13,12 @@ import {
 import { useDashboardStore } from '~/lib/stateStore';
 import { getPointId } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
-import type { Cluster, Point } from '~/types/data';
+import type { Point } from '~/types/data';
 import Filters from './Filters';
 import { ScatterPlotSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { EventType } from '~/lib/const';
 
 const defaultDimensions = { width: 500, height: 400 };
 const margin = { top: 40, right: 10, bottom: 10, left: 10 };
@@ -178,10 +179,9 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const loaderData = useLoaderData<typeof clientLoader>();
   const games = loaderData?.games ?? [];
   const { timeframe, scatterData } = loaderData;
-  console.log(scatterData);
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
-  const updateSelectedClusterId = useDashboardStore((state) => state.updateSelectedClusterId);
+  const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
   const resetSelectedPoint = useDashboardStore((state) => state.resetSelectedPoint);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -189,6 +189,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
   // const [scatterData, setscatterData] = useState<Cluster[]>(scatterData ?? []);
 
+  // TODO update clusters here
   // useEffect(() => {
   //   if (selectedPoint) {
   //     setscatterData((currentscatterData) =>
@@ -372,7 +373,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     });
     const tooltip = d3.select('.tooltip');
 
-    scatterData.forEach(({ cluster_id, points }) => {
+    scatterData.forEach(({ cluster_id, cluster_label, points }) => {
       container
         .selectAll(`circle.cluster-${cluster_id}`)
         .data(points)
@@ -398,7 +399,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           event.stopPropagation();
           if (!selectedPoint || getPointId(selectedPoint) !== getPointId(play)) {
             updateSelectedPoint(play);
-            updateSelectedClusterId(cluster_id);
+            updateSelectedCluster({ cluster_id, cluster_label });
           }
         })
         .on('mouseover', (event, d) => {
@@ -406,9 +407,8 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           container.selectAll(`circle.cluster-${cluster_id}`).attr('opacity', 1);
           tooltip?.html(`
         <div>
-          <p>Type: ${d.event_type || 'Unknown'}</p>
-          <p>Home: ${d.event_desc_home || 'N/A'}</p>
-          <p>Away: ${d.event_desc_away || 'N/A'}</p>
+          <p>Outcome: ${EventType[d.event_type] ?? 'N/A'}</p>
+          <p>Description: ${d.event_desc_home !== 'nan' ? d.event_desc_home : ''} ${d.event_desc_away !== 'nan' ? `, ${d.event_desc_away}` : ''}</p>
           <p>Cluster: ${cluster_id}</p> 
         </div>
       `);
@@ -433,7 +433,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
   const clusters = scatterData?.map((c) => c.cluster_id).sort() ?? [];
-  console.log(clusters);
+
   return (
     <div className="flex flex-col">
       {teamID && scatterData?.length === 0 && !isLoading ? (

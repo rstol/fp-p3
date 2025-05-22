@@ -1,14 +1,14 @@
-import { useDashboardStore } from '~/lib/stateStore';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { ClusterDetailsSkeleton } from './LoaderSkeletons';
-import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
 import { Check } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { BASE_URL } from '~/lib/const';
+import { useDashboardStore } from '~/lib/stateStore';
+import { ClusterDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from './ui/form';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
-import { useSubmit } from 'react-router';
 
 const FormSchema = z.object({
   clusterLabel: z.string(),
@@ -16,21 +16,20 @@ const FormSchema = z.object({
 });
 
 export default function ClusterView() {
-  // TODO get this info for the currently selected cluster
-  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
-  const selectedClusterId = useDashboardStore((state) => state.selectedClusterId);
+  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
+  const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
+  console.log(selectedCluster);
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      clusterLabel: selectedClusterId ?? '',
-      clusterId: selectedClusterId ?? '', // TODO change this
+      clusterLabel: selectedCluster?.cluster_label ?? '',
+      clusterId: selectedCluster?.cluster_id,
     },
   });
-  let submit = useSubmit();
 
   const isLoading = false; // TODO fetching data
   if (isLoading) return <ClusterDetailsSkeleton />;
-  if (!selectedClusterId) {
+  if (!selectedCluster) {
     return (
       <Card className="gap-4 border-none pt-1 shadow-none">
         <CardHeader>
@@ -43,18 +42,26 @@ export default function ClusterView() {
     );
   }
 
-  function onSubmit(data: z.infer<typeof FormSchema>) {
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
     console.log('submit', data);
-    submit(data, {
-      action: '/resources/cluster',
-      method: 'post',
+
+    const payload = {
+      cluster_label: data.clusterLabel,
+    };
+    await fetch(`${BASE_URL}/cluster/${data.clusterId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     });
+    updateSelectedCluster({ cluster_id: data.clusterId, cluster_label: data.clusterLabel });
   }
 
   return (
     <Card className="gap-4 border-none pb-1 shadow-none">
       <CardHeader>
-        <CardTitle>Cluster {selectedClusterId}</CardTitle>
+        <CardTitle>Cluster {selectedCluster.cluster_label}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         <Form {...form}>

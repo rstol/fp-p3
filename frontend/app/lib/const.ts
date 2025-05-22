@@ -32,3 +32,6 @@ export enum PlayActions {
   UpdatePlayNote = 'UpdatePlayNote',
   UpdatePlayCluster = 'UpdatePlayCluster',
 }
+
+export const OffenseColor = '#008348';
+export const DefenseColor = '#006BB6';
