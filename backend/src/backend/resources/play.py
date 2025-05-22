@@ -4,9 +4,10 @@ from typing import Any
 from backend.resources.playid import PlayId
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(slots=True)
 class Play:
     play_id: PlayId
+    game_date: str
     event_type: int
     event_score: str
     event_score_margin: str

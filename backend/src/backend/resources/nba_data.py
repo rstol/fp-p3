@@ -1,10 +1,9 @@
-import polars as pl
-from flask import Response, jsonify, request
+from flask import Response, jsonify
 from flask_restful import Resource
 from loguru import logger
 
 from backend.resources.dataset_manager import DatasetManager
-from backend.settings import DATA_DIR, TRACKING_DIR, UPDATE_PLAY_SCHEMA
+from backend.settings import TRACKING_DIR
 
 dataset_manager = DatasetManager(TRACKING_DIR)
 
@@ -84,23 +83,6 @@ class PlayDetailsResource(Resource):
             return {"error": "Invalid play ID format"}, 400
 
         return {"error": "Play not found"}, 404
-
-    def post(self, game_id: str, event_id: str):
-        update_play_data = request.get_json()
-        update_play_data["event_id"] = event_id
-        update_play_data["game_id"] = game_id
-
-        try:
-            df_update = pl.DataFrame(update_play_data, schema=UPDATE_PLAY_SCHEMA)
-        except ValueError as err:
-            logger.error(err)
-            return {"error": "Invalid play ID format"}, 400
-
-        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates.parquet")
-        user_updates = user_updates.update(df_update, on=["game_id", "event_id"], how="full")
-        user_updates.write_parquet(f"{DATA_DIR}/user_updates.parquet")
-
-        return {"message": "Play updated successfully"}, 200
 
 
 if __name__ == "__main__":

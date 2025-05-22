@@ -4,12 +4,12 @@ import polars as pl
 from polars import DataFrame
 
 from backend.resources.game import Game
-from backend.settings import VIDEO_DATA_DIR
+from backend.settings import TRACKING_DIR, VIDEO_DATA_DIR
 from backend.video.event import Event
 
 
 class DatasetManager:
-    def __init__(self, data_dir: str | None) -> None:
+    def __init__(self, data_dir: str = TRACKING_DIR) -> None:
         if not data_dir or not Path(data_dir).exists():
             msg = "Data directory given to DatasetManager does not exist"
             raise ValueError(msg)
@@ -63,6 +63,7 @@ class DatasetManager:
         play = self.get_play_raw_data(game_id, play_id)
         if play:
             play["possession_team_id"] = int(play["possession_team_id"])
+            play["quarter"] = play["moments"][0]["quarter"]
             del play["moments"]
             del play["primary_player_info"]
             del play["secondary_player_info"]

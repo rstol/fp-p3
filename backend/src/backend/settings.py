@@ -22,6 +22,6 @@ UPDATE_PLAY_SCHEMA = {
     "game_id": pl.String,
     "event_id": pl.String,
     "cluster_id": pl.String,
-    "cluster_name": pl.String,
+    "cluster_label": pl.String,
     "note": pl.String,
 }

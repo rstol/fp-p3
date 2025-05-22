@@ -1,4 +1,5 @@
 import time
+import uuid
 from pathlib import Path
 
 import faiss
@@ -7,17 +8,16 @@ import polars as pl
 import torch
 
 from backend.resources.cluster import Cluster, ClusterPlay
-from backend.resources.feedback_item import FeedbackItem
+from backend.resources.dataset_manager import DatasetManager
+from backend.resources.play import Play
 from backend.resources.playid import PlayId
 from backend.settings import EMBEDDINGS_DIR, TEAM_IDS_SAMPLE
 
 
 class PlayClustering:
-    def __init__(
-        self, team_id: int, game_ids: list[str] | None = None, initial_k: int = 12
-    ) -> None:
-        self.team_id = team_id
-        self.game_ids = game_ids
+    def __init__(self, team_id: int, game_ids: list[str], initial_k: int = 12) -> None:
+        self.team_id: int = team_id
+        self.game_ids: list[str] = game_ids
         self.index: faiss.Index | None = None
         self.kmeans: faiss.Kmeans | None = None
         self.clusters = []
@@ -42,7 +42,7 @@ class PlayClustering:
         embeddings = self._load_all_embeddings()
         self._build_index(embeddings)
         self._init_kmeans(embeddings)
-        self._set_team_embeddings(embeddings)
+        self._set_game_embeddings(embeddings)
 
     def _load_all_embeddings(self) -> np.ndarray:
         npy_files = list(Path(EMBEDDINGS_DIR).glob("*.npy"))
@@ -65,50 +65,62 @@ class PlayClustering:
         kmeans.train(embeddings)
         self.kmeans = kmeans
 
-    def get_team_embedding_ids(self) -> pl.LazyFrame:
-        return self.embedding_ids.with_row_index().filter(
-            pl.col("offensive_team_id").eq(self.team_id)
-        )
+    def get_games_embedding_ids(self) -> pl.LazyFrame:
+        return self.embedding_ids.with_row_index().filter(pl.col("game_id").is_in(self.game_ids))
 
-    def _set_team_embeddings(self, embeddings: np.ndarray) -> None:
-        self.team_embedding_ids = self.get_team_embedding_ids().collect()
-        self.team_embeddings_idx = (
-            self.team_embedding_ids.select(pl.col("index")).to_series().to_numpy()
-        )
-        self.team_embeddings = embeddings[self.team_embeddings_idx]
+    def _set_game_embeddings(self, embeddings: np.ndarray) -> None:
+        self.game_embedding_ids = self.get_games_embedding_ids().collect()
+        self.game_embedding_idxs = np.squeeze(self.game_embedding_ids.select(pl.col("index")))
+        self.game_embeddings = embeddings[self.game_embedding_idxs]
 
     def get_initial_clusters(
-        self, initial_k: int = 12, niter: int = 20
-    ) -> tuple[list[Cluster], np.ndarray, pl.DataFrame]:
-        distances, index = self.kmeans.index.search(self.team_embeddings, 1)
+        self, plays: pl.DataFrame, initial_k: int = 12, niter: int = 20
+    ) -> list[Cluster]:
+        distances, index = self.kmeans.index.search(self.game_embeddings, 1)
         distances = distances[..., 0]
         cluster_assignments = index[..., 0]
         centroids = self.kmeans.centroids
 
-        distance_indices = distances.argsort()
-        points_min_distance_indices = distance_indices[
-            (cluster_assignments[distance_indices][None] == np.arange(initial_k)[:, None]).argmax(
-                axis=1
+        plays = (
+            plays.join(
+                self.game_embedding_ids.with_row_count("row_nr"),
+                on=["game_id", "event_id"],
+                how="inner",
             )
-        ]
+            .sort("row_nr")
+            .drop("row_nr")
+        )
 
-        plays = self.team_embedding_ids[points_min_distance_indices]
-        min_distances = distances[points_min_distance_indices]
-
-        cluster_plays = [
-            ClusterPlay(PlayId(play["game_id"], play["event_id"]), distance, index)
-            for play, distance, index in zip(
-                plays.to_dicts(), min_distances, points_min_distance_indices, strict=True
+        cluster_play_lists = [[] for _ in range(initial_k)]
+        for play, embedding, distance, cluster_assignment in zip(
+            plays.iter_rows(named=True),
+            self.game_embeddings,
+            distances,
+            cluster_assignments,
+            strict=True,
+        ):
+            play_id = PlayId(play["game_id"], play["event_id"])
+            play = Play(
+                play_id=play_id,
+                event_type=play["event_type"],
+                game_date=play["game_date"],
+                event_score=play["event_score"],
+                event_score_margin=play["event_score_margin"],
+                possession_team_id=play["possession_team_id"],
+                event_desc_away=play["event_desc_away"],
+                event_desc_home=play["event_desc_home"],
             )
-        ]
+            cluster_play = ClusterPlay(play_id, distance, embedding, play)
+            cluster_play_lists[cluster_assignment].append(cluster_play)
+
         clusters = []
-        for i, cluster_play in enumerate(cluster_plays):
+        for i in range(initial_k):
             timestamp = time.time()
             cluster = Cluster(
-                id=str(i),
+                id=str(uuid.uuid4()),
                 label=f"Cluster {i + 1}",
                 centroid=centroids[i],
-                plays=[cluster_play],
+                plays=cluster_play_lists[i],  # Each cluster gets its own list
                 confidence=None,
                 created=timestamp,
                 last_modified=timestamp,
@@ -118,7 +130,7 @@ class PlayClustering:
 
         self.clusters = clusters
 
-        return clusters, cluster_assignments, self.team_embedding_ids
+        return clusters
 
     def find_similar_plays(self, k: int = 10) -> list[int]:
         q = np.expand_dims(embeddings_team[target_play_idx], axis=0)
@@ -127,114 +139,18 @@ class PlayClustering:
         print(distance, index)  # Distance index of top k neighbors to query
         # TODO
 
-    def apply_scout_feedback(self, feedback: list[FeedbackItem]) -> list[Cluster]:
-        """Apply feedback from scouts to refine clusters.
-
-        Args:
-            feedback: List of feedback items
-
-        Returns:
-            Updated list of clusters
-        """
-        updated_clusters = self.clusters.copy()
-        new_clusters = []
-
-        # Handle creation of new clusters
-        new_cluster_feedback = [f for f in feedback if f.to_cluster_id is None]
-        new_clusters_by_label = {}
-
-        for fb in new_cluster_feedback:
-            label = fb.new_cluster_label
-            if label not in new_clusters_by_label:
-                new_clusters_by_label[label] = []
-            new_clusters_by_label[label].append(fb.play_id)
-
-        # TODO
-
-        # Create new clusters
-        for label in new_clusters_by_label:
-            play_embeddings = None
-            faiss.normalize_L2(play_embeddings)
-
-            centroid = np.mean(play_embeddings, axis=0)
-            faiss.normalize_L2(centroid.reshape(1, -1))
-            plays = []
-            new_clusters.append(
-                Cluster(
-                    id=f"cluster-new-{int(time.time())}-{np.random.randint(1000, 9999)}",
-                    label=label,
-                    centroid=centroid,
-                    plays=plays,
-                    created=time.time(),
-                    last_modified=time.time(),
-                    created_by=feedback[0].scout_id,
-                )
-            )
-        # Handle moves between existing clusters
-        move_feedback = [f for f in feedback if f.to_cluster_id is not None]
-
-        for fb in move_feedback:
-            # Remove from source cluster if assigned
-            if fb.from_cluster_id:
-                for i, cluster in enumerate(updated_clusters):
-                    if cluster.id == fb.from_cluster_id and fb.play_id in cluster.play_ids:
-                        updated_play_ids = [pid for pid in cluster.play_ids if pid != fb.play_id]
-                        updated_clusters[i] = Cluster(
-                            id=cluster.id,
-                            label=cluster.label,
-                            centroid=cluster.centroid,  # Centroid will be recalculated later
-                            plays=updated_play_ids,
-                            created=cluster.created,
-                            last_modified=time.time(),
-                            created_by=cluster.created_by,
-                        )
-
-            # Add to target cluster
-            for i, cluster in enumerate(updated_clusters):
-                if cluster.id == fb.to_cluster_id:
-                    updated_play_ids = [*cluster.play_ids, fb.play_id]
-                    updated_clusters[i] = Cluster(
-                        id=cluster.id,
-                        label=cluster.label,
-                        centroid=cluster.centroid,  # Will be recalculated
-                        plays=updated_play_ids,
-                        created=cluster.created,
-                        last_modified=time.time(),
-                        created_by=cluster.created_by,
-                    )
-
-        # Recalculate centroids and confidence for all modified clusters
-        final_clusters = []
-
-        for cluster in updated_clusters + new_clusters:
-            if not cluster.play_ids:
-                continue  # Skip empty clusters
-
-            play_embeddings = np.array(
-                [self.plays_by_id[pid].embedding for pid in cluster.play_ids], dtype=np.float32
-            )
-            faiss.normalize_L2(play_embeddings)
-
-            # Recalculate centroid
-            centroid = np.mean(play_embeddings, axis=0)
-            faiss.normalize_L2(centroid.reshape(1, -1))
-
-            final_clusters.append(
-                Cluster(
-                    id=cluster.id,
-                    label=cluster.label,
-                    centroid=centroid,
-                    plays=cluster.plays,
-                    created=cluster.created,
-                    last_modified=cluster.last_modified,
-                    created_by=cluster.created_by,
-                )
-            )
-
-        self.clusters = final_clusters
-        return final_clusters
-
 
 if __name__ == "__main__":
-    clustering = PlayClustering(TEAM_IDS_SAMPLE.pop())
-    clustering.get_initial_clusters()
+    """DEBUG"""
+    team_id = TEAM_IDS_SAMPLE.pop()
+    dataset_manager = DatasetManager()
+    games = dataset_manager.get_games_for_team(str(team_id), as_dicts=False)
+    games = games.sort("game_date", descending=True).limit(5)
+    game_ids = games["game_id"].to_list()
+    clustering = PlayClustering(team_id, game_ids)
+    game_dates = games.select(["game_id", "game_date"])
+
+    plays_df = dataset_manager.get_plays_for_games(game_ids).drop("moments").collect()
+    plays_df = plays_df.join(game_dates, on="game_id", how="left")
+
+    clustering.get_initial_clusters(plays_df)
