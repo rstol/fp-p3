@@ -37,7 +37,7 @@ class TeamPlaysScatterResource(Resource):
             if Path(f"{DATA_DIR}/clusters/{team_id}.pkl").exists():
                 continue
             games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
-            games = games.sort("game_date", descending=True).limit(5)  # TOOD max timeframe?
+            games = games.sort("game_date", descending=True).limit(5)  # max timeframe?
 
             game_ids = games["game_id"].to_list()
             plays = self._concat_plays_from_games(game_ids, games)
@@ -73,7 +73,7 @@ class TeamPlaysScatterResource(Resource):
             updated_label = row["cluster_label"]
 
             if key not in play_index:
-                continue  # or log that play wasn't found
+                continue  # Mabye log this
 
             current_cluster, cluster_play = play_index[key]
 
@@ -170,10 +170,9 @@ class TeamPlaysScatterResource(Resource):
         idx = 0
         for cluster in self.clusters:
             for play in cluster.plays:
-                play.x = float(xys[idx, 0])  # Ensure it's serializable (e.g. float32 → float)
+                play.x = float(xys[idx, 0])
                 play.y = float(xys[idx, 1])
                 idx += 1
-        # return plays.with_columns(x=pl.lit(xys[:, 0]), y=pl.lit(xys[:, 1]))
 
     def get(self, team_id):
         """Get scatter plot data for a team's plays."""

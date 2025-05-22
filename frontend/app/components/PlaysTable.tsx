@@ -17,7 +17,7 @@ import { type Tag as TagType, TagInput } from 'emblor';
 import { ArrowUpDown, ChevronDown, Edit, Eye, MoreHorizontal, Tag } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
-import { useSubmit } from 'react-router';
+import { useLoaderData } from 'react-router';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -46,81 +46,10 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { BASE_URL, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
+import type { clientLoader } from '~/routes/_index';
+import type { Point } from '~/types/data';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
-
-// Define the Play type
-export type Play = {
-  id: string;
-  clusterId: number;
-  gameDate: Date;
-  quarter: number;
-  gameClock: string;
-  homeTeam: string;
-  awayTeam: string;
-  playNote: string;
-  playVideoUrl: string;
-};
-
-// Sample data for demonstration
-const data: Play[] = [
-  {
-    id: 'play1',
-    clusterId: 1,
-    gameDate: new Date('2025-04-01'),
-    quarter: 1,
-    gameClock: '10:45',
-    homeTeam: 'Lakers',
-    awayTeam: 'Celtics',
-    playNote: '',
-    playVideoUrl: 'videos/0021500615/95.mp4',
-  },
-  {
-    id: 'play2',
-    clusterId: 1,
-    gameDate: new Date('2025-04-01'),
-    quarter: 2,
-    gameClock: '5:22',
-    homeTeam: 'Lakers',
-    awayTeam: 'Warriors',
-    playNote: 'Curry isolation floater',
-    playVideoUrl: 'videos/0021500615/95.mp4',
-  },
-  {
-    id: 'play3',
-    clusterId: 1,
-    gameDate: new Date('2025-04-03'),
-    quarter: 4,
-    gameClock: '2:15',
-    homeTeam: 'Lakers',
-    awayTeam: 'Bucks',
-    playNote: 'Middleton isolation jump-ball two-pointer',
-    playVideoUrl: 'videos/0021500615/95.mp4',
-  },
-  {
-    id: 'play4',
-    clusterId: 1,
-    gameDate: new Date('2025-04-05'),
-    quarter: 3,
-    gameClock: '7:33',
-    homeTeam: 'Lakers',
-    awayTeam: 'Nuggets',
-    playNote: 'Jokić Isolation against Davis',
-    playVideoUrl: 'videos/0021500615/95.mp4',
-  },
-  {
-    id: 'play5',
-    clusterId: 1,
-    gameDate: new Date('2025-04-05'),
-    quarter: 4,
-    gameClock: '0:45',
-    homeTeam: 'Lakers',
-    awayTeam: 'Suns',
-    playNote: 'Durant three-pointer',
-    playVideoUrl: 'videos/0021500615/95.mp4',
-  },
-];
 
 const EditTagFormSchema = z.object({
   clusters: z
@@ -131,9 +60,6 @@ const EditTagFormSchema = z.object({
       }),
     )
     .length(1),
-  eventId: z.string(),
-  gameId: z.string(),
-  _action: z.string(),
 });
 
 // Component for editing tags
@@ -144,14 +70,23 @@ function EditTagDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  selectedPlays: any[];
+  selectedPlays: Point[];
 }) {
+  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const stageSelectedPlayClusterUpdate = useDashboardStore(
     (state) => state.stageSelectedPlayClusterUpdate,
   );
+  const data = useLoaderData<typeof clientLoader>();
+  const clusterData = data?.scatterData ?? [];
+  const initialTags = clusterData
+    .map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' }))
+    .sort();
 
-  const initialCluster = { id: '', text: '' };
-  const initialTags = [initialCluster];
+  const initialCluster = {
+    id: selectedCluster?.cluster_id,
+    text: selectedCluster?.cluster_label ?? '',
+  };
+
   const form = useForm<z.infer<typeof EditTagFormSchema>>({
     resolver: zodResolver(EditTagFormSchema),
     defaultValues: {
@@ -159,9 +94,8 @@ function EditTagDialog({
     },
   });
   const { setValue } = form;
-  const [tags, setTags] = React.useState<TagType[]>([initialCluster]);
+  const [tags, setTags] = React.useState<TagType[]>(initialTags);
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
-  let submit = useSubmit();
 
   async function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
     const updatedCluster = data.clusters[0];
@@ -173,7 +107,7 @@ function EditTagDialog({
       cluster_id: updatedCluster.id.startsWith('new_cluster') ? null : updatedCluster.id,
       cluster_label: updatedCluster.text,
     };
-    // TODO
+    // TODO bulk update
     // await fetch(`${BASE_URL}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
     //   method: 'PUT',
     //   headers: {
@@ -258,35 +192,36 @@ function EditTagDialog({
 
 const EditNoteFormSchema = z.object({
   note: z.string().optional(),
-  eventId: z.string(),
-  gameId: z.string(),
-  _action: z.string(),
 });
 
 function EditNoteDialog({
   open,
   onOpenChange,
+  selectedPlays,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  selectedPlays: Point[];
 }) {
-  let submit = useSubmit();
+  const firstNote = selectedPlays[0]?.note || '';
+  const allSameNote = selectedPlays.every((play) => play.note === firstNote);
   const form = useForm<z.infer<typeof EditNoteFormSchema>>({
     resolver: zodResolver(EditNoteFormSchema),
     defaultValues: {
-      note: '', // playDetails.note TODO
-      eventId: '', //TODO
-      gameId: '', // TODO,
-      _action: PlayActions.UpdatePlayNote,
+      note: allSameNote ? firstNote : '',
     },
   });
 
-  function onSubmit(data: z.infer<typeof EditNoteFormSchema>) {
+  async function onSubmit(data: z.infer<typeof EditNoteFormSchema>) {
     console.log('submit', data);
-    submit(data, {
-      action: '/resources/play',
-      method: 'post',
-    });
+    // TODO bulk endpoint for all points
+    // await fetch(`${BASE_URL}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
+    //   method: 'PUT',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify(data),
+    // });
     onOpenChange(false);
   }
   return (
@@ -332,49 +267,43 @@ export function PlaysTable() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
-  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
+  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
+  const loaderData = useLoaderData<typeof clientLoader>();
+  const { scatterData } = loaderData;
+  const data = scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
+  // TODO merge points with playdetails or add data in backend?
+
   // Dialog states
   const [tagDialogOpen, setTagDialogOpen] = React.useState(false);
   const [noteDialogOpen, setNoteDialogOpen] = React.useState(false);
-  const [selectedPlay, setSelectedPlay] = React.useState<Play | null>(null);
-  const [selectedPlays, setSelectedPlays] = React.useState<Play[]>([]);
-  const [editTag, setEditTag] = React.useState('');
-  const [editNote, setEditNote] = React.useState('');
-  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
-  // TODO use scatter data for this list or another endpoint
-  // Loading // Hide if no Play is selected!
+  const [selectedPlays, setSelectedPlays] = React.useState<Point[]>([]);
+  const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
+  // TODO Loading // Hide if no Play is selected!
 
   // Action handlers
-  function handleEditTag(play: Play) {
-    setSelectedPlay(play);
-    setEditTag(String(play.clusterId));
+  function handleEditTag(play: Point) {
+    setSelectedPlays([play]);
     setTagDialogOpen(true);
   }
 
-  function handleEditNote(play: Play) {
-    setSelectedPlay(play);
-    setEditNote(play.playNote);
+  function handleEditNote(play: Point) {
+    setSelectedPlays([play]);
     setNoteDialogOpen(true);
   }
 
-  function handleViewPreview(playId: string) {
-    console.log(`Preview Play in Plot for play: ${playId}`);
-    // Implement your preview logic here
+  function handleViewPreview(play: Point) {
+    updateSelectedPoint(play);
   }
 
   function handleTagSelected() {
     const selectedRows = table.getFilteredSelectedRowModel().rows;
     const plays = selectedRows.map((row) => row.original);
     setSelectedPlays(plays);
-    // Use the tag from the first play as initial value, or empty string if plays have different tags
-    const firstTag = plays[0]?.clusterId || '';
-    const allSameTag = plays.every((play) => play.clusterId === firstTag);
-    setEditTag(String(allSameTag ? firstTag : ''));
     setTagDialogOpen(true);
   }
 
   // Define columns
-  const columns: ColumnDef<Play>[] = [
+  const columns: ColumnDef<Point>[] = [
     {
       id: 'select',
       header: ({ table }) => (
@@ -409,7 +338,7 @@ export function PlaysTable() {
           <ArrowUpDown size={4} />
         </Button>
       ),
-      cell: ({ row }) => <div>{row.getValue('similarityScore')}</div>,
+      cell: ({ row }) => <div>{row.getValue('similarity_distance')}</div>,
     },
     // {
     //   accessorKey: 'clusterId',
@@ -438,7 +367,7 @@ export function PlaysTable() {
         </Button>
       ),
       cell: ({ row }) => {
-        const date = row.getValue('gameDate') as Date;
+        const date = new Date(row.getValue('game_date'));
         return <div>{date.toLocaleDateString()}</div>;
       },
     },
@@ -480,7 +409,7 @@ export function PlaysTable() {
       header: 'Play Note',
       cell: ({ row }) => (
         <div className="w-[150px] whitespace-break-spaces" title={row.getValue('playNote')}>
-          {row.getValue('playNote')}
+          {row.getValue('note')}
         </div>
       ),
     },
@@ -526,7 +455,7 @@ export function PlaysTable() {
                 <Edit className="mr-1 h-4 w-4" />
                 Edit play note
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleViewPreview(play.id)}>
+              <DropdownMenuItem onClick={() => handleViewPreview(play)}>
                 <Eye className="mr-1 h-4 w-4" />
                 Preview Play in Plot
               </DropdownMenuItem>
@@ -566,7 +495,11 @@ export function PlaysTable() {
         onOpenChange={setTagDialogOpen}
         selectedPlays={selectedPlays}
       />
-      <EditNoteDialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen} />
+      <EditNoteDialog
+        open={noteDialogOpen}
+        onOpenChange={setNoteDialogOpen}
+        selectedPlays={selectedPlays}
+      />
       <div className="flex items-center justify-between py-4">
         <div className="flex gap-2">
           <Input

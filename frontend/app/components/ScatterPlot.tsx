@@ -189,7 +189,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
   // const [scatterData, setscatterData] = useState<Cluster[]>(scatterData ?? []);
 
-  // TODO update clusters here
+  // TODO update clusters here until submission
   // useEffect(() => {
   //   if (selectedPoint) {
   //     setscatterData((currentscatterData) =>
@@ -380,7 +380,8 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         .join('circle')
         .attr('r', (d) => {
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          return isSelected ? 8 : 5;
+          const isTagged = selectedPoint?.is_tagged;
+          return isSelected ? 9 : isTagged ? 7 : 5;
         })
         .attr('cx', (d) => xScale(d.x))
         .attr('cy', (d) => yScale(d.y))
@@ -388,11 +389,13 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         .attr('fill', (d) => color(String(cluster_id)))
         .attr('stroke', (d) => {
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          return isSelected ? 'black' : 'white';
+          const isTagged = selectedPoint?.is_tagged;
+          return isSelected || isTagged ? 'black' : 'white';
         })
         .attr('stroke-width', (d) => {
+          const isTagged = selectedPoint?.is_tagged;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          return isSelected ? 2 : 1;
+          return isSelected || isTagged ? 2 : 1;
         })
         .attr('cursor', 'pointer')
         .on('click', (event, play) => {

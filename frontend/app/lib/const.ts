@@ -27,11 +27,5 @@ export const EventType: Record<number, string> = {
   13: 'end_period',
 };
 
-export enum PlayActions {
-  UpdateAllPlayFields = 'UpdateAllPlayFields',
-  UpdatePlayNote = 'UpdatePlayNote',
-  UpdatePlayCluster = 'UpdatePlayCluster',
-}
-
 export const OffenseColor = '#008348';
 export const DefenseColor = '#006BB6';

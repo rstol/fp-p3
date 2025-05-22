@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLoaderData, useSearchParams } from 'react-router';
 import { z } from 'zod';
-import { BASE_URL, DefenseColor, EventType, OffenseColor, PlayActions } from '~/lib/const';
+import { BASE_URL, DefenseColor, EventType, OffenseColor } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
 import type { PlayDetail, Team } from '~/types/data';
@@ -32,11 +32,6 @@ const FormSchema = z.object({
     .length(1),
   note: z.string().optional(),
 });
-
-export type PlayPayload = {
-  data: z.infer<typeof FormSchema> & { eventId?: string; gameId?: string };
-  action: PlayActions;
-};
 
 function PlayForm() {
   const data = useLoaderData<typeof clientLoader>();
@@ -283,13 +278,13 @@ export default function PlayView() {
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Outcome</span>
             <span className="flex-1 text-right">
-              {playDetails?.event_type ? `${EventType[playDetails.event_type]}` : 'N/A'}
+              {selectedPoint?.event_type ? `${EventType[selectedPoint.event_type]}` : 'N/A'}
             </span>
           </div>
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Game Date</span>
             <span className="flex-1 text-right">
-              {playDetails?.game_date ?? selectedPoint.game_date}
+              {selectedPoint?.game_date ?? selectedPoint.game_date}
             </span>
           </div>
           <div className="flex gap-4 pb-1">
@@ -299,8 +294,8 @@ export default function PlayView() {
           <div className="flex gap-4 py-1">
             <span className="shrink-0">Description</span>
             <span className="flex-1 text-right">
-              {playDetails?.event_desc_home !== 'nan' && playDetails?.event_desc_home}
-              {playDetails?.event_desc_away !== 'nan' && `${playDetails?.event_desc_away}`}
+              {selectedPoint?.event_desc_home !== 'nan' && selectedPoint?.event_desc_home}
+              {selectedPoint?.event_desc_away !== 'nan' && `${selectedPoint?.event_desc_away}`}
             </span>
           </div>
         </div>

@@ -33,9 +33,6 @@ class Cluster:
     def sort_plays_by_cluster_distance(self):
         pass
 
-    def get_umap(self):
-        pass
-
     def update_centroids(self):
         pass
 
