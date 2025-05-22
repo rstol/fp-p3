@@ -13,7 +13,7 @@ import {
 import { useDashboardStore } from '~/lib/stateStore';
 import { getPointId } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
-import type { Point } from '~/types/data';
+import type { ClusterMetadata, Point } from '~/types/data';
 import Filters from './Filters';
 import { ScatterPlotSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
@@ -38,7 +38,7 @@ function Legend({
   zoomedCluster,
   onSelectCluster,
 }: {
-  clusters: string[];
+  clusters: ClusterMetadata[];
   color: d3.ScaleOrdinal<string, string>;
   zoomedCluster: string | null;
   onSelectCluster: (cluster: string) => void;
@@ -58,12 +58,12 @@ function Legend({
         </SelectTrigger>
         <SelectContent>
           {clusters.map((cluster, index) => {
-            const c = color(String(cluster));
+            const c = color(String(cluster.cluster_id));
             return (
-              <SelectItem key={index} value={cluster}>
+              <SelectItem key={index} value={cluster.cluster_id}>
                 <span className="flex items-center gap-1">
                   <Circle fill={c} stroke={c} width={10} height={10} />
-                  Cluster {cluster}
+                  Cluster {cluster.cluster_label}
                 </span>
               </SelectItem>
             );
@@ -412,7 +412,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         <div>
           <p>Outcome: ${EventType[d.event_type] ?? 'N/A'}</p>
           <p>Description: ${d.event_desc_home !== 'nan' ? d.event_desc_home : ''} ${d.event_desc_away !== 'nan' ? `, ${d.event_desc_away}` : ''}</p>
-          <p>Cluster: ${cluster_id}</p> 
+          <p>Cluster: ${cluster_label}</p> 
         </div>
       `);
           return tooltip.style('visibility', 'visible');
@@ -435,7 +435,8 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
-  const clusters = scatterData?.map((c) => c.cluster_id).sort() ?? [];
+  const clusters =
+    scatterData?.map(({ cluster_id, cluster_label }) => ({ cluster_id, cluster_label })) ?? [];
 
   return (
     <div className="flex flex-col">

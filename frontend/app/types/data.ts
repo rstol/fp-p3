@@ -58,6 +58,8 @@ export interface Point {
   note: null | string;
   score: string | number;
   similarity_distance: number;
+  possession_team_id: number;
+  quarter: number;
 }
 
 export interface ClusterMetadata {

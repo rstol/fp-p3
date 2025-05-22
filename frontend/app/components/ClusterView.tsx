@@ -15,10 +15,10 @@ const FormSchema = z.object({
   clusterId: z.string(),
 });
 
-export default function ClusterView() {
+function ClusterLabelForm() {
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
-  console.log(selectedCluster);
+
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
@@ -26,6 +26,49 @@ export default function ClusterView() {
       clusterId: selectedCluster?.cluster_id,
     },
   });
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
+    console.log('submit', data);
+
+    const payload = {
+      cluster_label: data.clusterLabel,
+    };
+    await fetch(`${BASE_URL}/cluster/${data.clusterId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    updateSelectedCluster({ cluster_id: data.clusterId, cluster_label: data.clusterLabel });
+  }
+  return (
+    <Form {...form}>
+      <form className="grid w-full items-center gap-2" onSubmit={form.handleSubmit(onSubmit)}>
+        <FormField
+          control={form.control}
+          name="clusterLabel"
+          render={({ field }) => (
+            <FormItem className="flex flex-col items-start">
+              <FormLabel className="text-sm">Change Cluster Label</FormLabel>
+              <div className="flex w-full gap-2">
+                <FormControl>
+                  <Input type="text" placeholder="Add cluster label" {...field} />
+                </FormControl>
+                <Button type="submit" size="sm" className="h-9 w-10">
+                  <Check size={6} />
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </form>
+    </Form>
+  );
+}
+
+export default function ClusterView() {
+  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
 
   const isLoading = false; // TODO fetching data
   if (isLoading) return <ClusterDetailsSkeleton />;
@@ -42,50 +85,13 @@ export default function ClusterView() {
     );
   }
 
-  async function onSubmit(data: z.infer<typeof FormSchema>) {
-    console.log('submit', data);
-
-    const payload = {
-      cluster_label: data.clusterLabel,
-    };
-    await fetch(`${BASE_URL}/cluster/${data.clusterId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-    updateSelectedCluster({ cluster_id: data.clusterId, cluster_label: data.clusterLabel });
-  }
-
   return (
     <Card className="gap-4 border-none pb-1 shadow-none">
       <CardHeader>
         <CardTitle>Cluster {selectedCluster.cluster_label}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <Form {...form}>
-          <form className="grid w-full items-center gap-2" onSubmit={form.handleSubmit(onSubmit)}>
-            <FormField
-              control={form.control}
-              name="clusterLabel"
-              render={({ field }) => (
-                <FormItem className="flex flex-col items-start">
-                  <FormLabel className="text-sm">Change Cluster Label</FormLabel>
-                  <div className="flex w-full gap-2">
-                    <FormControl>
-                      <Input type="text" placeholder="Add cluster label" {...field} />
-                    </FormControl>
-                    <Button type="submit" size="sm" className="h-9 w-10">
-                      <Check size={6} />
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </form>
-        </Form>
+        <ClusterLabelForm />
         <div>
           <div className="divide-y divide-solid">
             <div className="flex gap-4 pb-1">

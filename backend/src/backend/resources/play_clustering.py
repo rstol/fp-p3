@@ -104,9 +104,12 @@ class PlayClustering:
                 play_id=play_id,
                 event_type=play["event_type"],
                 game_date=play["game_date"],
+                quarter=play["quarter"],
                 event_score=play["event_score"],
                 event_score_margin=play["event_score_margin"],
-                possession_team_id=play["possession_team_id"],
+                possession_team_id=0
+                if np.isnan(play["possession_team_id"])
+                else int(play["possession_team_id"]),
                 event_desc_away=play["event_desc_away"],
                 event_desc_home=play["event_desc_home"],
             )

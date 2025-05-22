@@ -10,8 +10,9 @@ class Play:
     game_date: str
     event_type: int
     event_score: str
+    quarter: int
     event_score_margin: str
-    possession_team_id: str
+    possession_team_id: int
     event_desc_home: dict[str, Any]
     event_desc_away: dict[str, Any]
     note: str | None = None

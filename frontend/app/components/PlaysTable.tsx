@@ -17,7 +17,7 @@ import { type Tag as TagType, TagInput } from 'emblor';
 import { ArrowUpDown, ChevronDown, Edit, Eye, MoreHorizontal, Tag } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
-import { useLoaderData } from 'react-router';
+import { data, useLoaderData } from 'react-router';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -263,15 +263,36 @@ function EditNoteDialog({
 }
 
 export function PlaysTable() {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    {
+      id: 'similarity_distance',
+      desc: false,
+    },
+  ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const loaderData = useLoaderData<typeof clientLoader>();
-  const { scatterData } = loaderData;
-  const data = scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
-  // TODO merge points with playdetails or add data in backend?
+  const { scatterData, games, teams } = loaderData;
+  let data = scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
+  const gameMap = new Map(games?.map((game) => [game.game_id, game]));
+  const teamMap = new Map(teams.map((team) => [team.teamid, team.name]));
+  const enhancedData =
+    React.useMemo(
+      () =>
+        data.map((point) => {
+          const game = gameMap.get(point.game_id);
+          const visitorTeamName = game ? teamMap.get(game.visitor_team_id) : undefined;
+
+          return {
+            ...point,
+            videoURL: `videos/${point.game_id}/${point.event_id}.mp4`,
+            visitorTeamName,
+          };
+        }),
+      [data],
+    ) ?? [];
 
   // Dialog states
   const [tagDialogOpen, setTagDialogOpen] = React.useState(false);
@@ -327,7 +348,7 @@ export function PlaysTable() {
       enableHiding: false,
     },
     {
-      accessorKey: 'similarityScore',
+      accessorKey: 'similarity_distance',
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -340,22 +361,8 @@ export function PlaysTable() {
       ),
       cell: ({ row }) => <div>{row.getValue('similarity_distance')}</div>,
     },
-    // {
-    //   accessorKey: 'clusterId',
-    //   header: ({ column }) => (
-    //     <Button
-    //       variant="ghost"
-    //       className="px-0.5!"
-    //       onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-    //     >
-    //       Cluster
-    //       <ArrowUpDown size={4} />
-    //     </Button>
-    //   ),
-    //   cell: ({ row }) => <div>{row.getValue('clusterId')}</div>,
-    // },
     {
-      accessorKey: 'gameDate',
+      accessorKey: 'game_date',
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -386,46 +393,32 @@ export function PlaysTable() {
       cell: ({ row }) => <div>Q{row.getValue('quarter')}</div>,
     },
     {
-      accessorKey: 'gameClock',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          className="px-0.5!"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Game Clock
-          <ArrowUpDown size={4} />
-        </Button>
-      ),
-      cell: ({ row }) => <div>{row.getValue('gameClock')}</div>,
-    },
-    {
-      accessorKey: 'awayTeam',
+      accessorKey: 'visitorTeamName',
       header: 'Opponent Team',
-      cell: ({ row }) => <div>{row.getValue('awayTeam')}</div>,
+      cell: ({ row }) => <div>{row.getValue('visitorTeamName')}</div>,
     },
     {
-      accessorKey: 'playNote',
+      accessorKey: 'note',
       header: 'Play Note',
       cell: ({ row }) => (
-        <div className="w-[150px] whitespace-break-spaces" title={row.getValue('playNote')}>
+        <div className="w-[150px] whitespace-break-spaces" title={row.getValue('note')}>
           {row.getValue('note')}
         </div>
       ),
     },
     {
-      accessorKey: 'playVideoUrl',
+      accessorKey: 'videoURL',
       header: 'Play Video',
       cell: ({ row }) => (
-        <div className="max-w-[250px] min-w-[200px] truncate" title={row.getValue('playVideoUrl')}>
+        <div className="max-w-[250px] min-w-[200px] truncate" title={row.getValue('videoURL')}>
           <video
-            key={row.getValue('playVideoUrl')} // Force remount component on change
+            key={row.getValue('videoURL')} // Force remount component on change
             controls
             disablePictureInPicture
             disableRemotePlayback
             muted
           >
-            <source src={row.getValue('playVideoUrl')} type="video/mp4" />
+            <source src={row.getValue('videoURL')} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
         </div>
@@ -467,7 +460,7 @@ export function PlaysTable() {
   ];
 
   const table = useReactTable({
-    data,
+    data: enhancedData,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -484,6 +477,8 @@ export function PlaysTable() {
       rowSelection,
     },
   });
+
+  if (!selectedCluster) return null;
 
   const title = `Similar plays in cluster ${selectedCluster?.cluster_label ?? ''}`;
 
@@ -504,14 +499,16 @@ export function PlaysTable() {
         <div className="flex gap-2">
           <Input
             placeholder="Filter by note..."
-            value={(table.getColumn('playNote')?.getFilterValue() as string) ?? ''}
-            onChange={(event) => table.getColumn('playNote')?.setFilterValue(event.target.value)}
+            value={(table.getColumn('note')?.getFilterValue() as string) ?? ''}
+            onChange={(event) => table.getColumn('note')?.setFilterValue(event.target.value)}
             className="max-w-sm"
           />
           <Input
             placeholder="Filter by team..."
-            value={(table.getColumn('awayTeam')?.getFilterValue() as string) ?? ''}
-            onChange={(event) => table.getColumn('awayTeam')?.setFilterValue(event.target.value)}
+            value={(table.getColumn('visitorTeamName')?.getFilterValue() as string) ?? ''}
+            onChange={(event) =>
+              table.getColumn('visitorTeamName')?.setFilterValue(event.target.value)
+            }
             className="max-w-sm"
           />
         </div>
@@ -583,7 +580,7 @@ export function PlaysTable() {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                  No cluster selected.
                 </TableCell>
               </TableRow>
             )}

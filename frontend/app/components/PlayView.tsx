@@ -8,14 +8,14 @@ import { z } from 'zod';
 import { BASE_URL, DefenseColor, EventType, OffenseColor } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
-import type { PlayDetail, Team } from '~/types/data';
+import type { PlayDetail, Point, Team } from '~/types/data';
 import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
 
-interface PlayDetailState extends PlayDetail {
+interface PlayDetailState {
   videoURL?: string;
   offenseTeam?: Team;
   defenseTeam?: Team;
@@ -183,12 +183,6 @@ export default function PlayView() {
           ok: false,
         }));
 
-        const resDetails = await fetch(
-          `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}`,
-        );
-        if (!resDetails.ok) throw new Error();
-        const playDetails: PlayDetailState = await resDetails.json();
-
         if (!checkPublicVideo.ok) {
           const res = await fetch(
             `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}/video`,
@@ -198,14 +192,13 @@ export default function PlayView() {
           publicVideoPath = URL.createObjectURL(blob);
         }
 
-        const game = games.find((game) => game.game_id === playDetails.game_id);
-        const isHomePossession = playDetails.possession_team_id === game?.home_team_id;
+        const game = games.find((game) => game.game_id === selectedPoint.game_id);
+        const isHomePossession = selectedPoint.possession_team_id === game?.home_team_id;
         const offenseTeamId = isHomePossession ? game?.home_team_id : game?.visitor_team_id;
         const defenseTeamId = isHomePossession ? game?.visitor_team_id : game?.home_team_id;
-        console.log(game, offenseTeamId, defenseTeamId);
         const offenseTeam = teams.find((team) => team.teamid === offenseTeamId);
         const defenseTeam = teams.find((team) => team.teamid === defenseTeamId);
-        setPlayDetails({ ...playDetails, videoURL: publicVideoPath, offenseTeam, defenseTeam });
+        setPlayDetails({ videoURL: publicVideoPath, offenseTeam, defenseTeam });
       } catch (error) {
         console.error('Failed to fetch play details:', error);
         // TODO update UI
@@ -289,7 +282,7 @@ export default function PlayView() {
           </div>
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Quarter</span>
-            <span className="flex-1 text-right">{playDetails?.quarter ?? 'N/A'}</span>
+            <span className="flex-1 text-right">{selectedPoint?.quarter ?? 'N/A'}</span>
           </div>
           <div className="flex gap-4 py-1">
             <span className="shrink-0">Description</span>

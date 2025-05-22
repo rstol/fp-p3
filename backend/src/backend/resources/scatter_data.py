@@ -119,6 +119,8 @@ class TeamPlaysScatterResource(Resource):
                         "event_desc_away": cluster_play.play.event_desc_away,
                         "game_date": cluster_play.play.game_date,
                         "event_type": cluster_play.play.event_type,
+                        "possession_team_id": cluster_play.play.possession_team_id,
+                        "quarter": cluster_play.play.quarter,
                         "similarity_distance": float(cluster_play.distance),
                         "score": cluster_play.play.event_score,
                         "note": cluster_play.play.note,
@@ -147,7 +149,15 @@ class TeamPlaysScatterResource(Resource):
 
         game_dates = games.select(["game_id", "game_date"])
 
-        plays_df = self.dataset_manager.get_plays_for_games(game_ids).drop("moments").collect()
+        plays_df = self.dataset_manager.get_plays_for_games(game_ids)
+        # add quarter from moments
+        plays_df = (
+            plays_df.with_columns(
+                [pl.col("moments").list.get(0).struct.field("quarter").alias("quarter")]
+            )
+            .drop("moments")
+            .collect()
+        )
         return plays_df.join(game_dates, on="game_id", how="left")
 
     def _generate_scatter_data(self):
@@ -195,7 +205,6 @@ class TeamPlaysScatterResource(Resource):
             return {"error": "Invalid team ID format"}, 400
         self._prepare_scatter_data_for_response(team_id, last_games)
         data = self._clusters_to_dicts()
-
         return data, 200
 
 
