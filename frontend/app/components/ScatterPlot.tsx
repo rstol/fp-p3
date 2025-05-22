@@ -13,7 +13,7 @@ import {
 import { useDashboardStore } from '~/lib/stateStore';
 import { getPointId } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
-import type { Point } from '~/types/data';
+import type { Cluster, Point } from '~/types/data';
 import Filters from './Filters';
 import { ScatterPlotSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
@@ -176,30 +176,30 @@ function InfoBar() {
 
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const loaderData = useLoaderData<typeof clientLoader>();
-  const clusterData = loaderData?.scatterData?.points ?? [];
   const games = loaderData?.games ?? [];
-  const { timeframe } = loaderData;
-
+  const { timeframe, scatterData } = loaderData;
+  console.log(scatterData);
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
-  const updatePoint = useDashboardStore((state) => state.updatePoint);
-  const resetPoint = useDashboardStore((state) => state.resetPoint);
+  const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
+  const updateSelectedClusterId = useDashboardStore((state) => state.updateSelectedClusterId);
+  const resetSelectedPoint = useDashboardStore((state) => state.resetSelectedPoint);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
-  const [plotData, setPlotData] = useState<Point[]>(clusterData);
+  // const [scatterData, setscatterData] = useState<Cluster[]>(scatterData ?? []);
 
-  useEffect(() => {
-    if (selectedPoint) {
-      setPlotData((currentPlotData) =>
-        currentPlotData.map((p) =>
-          getPointId(p) === getPointId(selectedPoint)
-            ? { ...p, cluster: selectedPoint.cluster }
-            : p,
-        ),
-      );
-    }
-  }, [selectedPoint]);
+  // useEffect(() => {
+  //   if (selectedPoint) {
+  //     setscatterData((currentscatterData) =>
+  //       currentscatterData.map((c) =>
+  //         getPointId(c) === getPointId(selectedPoint)
+  //           ? { ...p, cluster: selectedPoint.cluster }
+  //           : p,
+  //       ),
+  //     );
+  //   }
+  // }, [selectedPoint]);
 
   const color = d3.scaleOrdinal(d3.schemeCategory10);
 
@@ -235,18 +235,19 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     (clusterId: string) => {
       const svg = d3.select(svgRef.current);
       const g = svg.select<SVGGElement>('g.all-content');
-      if (g.empty() || !plotData || !plotData.length) return;
+      if (g.empty() || !scatterData || !scatterData.length) return;
 
-      const pointsInCluster = plotData.filter((d) => String(d.cluster) === clusterId);
-      if (!pointsInCluster.length) return;
+      const pointsInCluster = scatterData.find((c) => c.cluster_id === clusterId)?.points;
+      console.log(pointsInCluster);
+      if (!pointsInCluster?.length) return;
 
       const xScale = d3
         .scaleLinear()
-        .domain(d3.extent(plotData, (d) => d.x) as [number, number])
+        .domain(d3.extent(pointsInCluster, (d) => d.x) as [number, number])
         .range([0, defaultDimensions.width]);
       const yScale = d3
         .scaleLinear()
-        .domain(d3.extent(plotData, (d) => d.y) as [number, number])
+        .domain(d3.extent(pointsInCluster, (d) => d.y) as [number, number])
         .range([defaultDimensions.height, 0]);
 
       const xExtent = d3.extent(pointsInCluster, (d) => d.x) as [number, number];
@@ -269,7 +270,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         .call(zoom.transform as any, transform);
       setZoomedCluster(clusterId);
     },
-    [plotData, zoom],
+    [scatterData, zoom],
   );
 
   const handlePointDrag = (selection: d3.Selection<any, Point, any, any>) => {
@@ -302,21 +303,22 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
   };
 
   useEffect(() => {
-    if (!svgRef.current || !plotData) return;
+    if (!svgRef.current || !scatterData) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
     const container = svg.append('g').attr('class', 'all-content');
     svg.call(zoom as any).on('dblclick.zoom', null);
-
+    const allPoints = scatterData.flatMap((c) => c.points);
+    console.log(d3.extent(allPoints, (d) => d.x));
     const xScale = d3
       .scaleLinear()
-      .domain(d3.extent(plotData, (d) => d.x) as [number, number])
+      .domain(d3.extent(allPoints, (d) => d.x) as [number, number])
       .range([0, defaultDimensions.width]);
     const yScale = d3
       .scaleLinear()
-      .domain(d3.extent(plotData, (d) => d.y) as [number, number])
+      .domain(d3.extent(allPoints, (d) => d.y) as [number, number])
       .range([defaultDimensions.height, 0]);
 
     container
@@ -326,7 +328,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       .style('fill', 'none')
       .style('pointer-events', 'all')
       .on('click', () => {
-        // if (resetPoint) resetPoint();
+        // if (resetSelectedPoint) resetSelectedPoint();
       });
 
     function reset() {
@@ -343,16 +345,14 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       zoomReset: reset,
     });
 
-    const uniqueClusters = Array.from(new Set(plotData.map((d) => d.cluster)));
-    for (const clusterId of uniqueClusters) {
-      const pointsInThisCluster = plotData.filter((d) => d.cluster === clusterId);
-      if (pointsInThisCluster.length > 2) {
+    scatterData.forEach((cluster) => {
+      if (cluster.points.length > 2) {
         const density = d3
           .contourDensity<Point>()
           .x((d) => xScale(d.x))
           .y((d) => yScale(d.y))
           .size([defaultDimensions.width, defaultDimensions.height])
-          .bandwidth(15)(pointsInThisCluster);
+          .bandwidth(15)(cluster.points);
 
         const outermost = density.slice(0, 1);
         container
@@ -363,78 +363,80 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           .join('path')
           .attr('d', d3.geoPath())
           .attr('fill-opacity', 0.05)
-          .attr('fill', color(String(clusterId)))
-          .attr('stroke', color(String(clusterId)))
+          .attr('fill', color(cluster.cluster_id))
+          .attr('stroke', color(cluster.cluster_id))
           .attr('stroke-width', 0.8)
           .attr('opacity', 0.7)
           .attr('cursor', 'move');
       }
-    }
+    });
     const tooltip = d3.select('.tooltip');
 
-    container
-      .selectAll('circle')
-      .data(plotData)
-      .join('circle')
-      .attr('r', (d) => {
-        const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-        return isSelected ? 8 : 5;
-      })
-      .attr('cx', (d) => xScale(d.x))
-      .attr('cy', (d) => yScale(d.y))
-      .attr('class', (d) => `cluster-${d.cluster}`)
-      .attr('fill', (d) => color(String(d.cluster)))
-      .attr('stroke', (d) => {
-        const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-        return isSelected ? 'black' : 'white';
-      })
-      .attr('stroke-width', (d) => {
-        const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-        return isSelected ? 2 : 1;
-      })
-      .attr('cursor', 'pointer')
-      .on('click', (event, play) => {
-        event.stopPropagation();
-        if (!selectedPoint || getPointId(selectedPoint) !== getPointId(play)) {
-          updatePoint(play);
-        }
-      })
-      .on('mouseover', (event, d) => {
-        const clusterClass = `.cluster-${d.cluster}`;
-        container.selectAll('circle').attr('opacity', 0.4);
-        container.selectAll(clusterClass).attr('opacity', 1);
-        tooltip?.html(`
-      <div>
-        <p>Type: ${d.event_type || 'Unknown'}</p>
-        <p>Home: ${d.event_desc_home || 'N/A'}</p>
-        <p>Away: ${d.event_desc_away || 'N/A'}</p>
-        <p>Cluster: ${d.cluster}</p> 
-      </div>
-    `);
-        return tooltip.style('visibility', 'visible');
-      })
-      .on('mousemove', (event) => {
-        return tooltip
-          .style('top', event.clientY + 10 + 'px')
-          .style('left', event.clientX + 10 + 'px');
-      })
-      .on('mouseout', () => {
-        container.selectAll('circle').attr('opacity', 1);
-        return tooltip?.style('visibility', 'hidden');
-      });
-  }, [plotData, selectedPoint, svgRef.current, updatePoint, resetPoint]);
+    scatterData.forEach(({ cluster_id, points }) => {
+      container
+        .selectAll(`circle.cluster-${cluster_id}`)
+        .data(points)
+        .join('circle')
+        .attr('r', (d) => {
+          const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
+          return isSelected ? 8 : 5;
+        })
+        .attr('cx', (d) => xScale(d.x))
+        .attr('cy', (d) => yScale(d.y))
+        .attr('class', (d) => `cluster-${cluster_id}`)
+        .attr('fill', (d) => color(String(cluster_id)))
+        .attr('stroke', (d) => {
+          const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
+          return isSelected ? 'black' : 'white';
+        })
+        .attr('stroke-width', (d) => {
+          const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
+          return isSelected ? 2 : 1;
+        })
+        .attr('cursor', 'pointer')
+        .on('click', (event, play) => {
+          event.stopPropagation();
+          if (!selectedPoint || getPointId(selectedPoint) !== getPointId(play)) {
+            updateSelectedPoint(play);
+            updateSelectedClusterId(cluster_id);
+          }
+        })
+        .on('mouseover', (event, d) => {
+          container.selectAll('circle').attr('opacity', 0.4);
+          container.selectAll(`circle.cluster-${cluster_id}`).attr('opacity', 1);
+          tooltip?.html(`
+        <div>
+          <p>Type: ${d.event_type || 'Unknown'}</p>
+          <p>Home: ${d.event_desc_home || 'N/A'}</p>
+          <p>Away: ${d.event_desc_away || 'N/A'}</p>
+          <p>Cluster: ${cluster_id}</p> 
+        </div>
+      `);
+          return tooltip.style('visibility', 'visible');
+        })
+        .on('mousemove', (event) => {
+          return tooltip
+            .style('top', event.clientY + 10 + 'px')
+            .style('left', event.clientX + 10 + 'px');
+        })
+        .on('mouseout', () => {
+          container.selectAll('circle').attr('opacity', 1);
+          return tooltip?.style('visibility', 'hidden');
+        });
+    });
+  }, [scatterData, selectedPoint, svgRef.current, updateSelectedPoint, resetSelectedPoint]);
 
   useEffect(() => {
     zoomed({ transform: currentTransform });
-  }, [plotData, selectedPoint, currentTransform]);
+  }, [scatterData, selectedPoint, currentTransform]);
 
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
-  const clusters = Array.from(new Set(plotData.map((d) => String(d.cluster)))).sort();
-
+  const clusters = scatterData?.map((c) => c.cluster_id).sort() ?? [];
+  console.log(clusters);
   return (
     <div className="flex flex-col">
-      {teamID && plotData.length === 0 && !isLoading ? (
+      {teamID && scatterData?.length === 0 && !isLoading ? (
         <div className="py-4 text-center">
           No play data available for this team or current filters.
         </div>

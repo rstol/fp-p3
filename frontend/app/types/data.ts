@@ -1,11 +1,3 @@
-export interface DataPoint {
-  X1: number;
-  X2: number;
-  cluster: string;
-}
-
-export type DataArray = DataPoint[];
-
 export type Player = {
   firstname: string;
   lastname: string;
@@ -53,16 +45,19 @@ export interface PlayDetail {
   period?: number;
 }
 
-export interface PointData {
+export interface Point {
   x: number;
   y: number;
-  cluster: string;
   event_id: string;
   game_id: string;
   event_desc_home: string | null;
   event_desc_away: string | null;
   game_date?: string;
   event_type: number;
+  isTagged: boolean;
 }
 
-export type Point = PointData;
+export type Cluster = {
+  cluster_id: string;
+  points: Array<Point>;
+};

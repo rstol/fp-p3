@@ -18,18 +18,19 @@ const FormSchema = z.object({
 export default function ClusterView() {
   // TODO get this info for the currently selected cluster
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
+  const selectedClusterId = useDashboardStore((state) => state.selectedClusterId);
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      clusterLabel: selectedPoint?.cluster,
-      clusterId: selectedPoint?.cluster, // TODO change this
+      clusterLabel: selectedClusterId ?? '',
+      clusterId: selectedClusterId ?? '', // TODO change this
     },
   });
   let submit = useSubmit();
 
   const isLoading = false; // TODO fetching data
   if (isLoading) return <ClusterDetailsSkeleton />;
-  if (!selectedPoint) {
+  if (!selectedClusterId) {
     return (
       <Card className="gap-4 border-none pt-1 shadow-none">
         <CardHeader>
@@ -53,7 +54,7 @@ export default function ClusterView() {
   return (
     <Card className="gap-4 border-none pb-1 shadow-none">
       <CardHeader>
-        <CardTitle>Cluster {selectedPoint?.cluster}</CardTitle>
+        <CardTitle>Cluster {selectedClusterId}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         <Form {...form}>

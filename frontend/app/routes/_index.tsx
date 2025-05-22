@@ -1,4 +1,8 @@
-import { useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
+import {
+  useSearchParams,
+  type ActionFunctionArgs,
+  type ClientLoaderFunctionArgs,
+} from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import { PlaysTable } from '~/components/PlaysTable';
@@ -6,15 +10,13 @@ import PlayView from '~/components/PlayView';
 import ScatterPlot from '~/components/ScatterPlot';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
 import { Separator } from '~/components/ui/separator';
-import { BASE_URL, GameFilter } from '~/lib/const';
+import { BASE_URL, GameFilter, PlayActions } from '~/lib/const';
 import { fetchWithCache, purgeCacheOnGitCommitChange } from '~/lib/fetchCache';
-import type { Game, Point, Team } from '~/types/data';
+import type { Cluster, Game, Team } from '~/types/data';
 import type { Route } from './+types/_index';
+import invariant from 'tiny-invariant';
 
-interface ScatterDataResponse {
-  total_games: number;
-  points: Point[];
-}
+type ScatterDataResponse = Cluster[];
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -55,6 +57,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   ];
 
   const [teams, scatterData] = await Promise.all(fetchPromises);
+  console.log(scatterData);
   return {
     timeframe,
     totalGames,
@@ -62,6 +65,90 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
     games,
     scatterData,
   };
+}
+
+export async function clientAction({ request }: ActionFunctionArgs) {
+  invariant(request.method.toLowerCase() === 'post', 'Invalid request method - expected POST');
+
+  const formData = await request.formData();
+
+  const { _action, ...values } = Object.fromEntries(formData);
+  invariant(_action && typeof _action === 'string', 'Missing or invalid action in payload');
+  invariant(
+    values.eventId && typeof values.eventId === 'string',
+    'Missing or invalid eventId in payload',
+  );
+  invariant(
+    values.gameId && typeof values.gameId === 'string',
+    'Missing or invalid gameId in payload',
+  );
+  console.log(values);
+  switch (_action) {
+    case PlayActions.UpdateAllPlayFields: {
+      let { note, clusters, gameId, eventId } = values;
+      clusters = JSON.parse(clusters as string);
+      invariant(
+        Array.isArray(clusters) && clusters.length > 0,
+        'Missing or invalid clusters in payload',
+      );
+
+      // Set cluster id to null for new cluster
+      const cluster = clusters[0];
+      const payload = {
+        cluster_id: cluster.id.startsWith('new_cluster') ? null : cluster.id,
+        cluster_name: cluster.text,
+        note: note,
+      };
+      const backendResponse = await fetch(`${BASE_URL}/plays/${gameId}/${eventId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      return backendResponse; // No actual data just 200 or 40x
+    }
+    case PlayActions.UpdatePlayNote: {
+      const { note, gameId, eventId } = values;
+
+      const payload = {
+        note: note,
+      };
+      const backendResponse = await fetch(`${BASE_URL}/plays/${gameId}/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      return backendResponse; // No actual data just 200 or 40x
+    }
+    case PlayActions.UpdatePlayCluster:
+      let { clusters, gameId, eventId } = values;
+      clusters = JSON.parse(clusters as string);
+      invariant(
+        Array.isArray(clusters) && clusters.length > 0,
+        'Missing or invalid clusters in payload',
+      );
+
+      // Set cluster id to null for new cluster
+      const cluster = clusters[0];
+      const payload = {
+        cluster_id: cluster.id.startsWith('new_cluster') ? null : cluster.id,
+        cluster_name: cluster.text,
+      };
+      const backendResponse = await fetch(`${BASE_URL}/plays/${gameId}/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      return backendResponse; // No actual data just 200 or 40x
+    default:
+      break;
+  }
+  return;
 }
 
 clientLoader.hydrate = true;

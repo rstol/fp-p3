@@ -4,23 +4,24 @@ import type { Point } from '~/types/data';
 type State = {
   selectedPoint: Point | null;
   stagedChangesCount: number;
-  selectedTeamId: string | null;
+  selectedClusterId: string | null;
 };
 
 type Action = {
-  updatePoint: (point: Point) => void;
-  resetPoint: () => void;
+  updateSelectedPoint: (point: Point) => void;
+  resetSelectedPoint: () => void;
   stageSelectedPlayClusterUpdate: (clusterId: string) => void;
   clearPendingClusterUpdates: () => void;
-  setSelectedTeamId: (teamId: string | null) => void;
+  updateSelectedClusterId: (clusterId: string) => void;
 };
 
 export const useDashboardStore = create<State & Action>((set) => ({
   selectedPoint: null,
   stagedChangesCount: 0,
-  selectedTeamId: null,
-  updatePoint: (selectedPoint) => set(() => ({ selectedPoint })),
-  resetPoint: () =>
+  selectedClusterId: null,
+  updateSelectedPoint: (selectedPoint) => set(() => ({ selectedPoint })),
+  updateSelectedClusterId: (selectedClusterId) => set(() => ({ selectedClusterId })),
+  resetSelectedPoint: () =>
     set(() => ({
       selectedPoint: null,
     })),
@@ -30,7 +31,7 @@ export const useDashboardStore = create<State & Action>((set) => ({
       if (!selectedPoint) return state;
 
       // TODO only count if cluster assignment changed
-      if (selectedPoint.cluster === clusterId) return state;
+      // if (selectedPoint.cluster === clusterId) return state;
 
       return {
         selectedPoint: { ...selectedPoint, cluster: clusterId },
@@ -41,7 +42,4 @@ export const useDashboardStore = create<State & Action>((set) => ({
     set(() => ({
       stagedChangesCount: 0,
     })),
-  setSelectedTeamId: (teamId) => {
-    set(() => ({ selectedTeamId: teamId }));
-  },
 }));

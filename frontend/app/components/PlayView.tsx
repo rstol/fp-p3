@@ -3,18 +3,17 @@ import { type Tag, TagInput } from 'emblor';
 import { Check } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useFetcher, useLoaderData, useSearchParams, useSubmit } from 'react-router';
+import { useFetcher, useLoaderData, useSearchParams } from 'react-router';
 import { z } from 'zod';
 import { BASE_URL, EventType, PlayActions } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
-import type { clientAction } from '~/routes/resources.play';
+import type { PlayDetail, Team } from '~/types/data';
 import { PlayDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
-import type { PlayDetail, Team } from '~/types/data';
 
 type PlayDetailState = { videoURL?: string; offenseTeam?: Team } & PlayDetail;
 
@@ -40,48 +39,56 @@ export type PlayPayload = {
 
 function PlayForm({ playDetails }: { playDetails: PlayDetail | null }) {
   const data = useLoaderData<typeof clientLoader>();
-  const clusterData = data?.scatterData?.points ?? [];
-  const clusters = Array.from(new Set(clusterData.map((d) => String(d.cluster)))).sort();
+  const clusterData = data?.scatterData ?? [];
+  const clusters = clusterData.map((c) => c.cluster_id).sort();
   const stageSelectedPlayClusterUpdate = useDashboardStore(
     (state) => state.stageSelectedPlayClusterUpdate,
   );
-
+  const selectedClusterId = useDashboardStore((state) => state.selectedClusterId);
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   // TODO temporary transform: use data schema
-  const initialCluster = {
-    id: String(selectedPoint?.cluster),
-    text: String(selectedPoint?.cluster),
-  };
+  const initialCluster = selectedClusterId
+    ? [
+        {
+          id: selectedClusterId,
+          text: selectedClusterId,
+        },
+      ]
+    : [];
   const initialTags = [...clusters].map((c) => ({ id: c, text: c }));
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      clusters: [initialCluster],
+      clusters: initialCluster,
       note: '', // playDetails.note TODO
       eventId: selectedPoint?.event_id,
       gameId: selectedPoint?.game_id,
       _action: PlayActions.UpdateAllPlayFields,
     },
   });
-  const [tags, setTags] = useState<Tag[]>([initialCluster]);
+  const [tags, setTags] = useState<Tag[]>(initialCluster);
   const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
   const { setValue } = form;
-  let submit = useSubmit();
 
-  function onSubmit(data: z.infer<typeof FormSchema>) {
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
     const updatedCluster = data.clusters[0];
     const defaultCluster = form.formState.defaultValues?.clusters?.[0];
     if (updatedCluster.text !== defaultCluster?.text && updatedCluster.id !== defaultCluster?.id) {
       stageSelectedPlayClusterUpdate(data.clusters[0].id); // TODO
     }
 
-    submit(
-      { ...data, clusters: JSON.stringify(data.clusters) },
-      {
-        action: '/resources/play',
-        method: 'post',
+    const payload = {
+      cluster_id: updatedCluster.id.startsWith('new_cluster') ? null : updatedCluster.id,
+      cluster_name: updatedCluster.text,
+      note: data.note,
+    };
+    await fetch(`${BASE_URL}/plays/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    );
+      body: JSON.stringify(payload),
+    });
   }
 
   //TODO define for to new cluster data format
@@ -159,16 +166,13 @@ function PlayForm({ playDetails }: { playDetails: PlayDetail | null }) {
 export default function PlayView() {
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const stagedChangesCount = useDashboardStore((state) => state.stagedChangesCount);
-  const selectedTeamId = useDashboardStore((state) => state.selectedTeamId);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
   const [playDetails, setPlayDetails] = useState<PlayDetailState | null>(null);
   const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
   const [_, setSearchParams] = useSearchParams();
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
-  const clusterDataFetcher = useFetcher<typeof clientAction>();
-  // TODO loader during updating the clusters
-  const isUpdating = clusterDataFetcher.state !== 'idle';
+  // TODO loader during submitting feedback & updating the clusters
 
   useEffect(() => {
     if (!selectedPoint) return;
@@ -176,7 +180,7 @@ export default function PlayView() {
     seIsLoadingPlayDetails(true);
     const fetchPlayDetails = async () => {
       try {
-        let publicVideoPath = `videos/00${selectedPoint.game_id}/${selectedPoint.event_id}.mp4`;
+        let publicVideoPath = `videos/${selectedPoint.game_id}/${selectedPoint.event_id}.mp4`;
 
         // Try to fetch from public folder first
         const checkPublicVideo = await fetch(publicVideoPath, { method: 'HEAD' }).catch(() => ({
@@ -184,14 +188,14 @@ export default function PlayView() {
         }));
 
         const resDetails = await fetch(
-          `${BASE_URL}/plays/00${selectedPoint.game_id}/${selectedPoint.event_id}`,
+          `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}`,
         );
         if (!resDetails.ok) throw new Error();
         const playDetails = await resDetails.json();
 
         if (!checkPublicVideo.ok) {
           const res = await fetch(
-            `${BASE_URL}/plays/00${selectedPoint.game_id}/${selectedPoint.event_id}/video`,
+            `${BASE_URL}/plays/${selectedPoint.game_id}/${selectedPoint.event_id}/video`,
           );
           const arrayBuffer = await res.arrayBuffer();
           const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
@@ -296,11 +300,7 @@ export default function PlayView() {
         <PlayForm playDetails={playDetails} />
         {stagedChangesCount > 0 && (
           <div className="mt-6 flex w-full items-center justify-end">
-            <Button
-              size="sm"
-              disabled={stagedChangesCount === 0 || !selectedTeamId}
-              onClick={onClickApplyChanges}
-            >
+            <Button size="sm" disabled={stagedChangesCount === 0} onClick={onClickApplyChanges}>
               Apply Changes ({stagedChangesCount})
             </Button>
           </div>

@@ -149,6 +149,7 @@ function EditTagDialog({
   const stageSelectedPlayClusterUpdate = useDashboardStore(
     (state) => state.stageSelectedPlayClusterUpdate,
   );
+
   const initialCluster = { id: '', text: '' };
   const initialTags = [initialCluster];
   const form = useForm<z.infer<typeof EditTagFormSchema>>({
@@ -337,7 +338,7 @@ export function PlaysTable() {
   const [selectedPlays, setSelectedPlays] = React.useState<Play[]>([]);
   const [editTag, setEditTag] = React.useState('');
   const [editNote, setEditNote] = React.useState('');
-
+  const selectedClusterId = useDashboardStore((state) => state.selectedClusterId);
   // TODO use scatter data for this list or another endpoint
   // Loading // Hide if no Play is selected!
 
@@ -553,7 +554,7 @@ export function PlaysTable() {
     },
   });
 
-  const title = `Similar plays in cluster ${selectedPoint?.cluster ?? ''}`;
+  const title = `Similar plays in cluster ${selectedClusterId ?? ''}`;
 
   return (
     <div className="w-full">
