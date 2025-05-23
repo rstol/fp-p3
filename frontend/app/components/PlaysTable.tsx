@@ -17,7 +17,7 @@ import { type Tag as TagType, TagInput } from 'emblor';
 import { ArrowUpDown, ChevronDown, Edit, Eye, MoreHorizontal, Tag } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
-import { data, useLoaderData } from 'react-router';
+import { useLoaderData } from 'react-router';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -80,15 +80,19 @@ function EditTagDialog({
   const tagOptions = clusterData
     .map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' }))
     .sort();
-
+  const allTagged = selectedPlays.every((play) => play.is_tagged);
+  const initialTag =
+    allTagged && selectedCluster
+      ? [{ id: selectedCluster?.cluster_id, text: selectedCluster?.cluster_label ?? '' }]
+      : [];
   const form = useForm<z.infer<typeof EditTagFormSchema>>({
     resolver: zodResolver(EditTagFormSchema),
     defaultValues: {
-      clusters: [],
+      clusters: initialTag,
     },
   });
   const { setValue } = form;
-  const [tags, setTags] = React.useState<TagType[]>([]);
+  const [tags, setTags] = React.useState<TagType[]>(initialTag);
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
 
   async function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
@@ -256,11 +260,11 @@ function EditNoteDialog({
   );
 }
 
-export function PlaysTable() {
+export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
   const [sorting, setSorting] = React.useState<SortingState>([
     {
       id: 'similarity_distance',
-      desc: false,
+      desc: true,
     },
   ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -268,9 +272,8 @@ export function PlaysTable() {
   const [rowSelection, setRowSelection] = React.useState({});
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const loaderData = useLoaderData<typeof clientLoader>();
-  const scatterData = useDashboardStore((state) => state.clusters);
   const { games, teams } = loaderData;
-  let data = scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
+
   const gameMap = new Map(games?.map((game) => [game.game_id, game]));
   const teamMap = new Map(teams.map((team) => [team.teamid, team.name]));
   const enhancedData =
@@ -355,7 +358,7 @@ export function PlaysTable() {
         </Button>
       ),
       cell: ({ row }) => (
-        <div>{(100 - 100 * Number(row.getValue('similarity_distance'))).toFixed(2)}</div>
+        <div>{(100 * Number(row.getValue('similarity_distance'))).toFixed(2)}</div>
       ),
     },
     {
@@ -476,8 +479,6 @@ export function PlaysTable() {
   });
 
   if (!selectedCluster) return null;
-
-  const title = `Similar plays in cluster ${selectedCluster?.cluster_label ?? ''}`;
 
   return (
     <div className="w-full">

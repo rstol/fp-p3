@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
-import { GameFilter } from '~/lib/const';
+import { GameFilter, TeamIDs } from '~/lib/const';
 import { cn } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
 
@@ -39,8 +39,9 @@ export default function Filters({ teamID }: { teamID: string | null }) {
   const [_, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
   const isNavigating = Boolean(navigation.location);
+  const filteredTeams = teams.filter((team) => TeamIDs.includes(team.teamid));
 
-  const commandItems = teams.map((team) => ({
+  const commandItems = filteredTeams.map((team) => ({
     value: String(team.teamid),
     label: team.name,
     abbreviation: team.abbreviation,

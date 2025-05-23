@@ -39,9 +39,9 @@ class PlayClustering:
         return embeddings_sources_df
 
     def _init(self) -> None:
-        self.embeddings = self._load_all_embeddings()
+        embeddings = self._load_all_embeddings()
         # self._build_index(embeddings)
-        self._set_game_embeddings()
+        self._set_game_embeddings(embeddings)
 
     def _load_all_embeddings(self) -> np.ndarray:
         npy_files = list(Path(EMBEDDINGS_DIR).glob("*.npy"))
@@ -60,25 +60,30 @@ class PlayClustering:
         self.index = index
 
     def _init_kmeans(self) -> None:
-        kmeans = faiss.Kmeans(self.d, self.initial_k, niter=25)
-        kmeans.train(self.embeddings)
-        self.kmeans = kmeans
+        clustering = faiss.Clustering(self.d, self.initial_k)
+        clustering.niter = 25
+        index = faiss.IndexFlatIP(self.d)
+        clustering.train(self.game_embeddings, index)
+
+        self.kmeans = clustering
+        self.kmeans_index = index
 
     def get_games_embedding_ids(self) -> pl.LazyFrame:
-        return self.embedding_ids.with_row_index().filter(pl.col("game_id").is_in(self.game_ids))
+        return self.embedding_ids.with_row_index().filter(
+            pl.col("game_id").is_in(self.game_ids) & pl.col("offensive_team_id").eq(self.team_id)
+        )
 
-    def _set_game_embeddings(self) -> None:
+    def _set_game_embeddings(self, embeddings) -> None:
         self.game_embedding_ids = self.get_games_embedding_ids().collect()
         self.game_embedding_idxs = np.squeeze(self.game_embedding_ids.select(pl.col("index")))
-        self.game_embeddings = self.embeddings[self.game_embedding_idxs]
+        self.game_embeddings = embeddings[self.game_embedding_idxs]
 
     def get_initial_clusters(self, plays: pl.DataFrame) -> list[Cluster]:
         self._init_kmeans()
-        distances, index = self.kmeans.index.search(self.game_embeddings, 1)
+        distances, index = self.kmeans_index.search(self.game_embeddings, 1)
         distances = distances[..., 0]
         cluster_assignments = index[..., 0]
-        centroids = self.kmeans.centroids
-
+        centroids = faiss.vector_to_array(self.kmeans.centroids).reshape(self.initial_k, self.d)
         cluster_play_lists = self.merge_plays_embeddings(
             plays, self.game_embedding_ids, self.game_embeddings, distances, cluster_assignments
         )
@@ -109,6 +114,7 @@ class PlayClustering:
         embeddings,
         distances,
         cluster_assignments,
+        num_clusters: int | None = None,
     ):
         plays = (
             plays.join(
@@ -117,8 +123,8 @@ class PlayClustering:
             .sort("row_nr")
             .drop("row_nr")
         )
-
-        cluster_play_lists = [[] for _ in range(self.initial_k)]
+        num_clusters = num_clusters or self.initial_k
+        cluster_play_lists = [[] for _ in range(num_clusters)]
         for play, embedding, distance, cluster_assignment in zip(
             plays.iter_rows(named=True), embeddings, distances, cluster_assignments, strict=True
         ):
@@ -140,17 +146,31 @@ class PlayClustering:
             cluster_play_lists[cluster_assignment].append(cluster_play)
         return cluster_play_lists
 
-    def find_similar_plays(self, q_embedding: np.ndarray, k: int = 10):
+    def find_similar_plays(self, q_embedding: np.ndarray):
         self._build_index(self.game_embeddings)
         q = np.expand_dims(q_embedding, axis=0)
-        faiss.normalize_L2(q)
-        distances, index = self.index.search(q, k)  # Distance index of top k neighbors to query
-        distances = distances[0, ...]
-        embedding_idx = index[0, ...]
+        distances, index = self.index.search(q, self.game_embeddings.shape[0])
+        mask = (distances[0] > 0.98) & (
+            distances[0] < 1
+        )  # Radius: Cosine distance similarity threshold
+        masked_indices = index[0][mask]
+        masked_distances = distances[0][mask]
 
-        embedding_ids = self.game_embedding_ids[embedding_idx]
-        embeddings = self.game_embeddings[embedding_idx]
-        return embedding_ids, distances, embeddings
+        # Handle limits
+        if len(masked_indices) < 2:
+            final_indices = index[0][:2]
+            final_distances = distances[0][:2]
+        elif len(masked_indices) > 10:
+            # Too many — keep top 10 most similar in radius
+            final_indices = masked_indices[:10]
+            final_distances = masked_distances[:10]
+        else:
+            final_indices = masked_indices
+            final_distances = masked_distances
+
+        embedding_ids = self.game_embedding_ids[final_indices]
+        embeddings = self.game_embeddings[final_indices]
+        return embedding_ids, final_distances, embeddings
 
 
 if __name__ == "__main__":

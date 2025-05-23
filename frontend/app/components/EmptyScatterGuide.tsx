@@ -1,8 +1,8 @@
-import { Link, NavLink, useLoaderData } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
+import { TeamIDs } from '~/lib/const';
 import { clientLoader } from '~/routes/_index';
 import type { Team } from '~/types/data';
 import { Button } from './ui/button';
-import { TeamIDs } from '~/lib/const';
 
 export default function EmptyScatterGuide() {
   const data = useLoaderData<typeof clientLoader>();

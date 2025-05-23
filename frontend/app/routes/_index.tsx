@@ -17,6 +17,7 @@ import { fetchWithCache, purgeCacheOnGitCommitChange } from '~/lib/fetchCache';
 import type { ClusterData, Game, Team } from '~/types/data';
 import type { Route } from './+types/_index';
 import { useEffect } from 'react';
+import { useDashboardStore } from '~/lib/stateStore';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -76,6 +77,8 @@ export default function Home() {
   const teamID = searchParams.get('teamid');
   const data = useLoaderData<typeof clientLoader>();
   const location = useLocation();
+  const scatterData = useDashboardStore((state) => state.clusters);
+  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
 
   useEffect(() => {
     if (data.scatterData) {
@@ -85,6 +88,9 @@ export default function Home() {
     }
   }, [location, data.scatterData]);
 
+  let tableData =
+    scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
+  const tableTitle = `Similar plays in cluster ${selectedCluster?.cluster_label ?? ''}`;
   return (
     <>
       <div className="space-y-4">
@@ -102,7 +108,7 @@ export default function Home() {
         </ResizablePanelGroup>
       </div>
       <div className="mt-12 mb-16 space-y-10">
-        <PlaysTable />
+        <PlaysTable data={tableData} title={tableTitle} />
         {/* <TeamsTable />
         <GamesTable /> */}
       </div>

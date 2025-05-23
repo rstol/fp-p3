@@ -138,6 +138,8 @@ cache/
 
 # Data 
 games_preprocessed
+user_updates
+clusters
 experiments
 backend/data/raw/events
 **/*:Zone.Identifier

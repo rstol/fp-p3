@@ -17,7 +17,7 @@ from backend.resources.cluster import Cluster
 from backend.resources.dataset_manager import DatasetManager
 from backend.resources.play_clustering import PlayClustering
 from backend.resources.playid import PlayId
-from backend.settings import DATA_DIR, TEAM_IDS_SAMPLE, UPDATE_PLAY_SCHEMA
+from backend.settings import DATA_DIR, UPDATE_PLAY_SCHEMA
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -33,31 +33,31 @@ class TeamPlaysScatterResource(Resource):
         self.dataset_manager = DatasetManager()
         self.umap_model = umap.UMAP(n_neighbors=5, metric="cosine", verbose=True, low_memory=False)
         self.clusters: list[Cluster] | None = None
-        self._init_clusters()
 
-    def _init_clusters(self):
-        for team_id in TEAM_IDS_SAMPLE:
-            if Path(f"{DATA_DIR}/clusters/{team_id}.pkl").exists():
-                continue
+    def _init_clusters(self, team_id: int):
+        if Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
+            return
 
-            user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
-            user_updates.write_parquet(f"{DATA_DIR}/user_updates_{team_id}.parquet")
+        user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
+        fpath = Path(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        user_updates.write_parquet(fpath)
 
-            game_ids, plays = self._load_plays_for_team(team_id)
-            logger.info(f"Plays for team {team_id}: {plays.height}")
-            play_clustering = PlayClustering(
-                team_id=team_id, game_ids=game_ids, initial_k=self.INITIAL_CLUSTER_NUM
-            )
-            initial_clusters = play_clustering.get_initial_clusters(plays)
+        game_ids, plays = self._load_plays_for_team(team_id)
+        logger.info(f"Plays for team {team_id}: {plays.height}")
+        play_clustering = PlayClustering(
+            team_id=team_id, game_ids=game_ids, initial_k=self.INITIAL_CLUSTER_NUM
+        )
+        initial_clusters = play_clustering.get_initial_clusters(plays)
 
-            fpath = Path(f"{DATA_DIR}/clusters/{team_id}.pkl")
-            fpath.parent.mkdir(parents=True, exist_ok=True)
-            with fpath.open("wb") as f:
-                pickle.dump(initial_clusters, f)
+        fpath = Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl")
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        with fpath.open("wb") as f:
+            pickle.dump(initial_clusters, f)
 
-    def _load_plays_for_team(self, team_id: int):
+    def _load_plays_for_team(self, team_id: int, timeframe=5):
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
-        games = games.sort("game_date", descending=True).limit(5)  # max timeframe?
+        games = games.sort("game_date", descending=True).limit(timeframe)
 
         game_ids = games["game_id"].to_list()
         return game_ids, self._concat_plays_from_games(game_ids, games)
@@ -66,9 +66,12 @@ class TeamPlaysScatterResource(Resource):
         if Path(f"{DATA_DIR}/clusters/{team_id}.pkl").exists():
             with Path(f"{DATA_DIR}/clusters/{team_id}.pkl").open("rb") as f:
                 self.clusters = pickle.load(f)
+        if Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
+            with Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").open("rb") as f:
+                self.clusters = pickle.load(f)
 
-    def apply_user_updates(self, team_id: int):
-        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates_{team_id}.parquet")
+    def apply_user_updates(self, team_id: int, timeframe: int):
+        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
 
         if self.clusters is None:
             raise ValueError("Clusters attribute is not set")
@@ -116,18 +119,21 @@ class TeamPlaysScatterResource(Resource):
                         created_by="user",
                     )
 
-                    game_ids, plays = self._load_plays_for_team(team_id)
+                    game_ids, plays = self._load_plays_for_team(team_id, timeframe)
                     play_clustering = PlayClustering(team_id=team_id, game_ids=game_ids)
                     embedding_ids, distances, embeddings = play_clustering.find_similar_plays(
-                        new_cluster.centroid, 5
+                        new_cluster.centroid
                     )
-                    cluster_assignments = np.full((len(embedding_ids),), 1)
+                    cluster_assignments = np.full((len(embedding_ids),), 0)
 
-                    # TODO the following does not yet fully work
                     cluster_play_list = play_clustering.merge_plays_embeddings(
-                        plays, embedding_ids, embeddings, distances, cluster_assignments
+                        plays, embedding_ids, embeddings, distances, cluster_assignments, 1
                     )[0]
-                    target_play_ids = set(play.play_id for play in cluster_play_list)
+                    target_play_ids = set(
+                        play.play_id
+                        for play in cluster_play_list
+                        if play.play_id != cluster_play.play_id
+                    )
                     moved_plays = []
                     for cluster in cluster_dict.values():
                         remaining_plays = []
@@ -137,7 +143,7 @@ class TeamPlaysScatterResource(Resource):
                             else:
                                 remaining_plays.append(play)
                         cluster.plays = remaining_plays
-                    print("MOVED plays ", moved_plays, len(moved_plays))
+
                     new_cluster.plays.extend(moved_plays)
                     self.clusters.append(new_cluster)
                     cluster_dict[updated_cluster_id] = new_cluster
@@ -148,6 +154,12 @@ class TeamPlaysScatterResource(Resource):
 
         # TODO save updated clusters
         # Clear user updates?
+        fpath = Path(f"{DATA_DIR}/clusters/{team_id}.pkl")
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        with fpath.open("wb") as f:
+            pickle.dump(self.clusters, f)
+        user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
+        user_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
         print("New cluster ids", new_cluster_ids)
 
     def _clusters_to_dicts(self, cluster_plays):
@@ -184,10 +196,11 @@ class TeamPlaysScatterResource(Resource):
 
     def _prepare_scatter_data_for_response(self, team_id: int, timeframe: int):
         logger.info(f"Prep scatter data: team {team_id}, timeframe {timeframe}")
-        # TODO timeframes
+        self._init_clusters(team_id)
+
         self._load_clusters_for_team(team_id)
 
-        self.apply_user_updates(team_id)
+        self.apply_user_updates(team_id, timeframe)
 
         return self._generate_scatter_data(team_id, timeframe)
 
@@ -311,9 +324,9 @@ class ScatterPointResource(Resource):
             logger.error(err)
             return {"error": "Invalid play ID format"}, 400
 
-        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates_{team_id}.parquet")
+        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
         user_updates = user_updates.update(df_update, on=["game_id", "event_id"], how="full")
-        user_updates.write_parquet(f"{DATA_DIR}/user_updates_{team_id}.parquet")
+        user_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
 
         return {"message": "Play updated successfully"}, 200
 
@@ -332,10 +345,10 @@ class ClusterResource(Resource):
             logger.error(err)
             return {"error": "Invalid play ID format"}, 400
         print(df_update)
-        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates_{team_id}.parquet")
+        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
         user_updates = user_updates.update(df_update, on=["cluster_id"], how="full")
         print(user_updates)
-        user_updates.write_parquet(f"{DATA_DIR}/user_updates_{team_id}.parquet")
+        user_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
 
         return {"message": "Play updated successfully"}, 200
 

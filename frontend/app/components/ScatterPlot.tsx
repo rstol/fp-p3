@@ -21,7 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import { EventType } from '~/lib/const';
 
 const defaultDimensions = { width: 500, height: 400 };
-const margin = { top: 40, right: 10, bottom: 10, left: 10 };
+const margin = { top: 60, right: 20, bottom: 20, left: 20 };
 
 const getZoomMethod =
   (svgRef: React.RefObject<SVGSVGElement | null>, method: string) =>
@@ -230,11 +230,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
   const zoomIntoCluster = useCallback(
     (clusterId: string) => {
-      console.log('Zoom into', clusterId);
       const svg = d3.select(svgRef.current);
-      const g = svg.select<SVGGElement>('g.all-content');
-      if (g.empty() || !scatterData || !scatterData.length) return;
-
       const pointsInCluster = scatterData.find((c) => c.cluster_id === clusterId)?.points;
 
       if (!pointsInCluster?.length) return;
@@ -242,26 +238,37 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       const xScale = d3
         .scaleLinear()
         .domain(d3.extent(pointsInCluster, (d) => d.x) as [number, number])
-        .range([0, defaultDimensions.width]);
+        .range([margin.left, defaultDimensions.width - margin.right]);
       const yScale = d3
         .scaleLinear()
         .domain(d3.extent(pointsInCluster, (d) => d.y) as [number, number])
-        .range([defaultDimensions.height, 0]);
+        .range([defaultDimensions.height - margin.bottom, margin.top]);
 
-      const xExtent = d3.extent(pointsInCluster, (d) => d.x) as [number, number];
-      const yExtent = d3.extent(pointsInCluster, (d) => d.y) as [number, number];
+      const [xMin, xMax] = d3.extent(pointsInCluster, (d) => d.x) as [number, number];
+      const [yMin, yMax] = d3.extent(pointsInCluster, (d) => d.y) as [number, number];
 
-      const viewBoxWidth = defaultDimensions.width;
-      const viewBoxHeight = defaultDimensions.height;
+      const x0 = xScale(xMin);
+      const x1 = xScale(xMax);
+      const y0 = yScale(yMax); // y-scale is inverted!
+      const y1 = yScale(yMin);
 
-      const scaleX = viewBoxWidth / (xScale(xExtent[1]) - xScale(xExtent[0]));
-      const scaleY = viewBoxHeight / (yScale(yExtent[0]) - yScale(yExtent[1]));
-      const k = Math.min(scaleX, scaleY) * 0.9;
+      const clusterWidth = x1 - x0;
+      const clusterHeight = y1 - y0;
 
-      const tx = viewBoxWidth / 2 - (k * (xScale(xExtent[0]) + xScale(xExtent[1]))) / 2;
-      const ty = viewBoxHeight / 2 - (k * (yScale(yExtent[0]) + yScale(yExtent[1]))) / 2;
-      // TODO check if translate is NaN
-      const transform = d3.zoomIdentity.translate(tx, ty).scale(k);
+      const scale =
+        0.9 *
+        Math.min(
+          (defaultDimensions.width - margin.left - margin.right) / clusterWidth,
+          (defaultDimensions.height - margin.top - margin.bottom) / clusterHeight,
+        );
+
+      const midX = (x0 + x1) / 2;
+      const midY = (y0 + y1) / 2;
+
+      // Compute translate
+      const translateX = defaultDimensions.width / 2 - scale * midX;
+      const translateY = defaultDimensions.height / 2 - scale * midY;
+      const transform = d3.zoomIdentity.translate(translateX, translateY).scale(scale);
 
       svg
         .transition()
@@ -313,11 +320,11 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     const xScale = d3
       .scaleLinear()
       .domain(d3.extent(allPoints, (d) => d.x) as [number, number])
-      .range([0, defaultDimensions.width]);
+      .range([margin.left, defaultDimensions.width - margin.right]);
     const yScale = d3
       .scaleLinear()
       .domain(d3.extent(allPoints, (d) => d.y) as [number, number])
-      .range([defaultDimensions.height, 0]);
+      .range([defaultDimensions.height - margin.bottom, margin.top]);
 
     container
       .append('rect')

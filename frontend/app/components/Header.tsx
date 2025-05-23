@@ -21,7 +21,7 @@ export default function Header() {
             return (
               <NavLink
                 key={link.to}
-                to={`${link.to}${location.search}`}
+                to={`${link.to}${location.search.replace('&fetch_scatter=True', '')}`}
                 className={({ isActive }) =>
                   cn(
                     navigationMenuTriggerStyle(),
