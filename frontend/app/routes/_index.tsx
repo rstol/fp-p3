@@ -1,4 +1,10 @@
-import { useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
+import {
+  redirect,
+  useLoaderData,
+  useLocation,
+  useSearchParams,
+  type ClientLoaderFunctionArgs,
+} from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import { PlaysTable } from '~/components/PlaysTable';
@@ -10,6 +16,7 @@ import { BASE_URL, GameFilter } from '~/lib/const';
 import { fetchWithCache, purgeCacheOnGitCommitChange } from '~/lib/fetchCache';
 import type { ClusterData, Game, Team } from '~/types/data';
 import type { Route } from './+types/_index';
+import { useEffect } from 'react';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -24,6 +31,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const teamID = url.searchParams.get('teamid');
   const timeframeUrl = url.searchParams.get('timeframe');
   const fetchScatter = url.searchParams.get('fetch_scatter');
+
   let timeframe =
     isNaN(Number(timeframeUrl)) || timeframeUrl === null
       ? GameFilter.LAST3
@@ -50,9 +58,10 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   ];
 
   const [teams, scatterData] = await Promise.all(fetchPromises);
-  console.log(scatterData);
+
   return {
     timeframe,
+    teamID,
     totalGames,
     teams,
     games,
@@ -65,6 +74,16 @@ clientLoader.hydrate = true;
 export default function Home() {
   const [searchParams] = useSearchParams();
   const teamID = searchParams.get('teamid');
+  const data = useLoaderData<typeof clientLoader>();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (data.scatterData) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('fetch_scatter');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [location, data.scatterData]);
 
   return (
     <>

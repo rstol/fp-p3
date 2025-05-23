@@ -11,10 +11,12 @@ def add_routes(app):
     api.add_resource(
         res.scatter_data.TeamPlaysScatterResource, API + "teams/<string:team_id>/plays/scatter"
     )
-    api.add_resource(res.scatter_data.ClusterResource, API + "cluster/<string:cluster_id>")
+    api.add_resource(
+        res.scatter_data.ClusterResource, API + "teams/<string:team_id>/cluster/<string:cluster_id>"
+    )
     api.add_resource(
         res.scatter_data.ScatterPointResource,
-        API + "scatterpoint/<string:game_id>/<string:event_id>",
+        API + "teams/<string:team_id>/scatterpoint/<string:game_id>/<string:event_id>",
     )
     # NBA Data endpoints
     api.add_resource(res.nba_data.TeamsResource, API + "teams")

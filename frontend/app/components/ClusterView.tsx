@@ -9,16 +9,38 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
+import { useLoaderData } from 'react-router';
+import type { clientLoader } from '~/routes/_index';
+import type { ClusterMetadata } from '~/types/data';
+import { useEffect } from 'react';
 
-const FormSchema = z.object({
-  clusterLabel: z.string(),
-  clusterId: z.string(),
-});
+function createFormSchema(existingLabels: string[]) {
+  return z.object({
+    clusterLabel: z
+      .string()
+      .min(1, 'Label cannot be empty')
+      .refine((label) => !existingLabels.includes(label), {
+        message: 'Label must be unique',
+      }),
+    clusterId: z.string(),
+  });
+}
 
-function ClusterLabelForm() {
-  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
+function ClusterLabelForm({
+  clusters,
+  selectedCluster,
+}: {
+  clusters: ClusterMetadata[];
+  selectedCluster: ClusterMetadata;
+}) {
   const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
+  const updateClusterLabel = useDashboardStore((state) => state.updateClusterLabel);
+  const { teamID } = useLoaderData<typeof clientLoader>();
+  const existingLabels = clusters
+    .map((c) => c.cluster_label)
+    .filter((label) => label && label !== selectedCluster?.cluster_label); // allow current label
 
+  const FormSchema = createFormSchema(existingLabels as string[]);
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
@@ -26,20 +48,31 @@ function ClusterLabelForm() {
       clusterId: selectedCluster?.cluster_id,
     },
   });
+
+  useEffect(() => {
+    form.reset({
+      clusterLabel: selectedCluster?.cluster_label ?? '',
+      clusterId: selectedCluster?.cluster_id,
+    });
+  }, [selectedCluster, form]);
+
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     console.log('submit', data);
 
     const payload = {
       cluster_label: data.clusterLabel,
     };
-    await fetch(`${BASE_URL}/cluster/${data.clusterId}`, {
+    await fetch(`${BASE_URL}/teams/${teamID}/cluster/${data.clusterId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
     });
+
+    updateClusterLabel(data.clusterId, data.clusterLabel);
     updateSelectedCluster({ cluster_id: data.clusterId, cluster_label: data.clusterLabel });
+    form.reset();
   }
   return (
     <Form {...form}>
@@ -49,7 +82,7 @@ function ClusterLabelForm() {
           name="clusterLabel"
           render={({ field }) => (
             <FormItem className="flex flex-col items-start">
-              <FormLabel className="text-sm">Change Cluster Label</FormLabel>
+              <FormLabel className="text-sm">Rename Cluster</FormLabel>
               <div className="flex w-full gap-2">
                 <FormControl>
                   <Input type="text" placeholder="Add cluster label" {...field} />
@@ -69,6 +102,12 @@ function ClusterLabelForm() {
 
 export default function ClusterView() {
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
+  const data = useLoaderData<typeof clientLoader>();
+  const clusterData = data?.scatterData ?? [];
+  const clusters = clusterData.map(({ cluster_id, cluster_label }) => ({
+    cluster_id,
+    cluster_label,
+  }));
 
   const isLoading = false; // TODO fetching data
   if (isLoading) return <ClusterDetailsSkeleton />;
@@ -79,7 +118,7 @@ export default function ClusterView() {
           <CardTitle>Cluster Statistics</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="text-sm">No cluster selected.</div>
+          <div className="text-sm">No point selected.</div>
         </CardContent>
       </Card>
     );
@@ -91,7 +130,7 @@ export default function ClusterView() {
         <CardTitle>Cluster {selectedCluster.cluster_label}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <ClusterLabelForm />
+        <ClusterLabelForm clusters={clusters} selectedCluster={selectedCluster} />
         <div>
           <div className="divide-y divide-solid">
             <div className="flex gap-4 pb-1">

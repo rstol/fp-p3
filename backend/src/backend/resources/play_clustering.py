@@ -39,10 +39,9 @@ class PlayClustering:
         return embeddings_sources_df
 
     def _init(self) -> None:
-        embeddings = self._load_all_embeddings()
-        self._build_index(embeddings)
-        self._init_kmeans(embeddings)
-        self._set_game_embeddings(embeddings)
+        self.embeddings = self._load_all_embeddings()
+        # self._build_index(embeddings)
+        self._set_game_embeddings()
 
     def _load_all_embeddings(self) -> np.ndarray:
         npy_files = list(Path(EMBEDDINGS_DIR).glob("*.npy"))
@@ -50,74 +49,42 @@ class PlayClustering:
         for file_path in npy_files:
             embedding: list[torch.Tensor] = np.load(file_path, allow_pickle=True)
             embeddings_all.append([e.numpy() for e in embedding])
-        return np.concatenate(embeddings_all, axis=0)
+        all_embeddings = np.concatenate(embeddings_all, axis=0)
+        faiss.normalize_L2(all_embeddings)
+        return all_embeddings
 
     def _build_index(self, embeddings: np.ndarray) -> None:
         index = faiss.index_factory(self.d, "Flat", faiss.METRIC_INNER_PRODUCT)
-        faiss.normalize_L2(embeddings)
         index.add(embeddings)
         assert index.is_trained
         self.index = index
 
-    def _init_kmeans(self, embeddings: np.ndarray) -> None:
-        kmeans = faiss.Kmeans(self.d, self.initial_k, niter=20)
-        faiss.normalize_L2(embeddings)
-        kmeans.train(embeddings)
+    def _init_kmeans(self) -> None:
+        kmeans = faiss.Kmeans(self.d, self.initial_k, niter=25)
+        kmeans.train(self.embeddings)
         self.kmeans = kmeans
 
     def get_games_embedding_ids(self) -> pl.LazyFrame:
         return self.embedding_ids.with_row_index().filter(pl.col("game_id").is_in(self.game_ids))
 
-    def _set_game_embeddings(self, embeddings: np.ndarray) -> None:
+    def _set_game_embeddings(self) -> None:
         self.game_embedding_ids = self.get_games_embedding_ids().collect()
         self.game_embedding_idxs = np.squeeze(self.game_embedding_ids.select(pl.col("index")))
-        self.game_embeddings = embeddings[self.game_embedding_idxs]
+        self.game_embeddings = self.embeddings[self.game_embedding_idxs]
 
-    def get_initial_clusters(
-        self, plays: pl.DataFrame, initial_k: int = 12, niter: int = 20
-    ) -> list[Cluster]:
+    def get_initial_clusters(self, plays: pl.DataFrame) -> list[Cluster]:
+        self._init_kmeans()
         distances, index = self.kmeans.index.search(self.game_embeddings, 1)
         distances = distances[..., 0]
         cluster_assignments = index[..., 0]
         centroids = self.kmeans.centroids
 
-        plays = (
-            plays.join(
-                self.game_embedding_ids.with_row_count("row_nr"),
-                on=["game_id", "event_id"],
-                how="inner",
-            )
-            .sort("row_nr")
-            .drop("row_nr")
+        cluster_play_lists = self.merge_plays_embeddings(
+            plays, self.game_embedding_ids, self.game_embeddings, distances, cluster_assignments
         )
 
-        cluster_play_lists = [[] for _ in range(initial_k)]
-        for play, embedding, distance, cluster_assignment in zip(
-            plays.iter_rows(named=True),
-            self.game_embeddings,
-            distances,
-            cluster_assignments,
-            strict=True,
-        ):
-            play_id = PlayId(play["game_id"], play["event_id"])
-            play = Play(
-                play_id=play_id,
-                event_type=play["event_type"],
-                game_date=play["game_date"],
-                quarter=play["quarter"],
-                event_score=play["event_score"],
-                event_score_margin=play["event_score_margin"],
-                possession_team_id=0
-                if np.isnan(play["possession_team_id"])
-                else int(play["possession_team_id"]),
-                event_desc_away=play["event_desc_away"],
-                event_desc_home=play["event_desc_home"],
-            )
-            cluster_play = ClusterPlay(play_id, distance, embedding, play)
-            cluster_play_lists[cluster_assignment].append(cluster_play)
-
         clusters = []
-        for i in range(initial_k):
+        for i in range(self.initial_k):
             timestamp = time.time()
             cluster = Cluster(
                 id=str(uuid.uuid4()),
@@ -135,12 +102,55 @@ class PlayClustering:
 
         return clusters
 
-    def find_similar_plays(self, k: int = 10) -> list[int]:
-        q = np.expand_dims(embeddings_team[target_play_idx], axis=0)
+    def merge_plays_embeddings(
+        self,
+        plays: pl.DataFrame,
+        embedding_ids: pl.DataFrame,
+        embeddings,
+        distances,
+        cluster_assignments,
+    ):
+        plays = (
+            plays.join(
+                embedding_ids.with_row_count("row_nr"), on=["game_id", "event_id"], how="inner"
+            )
+            .sort("row_nr")
+            .drop("row_nr")
+        )
+
+        cluster_play_lists = [[] for _ in range(self.initial_k)]
+        for play, embedding, distance, cluster_assignment in zip(
+            plays.iter_rows(named=True), embeddings, distances, cluster_assignments, strict=True
+        ):
+            play_id = PlayId(play["game_id"], play["event_id"])
+            play = Play(
+                play_id=play_id,
+                event_type=play["event_type"],
+                game_date=play["game_date"],
+                quarter=play["quarter"],
+                event_score=play["event_score"],
+                event_score_margin=play["event_score_margin"],
+                possession_team_id=0
+                if np.isnan(play["possession_team_id"])
+                else int(play["possession_team_id"]),
+                event_desc_away=play["event_desc_away"],
+                event_desc_home=play["event_desc_home"],
+            )
+            cluster_play = ClusterPlay(play_id, distance, embedding, play)
+            cluster_play_lists[cluster_assignment].append(cluster_play)
+        return cluster_play_lists
+
+    def find_similar_plays(self, q_embedding: np.ndarray, k: int = 10):
+        self._build_index(self.game_embeddings)
+        q = np.expand_dims(q_embedding, axis=0)
         faiss.normalize_L2(q)
-        distance, index = index.search(q, k)  # actual search
-        print(distance, index)  # Distance index of top k neighbors to query
-        # TODO
+        distances, index = self.index.search(q, k)  # Distance index of top k neighbors to query
+        distances = distances[0, ...]
+        embedding_idx = index[0, ...]
+
+        embedding_ids = self.game_embedding_ids[embedding_idx]
+        embeddings = self.game_embeddings[embedding_idx]
+        return embedding_ids, distances, embeddings
 
 
 if __name__ == "__main__":
@@ -153,7 +163,17 @@ if __name__ == "__main__":
     clustering = PlayClustering(team_id, game_ids)
     game_dates = games.select(["game_id", "game_date"])
 
-    plays_df = dataset_manager.get_plays_for_games(game_ids).drop("moments").collect()
+    plays_df = dataset_manager.get_plays_for_games(game_ids)
+    plays_df = (
+        plays_df.with_columns(
+            [pl.col("moments").list.get(0).struct.field("quarter").alias("quarter")]
+        )
+        .drop("moments")
+        .collect()
+    )
     plays_df = plays_df.join(game_dates, on="game_id", how="left")
 
-    clustering.get_initial_clusters(plays_df)
+    clusters = clustering.get_initial_clusters(plays_df)
+    cluster = clusters[0]
+    play = cluster.plays[0]
+    clustering.find_similar_plays(play.embedding)

@@ -14,6 +14,7 @@ class ClusterPlay:
     play: Play
     x: float | None = None
     y: float | None = None
+    recency: float | None = None
 
 
 @dataclass(slots=True)
@@ -22,7 +23,7 @@ class Cluster:
 
     id: str
     label: str
-    centroid: np.ndarray
+    centroid: np.ndarray | None
     plays: list[ClusterPlay]
     created: float
     last_modified: float

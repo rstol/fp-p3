@@ -76,25 +76,19 @@ function EditTagDialog({
   const stageSelectedPlayClusterUpdate = useDashboardStore(
     (state) => state.stageSelectedPlayClusterUpdate,
   );
-  const data = useLoaderData<typeof clientLoader>();
-  const clusterData = data?.scatterData ?? [];
-  const initialTags = clusterData
+  const clusterData = useDashboardStore((state) => state.clusters);
+  const tagOptions = clusterData
     .map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' }))
     .sort();
-
-  const initialCluster = {
-    id: selectedCluster?.cluster_id,
-    text: selectedCluster?.cluster_label ?? '',
-  };
 
   const form = useForm<z.infer<typeof EditTagFormSchema>>({
     resolver: zodResolver(EditTagFormSchema),
     defaultValues: {
-      clusters: [initialCluster],
+      clusters: [],
     },
   });
   const { setValue } = form;
-  const [tags, setTags] = React.useState<TagType[]>(initialTags);
+  const [tags, setTags] = React.useState<TagType[]>([]);
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
 
   async function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
@@ -119,8 +113,8 @@ function EditTagDialog({
   }
 
   const generateTagId = () => {
-    const generatedId = Math.random() * 16;
-    return `new_cluster_${generatedId}`;
+    const randomString = Math.random().toString(36).substring(2, 10); // base36, removes "0." prefix
+    return `new_cluster_${randomString}`;
   };
 
   return (
@@ -151,7 +145,7 @@ function EditTagDialog({
                       <FormControl>
                         <TagInput
                           {...field}
-                          autocompleteOptions={initialTags}
+                          autocompleteOptions={tagOptions}
                           maxTags={1}
                           tags={tags}
                           inlineTags
@@ -274,7 +268,8 @@ export function PlaysTable() {
   const [rowSelection, setRowSelection] = React.useState({});
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const loaderData = useLoaderData<typeof clientLoader>();
-  const { scatterData, games, teams } = loaderData;
+  const scatterData = useDashboardStore((state) => state.clusters);
+  const { games, teams } = loaderData;
   let data = scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
   const gameMap = new Map(games?.map((game) => [game.game_id, game]));
   const teamMap = new Map(teams.map((team) => [team.teamid, team.name]));
@@ -287,7 +282,7 @@ export function PlaysTable() {
 
           return {
             ...point,
-            videoURL: `videos/${point.game_id}/${point.event_id}.mp4`,
+            videoURL: `/videos/${point.game_id}/${point.event_id}.mp4`,
             visitorTeamName,
           };
         }),
@@ -359,7 +354,9 @@ export function PlaysTable() {
           <ArrowUpDown size={4} />
         </Button>
       ),
-      cell: ({ row }) => <div>{row.getValue('similarity_distance')}</div>,
+      cell: ({ row }) => (
+        <div>{(100 - 100 * Number(row.getValue('similarity_distance'))).toFixed(2)}</div>
+      ),
     },
     {
       accessorKey: 'game_date',
@@ -580,7 +577,7 @@ export function PlaysTable() {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No cluster selected.
+                  No point selected.
                 </TableCell>
               </TableRow>
             )}

@@ -60,6 +60,7 @@ export interface Point {
   similarity_distance: number;
   possession_team_id: number;
   quarter: number;
+  recency: number;
 }
 
 export interface ClusterMetadata {

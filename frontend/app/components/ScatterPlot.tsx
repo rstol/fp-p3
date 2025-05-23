@@ -39,9 +39,9 @@ function Legend({
   onSelectCluster,
 }: {
   clusters: ClusterMetadata[];
-  color: d3.ScaleOrdinal<string, string>;
+  color: d3.ScaleOrdinal<string, string | readonly string[], never>;
   zoomedCluster: string | null;
-  onSelectCluster: (cluster: string) => void;
+  onSelectCluster: (clusterId: string) => void;
 }) {
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
@@ -49,7 +49,7 @@ function Legend({
 
   return (
     <div className="absolute top-2 right-2 z-10">
-      <Select onValueChange={onSelectCluster} value={zoomedCluster ?? undefined}>
+      <Select onValueChange={onSelectCluster} value={zoomedCluster ?? ''}>
         <SelectTrigger className="gap-1 border border-gray-400 bg-white">
           <Label htmlFor="timeframe" className="text-xs">
             Legend:
@@ -62,7 +62,7 @@ function Legend({
             return (
               <SelectItem key={index} value={cluster.cluster_id}>
                 <span className="flex items-center gap-1">
-                  <Circle fill={c} stroke={c} width={10} height={10} />
+                  <Circle fill={c as string} stroke={c as string} width={10} height={10} />
                   Cluster {cluster.cluster_label}
                 </span>
               </SelectItem>
@@ -177,32 +177,25 @@ function InfoBar() {
 
 const ScatterPlot = ({ teamID }: { teamID: string }) => {
   const loaderData = useLoaderData<typeof clientLoader>();
-  const games = loaderData?.games ?? [];
-  const { timeframe, scatterData } = loaderData;
+  const { scatterData: initialScatterData } = loaderData;
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
   const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
   const resetSelectedPoint = useDashboardStore((state) => state.resetSelectedPoint);
+  const setClusters = useDashboardStore((state) => state.setClusters);
+  const scatterData = useDashboardStore((state) => state.clusters);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
-  // const [scatterData, setscatterData] = useState<Cluster[]>(scatterData ?? []);
 
-  // TODO update clusters here until submission
-  // useEffect(() => {
-  //   if (selectedPoint) {
-  //     setscatterData((currentscatterData) =>
-  //       currentscatterData.map((c) =>
-  //         getPointId(c) === getPointId(selectedPoint)
-  //           ? { ...p, cluster: selectedPoint.cluster }
-  //           : p,
-  //       ),
-  //     );
-  //   }
-  // }, [selectedPoint]);
+  useEffect(() => {
+    if (initialScatterData) {
+      setClusters(initialScatterData);
+    }
+  }, [initialScatterData]);
 
-  const color = d3.scaleOrdinal(d3.schemeCategory10);
+  const color = d3.scaleOrdinal([...d3.schemeCategory10, d3.schemeSet3]); // 24 colors
 
   const zoomed = useCallback(
     ({ transform }: d3.D3ZoomEvent<Element, unknown> | { transform: d3.ZoomTransform }) => {
@@ -215,16 +208,19 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       container
         .selectAll('circle')
         .attr('r', function (d: any) {
+          const isTagged = d?.is_tagged;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          return isSelected ? 8 / transform.k : 5 / transform.k;
+          return isSelected ? 8 / transform.k : isTagged ? 6 / transform.k : 5 / transform.k;
         })
         .attr('stroke', function (d: any) {
+          const isTagged = d?.is_tagged;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          return isSelected ? 'black' : 'white';
+          return isSelected || isTagged ? 'black' : 'white';
         })
         .attr('stroke-width', function (d: any) {
+          const isTagged = d?.is_tagged;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          return isSelected ? 2 / transform.k : 1 / transform.k;
+          return isSelected || isTagged ? 2 / transform.k : 1 / transform.k;
         });
       container.selectAll('path').attr('stroke-width', 0.8 / transform.k); // contour
     },
@@ -234,12 +230,13 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
   const zoomIntoCluster = useCallback(
     (clusterId: string) => {
+      console.log('Zoom into', clusterId);
       const svg = d3.select(svgRef.current);
       const g = svg.select<SVGGElement>('g.all-content');
       if (g.empty() || !scatterData || !scatterData.length) return;
 
       const pointsInCluster = scatterData.find((c) => c.cluster_id === clusterId)?.points;
-      console.log(pointsInCluster);
+
       if (!pointsInCluster?.length) return;
 
       const xScale = d3
@@ -263,6 +260,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
       const tx = viewBoxWidth / 2 - (k * (xScale(xExtent[0]) + xScale(xExtent[1]))) / 2;
       const ty = viewBoxHeight / 2 - (k * (yScale(yExtent[0]) + yScale(yExtent[1]))) / 2;
+      // TODO check if translate is NaN
       const transform = d3.zoomIdentity.translate(tx, ty).scale(k);
 
       svg
@@ -312,7 +310,6 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
     const container = svg.append('g').attr('class', 'all-content');
     svg.call(zoom as any).on('dblclick.zoom', null);
     const allPoints = scatterData.flatMap((c) => c.points);
-    console.log(d3.extent(allPoints, (d) => d.x));
     const xScale = d3
       .scaleLinear()
       .domain(d3.extent(allPoints, (d) => d.x) as [number, number])
@@ -372,7 +369,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       }
     });
     const tooltip = d3.select('.tooltip');
-
+    console.log(scatterData);
     scatterData.forEach(({ cluster_id, cluster_label, points }) => {
       container
         .selectAll(`circle.cluster-${cluster_id}`)
@@ -380,20 +377,28 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         .join('circle')
         .attr('r', (d) => {
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          const isTagged = selectedPoint?.is_tagged;
-          return isSelected ? 9 : isTagged ? 7 : 5;
+          const isTagged = d?.is_tagged;
+          return isSelected ? 8 : isTagged ? 6 : 5;
         })
         .attr('cx', (d) => xScale(d.x))
         .attr('cy', (d) => yScale(d.y))
         .attr('class', (d) => `cluster-${cluster_id}`)
-        .attr('fill', (d) => color(String(cluster_id)))
+        .attr('fill', (d) => {
+          const baseColor = color(cluster_id);
+          if (d.recency) {
+            const rgb = d3.rgb(baseColor as string);
+            const alpha = 0.5 + 0.5 * d.recency; // opacity from 0.5 to 1.0
+            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+          }
+          return baseColor;
+        })
         .attr('stroke', (d) => {
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          const isTagged = selectedPoint?.is_tagged;
+          const isTagged = d?.is_tagged;
           return isSelected || isTagged ? 'black' : 'white';
         })
         .attr('stroke-width', (d) => {
-          const isTagged = selectedPoint?.is_tagged;
+          const isTagged = d?.is_tagged;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
           return isSelected || isTagged ? 2 : 1;
         })
@@ -401,6 +406,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
         .on('click', (event, play) => {
           event.stopPropagation();
           if (!selectedPoint || getPointId(selectedPoint) !== getPointId(play)) {
+            setZoomedCluster(cluster_id);
             updateSelectedPoint(play);
             updateSelectedCluster({ cluster_id, cluster_label });
           }
