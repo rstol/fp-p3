@@ -20,8 +20,7 @@ ENV PATH="$VIRTUAL_ENVIRONMENT_PATH/bin:$PATH"
 RUN uv python install 3.12
 
 # Install ffmpeg
-RUN apt-get update && \
-    apt-get install -y ffmpeg && \
+RUN apt-get install -y ffmpeg && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
