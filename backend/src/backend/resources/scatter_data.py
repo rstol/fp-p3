@@ -133,16 +133,16 @@ class TeamPlaysScatterResource(Resource):
                     target_play_ids = set(
                         play.play_id
                         for play in cluster_play_list
-                        if play.play_id != cluster_play.play_id
+                        if play.play_id != cluster_play.play_id and not cluster_play.play.is_tagged
                     )
                     moved_plays = []
                     for cluster in cluster_dict.values():
                         remaining_plays = []
-                        for play in cluster.plays:
-                            if play.play_id in target_play_ids:
-                                moved_plays.append(play)
+                        for cluster_play in cluster.plays:
+                            if cluster_play.play_id in target_play_ids:
+                                moved_plays.append(cluster_play)
                             else:
-                                remaining_plays.append(play)
+                                remaining_plays.append(cluster_play)
                         cluster.plays = remaining_plays
 
                     new_cluster.plays.extend(moved_plays)

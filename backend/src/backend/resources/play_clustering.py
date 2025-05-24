@@ -150,20 +150,19 @@ class PlayClustering:
         self._build_index(self.game_embeddings)
         q = np.expand_dims(q_embedding, axis=0)
         distances, index = self.index.search(q, self.game_embeddings.shape[0])
-        mask = (distances[0] > 0.98) & (
-            distances[0] < 1
-        )  # Radius: Cosine distance similarity threshold
+        mask = (distances[0] > 0.95) & (distances[0] < 1)  # Radius: Cosine similarity threshold
         masked_indices = index[0][mask]
         masked_distances = distances[0][mask]
 
         # Handle limits
-        if len(masked_indices) < 2:
-            final_indices = index[0][:2]
-            final_distances = distances[0][:2]
-        elif len(masked_indices) > 10:
-            # Too many — keep top 10 most similar in radius
-            final_indices = masked_indices[:10]
-            final_distances = masked_distances[:10]
+        min_limit, max_limit = 3, 10
+        if len(masked_indices) < min_limit:
+            final_indices = index[0][:min_limit]
+            final_distances = distances[0][:min_limit]
+        elif len(masked_indices) > max_limit:
+            # Too many — keep top max_limit most similar in radius
+            final_indices = masked_indices[:max_limit]
+            final_distances = masked_distances[:max_limit]
         else:
             final_indices = masked_indices
             final_distances = masked_distances
