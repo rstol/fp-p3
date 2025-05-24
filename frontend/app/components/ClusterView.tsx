@@ -102,8 +102,9 @@ function ClusterLabelForm({
 
 export default function ClusterView() {
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
+  const clustersState = useDashboardStore((state) => state.clusters);
   const data = useLoaderData<typeof clientLoader>();
-  const clusterData = data?.scatterData ?? [];
+  const clusterData = clustersState ?? data?.scatterData ?? [];
   const clusters = clusterData.map(({ cluster_id, cluster_label }) => ({
     cluster_id,
     cluster_label,
@@ -124,6 +125,14 @@ export default function ClusterView() {
     );
   }
 
+  const allPoints = data?.scatterData?.flatMap((c) => c.points);
+  const currentCluster = clusterData.find((c) => c.cluster_id === selectedCluster.cluster_id);
+  const usage =
+    currentCluster && allPoints ? (100 / allPoints.length) * currentCluster.points.length : 0;
+  const misses = currentCluster?.points.filter((p) => p.event_type === 2);
+  const makes = currentCluster?.points.filter((p) => p.event_type === 1);
+  const makeMissRatio = misses && makes ? makes?.length / misses?.length : 0;
+
   return (
     <Card className="gap-4 border-none pb-1 shadow-none">
       <CardHeader>
@@ -134,12 +143,15 @@ export default function ClusterView() {
         <div>
           <div className="divide-y divide-solid">
             <div className="flex gap-4 pb-1">
-              <span className="shrink-0">Points per Position:</span>
-              <span className="flex-1 text-right">2.3</span>
-            </div>
-            <div className="flex gap-4 py-1">
               <span className="shrink-0">Usage:</span>
-              <span className="flex-1 text-right">17.68%</span>
+              <span className="flex-1 text-right">{usage.toFixed(1)}%</span>
+            </div>
+            <div className="py-1">
+              <div className="flex gap-4">
+                <span className="shrink-0">Success ratio:</span>
+                <span className="flex-1 text-right">{makeMissRatio.toFixed(1)}</span>
+              </div>
+              <small>made shot vs. missed shot</small>
             </div>
           </div>
         </div>

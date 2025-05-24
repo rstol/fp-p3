@@ -269,7 +269,6 @@ export default function PlayView() {
   if (isLoadingPlayDetails) {
     return <PlayDetailsSkeleton />;
   }
-  console.log(playDetails);
 
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
