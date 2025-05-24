@@ -1,7 +1,7 @@
 FROM node:20-alpine AS development
 WORKDIR /app_root
 COPY package.json .
-RUN npm install
+RUN npm install --force
 COPY . .
 CMD ["npm", "run", "dev"]
 
@@ -10,7 +10,7 @@ FROM node:20-alpine AS production-dependencies-env
 ENV ROOT_PATH=/app_root
 WORKDIR ${ROOT_PATH}
 COPY package.json package-lock.json .
-RUN npm ci --ignore-scripts
+RUN npm ci --ignore-scripts --force
 
 FROM node:20-alpine AS build-env
 ARG COMMIT_HASH
