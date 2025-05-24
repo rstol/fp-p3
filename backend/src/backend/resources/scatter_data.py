@@ -35,13 +35,14 @@ class TeamPlaysScatterResource(Resource):
         self.clusters: list[Cluster] | None = None
 
     def _init_clusters(self, team_id: int):
+        fpath = Path(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+        if not fpath.exists():
+            user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
+            fpath.parent.mkdir(parents=True, exist_ok=True)
+            user_updates.write_parquet(fpath)
+
         if Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
             return
-
-        user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
-        fpath = Path(f"{DATA_DIR}/user_updates/{team_id}.parquet")
-        fpath.parent.mkdir(parents=True, exist_ok=True)
-        user_updates.write_parquet(fpath)
 
         game_ids, plays = self._load_plays_for_team(team_id)
         logger.info(f"Plays for team {team_id}: {plays.height}")

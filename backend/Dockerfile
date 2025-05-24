@@ -34,9 +34,6 @@ RUN groupadd -g 1001 app-user && \
 WORKDIR ${PYTHONPATH}
 RUN chown app-user:app-user ${PYTHONPATH}
 
-# Copy the application server configuration
-COPY --chown=app-user:app-user gunicorn.conf.py ${PYTHONPATH}
-
 # Document the exposed port
 EXPOSE ${PORT}
 
@@ -53,20 +50,21 @@ EXPOSE ${PORT}
 # # Copy data files
 # COPY --chown=app-user:app-user data/embeddings ${PYTHONPATH}/data/embeddings
 # COPY --chown=app-user:app-user data/nba_tracking_data ${PYTHONPATH}/data/nba_tracking_data
+# COPY --chown=app-user:app-user data/init_clusters ${PYTHONPATH}/data/init_clusters
 
 # CMD ["python", "-m", "backend.router.app"]
 
 # Start production stage from builder to avoid inheriting dev tools
 FROM builder AS production
 
-COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
+COPY --chown=app-user:app-user uv.lock pyproject.toml gunicorn.conf.py ${PYTHONPATH}
 
-WORKDIR ${PYTHONPATH}/backend
+WORKDIR ${PYTHONPATH}
 RUN uv sync --locked --no-install-project --no-dev
 
 # Copy application files
 COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
-COPY --chown=app-user:app-user gunicorn.conf.py ${PYTHONPATH}/backend/gunicorn.conf.py
+
 # Copy data files
 COPY --chown=app-user:app-user data/embeddings ${PYTHONPATH}/data/embeddings
 COPY --chown=app-user:app-user data/nba_tracking_data ${PYTHONPATH}/data/nba_tracking_data
