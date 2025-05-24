@@ -59,19 +59,19 @@ EXPOSE ${PORT}
 # Start production stage from builder to avoid inheriting dev tools
 FROM builder AS production
 
-WORKDIR ${PYTHONPATH}
+WORKDIR ${PYTHONPATH}/backend
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-install-project --no-dev
 
-WORKDIR ${PYTHONPATH}/backend
 # Copy application files
 COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
 COPY --chown=app-user:app-user gunicorn.conf.py ${PYTHONPATH}/backend/gunicorn.conf.py
 # Copy data files
 COPY --chown=app-user:app-user data/embeddings ${PYTHONPATH}/data/embeddings
 COPY --chown=app-user:app-user data/nba_tracking_data ${PYTHONPATH}/data/nba_tracking_data
+COPY --chown=app-user:app-user data/init_clusters ${PYTHONPATH}/data/init_clusters
 
 # Activate entrypoint for running the Gunicorn application server
 # For environments with multiple CPU cores, increase the number of workers
