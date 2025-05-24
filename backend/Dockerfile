@@ -20,7 +20,8 @@ ENV PATH="$VIRTUAL_ENVIRONMENT_PATH/bin:$PATH"
 RUN uv python install 3.12
 
 # Install ffmpeg
-RUN apt-get install -y ffmpeg && \
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -58,11 +59,10 @@ EXPOSE ${PORT}
 # Start production stage from builder to avoid inheriting dev tools
 FROM builder AS production
 
+COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
+
 WORKDIR ${PYTHONPATH}/backend
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project --no-dev
+RUN uv sync --locked --no-install-project --no-dev
 
 # Copy application files
 COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
