@@ -58,14 +58,13 @@ CMD ["python", "-m", "backend.router.app"]
 # Start production stage from builder to avoid inheriting dev tools
 FROM builder AS production
 
-# COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
-WORKDIR ${PYTHONPATH}/backend
-
+WORKDIR ${PYTHONPATH}
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-install-project --no-dev
 
+WORKDIR ${PYTHONPATH}/backend
 # Copy application files
 COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
 COPY --chown=app-user:app-user gunicorn.conf.py ${PYTHONPATH}/backend/gunicorn.conf.py
