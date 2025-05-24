@@ -1,9 +1,9 @@
-FROM node:20-alpine AS development
-WORKDIR /app_root
-COPY package.json .
-RUN npm install --force
-COPY . .
-CMD ["npm", "run", "dev"]
+# FROM node:20-alpine AS development
+# WORKDIR /app_root
+# COPY package.json .
+# RUN npm install --force
+# COPY . .
+# CMD ["npm", "run", "dev"]
 
 # Production build
 FROM node:20-alpine AS production-dependencies-env
