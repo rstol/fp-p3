@@ -3,7 +3,8 @@ FROM ghcr.io/astral-sh/uv:bookworm-slim AS builder
 ARG PORT=8080
 ARG TRACKING_DIR=/application_root/data/nba_tracking_data
 
-ENV UV_COMPILE_BYTECODE=0 UV_LINK_MODE=copy
+ENV UV_COMPILE_BYTECODE=0 
+ENV UV_LINK_MODE=copy
 ENV UV_PYTHON_INSTALL_DIR=/python
 ENV UV_PYTHON_PREFERENCE=only-managed
 ENV UV_CACHE_DIR="/application_root/.cache"
@@ -57,10 +58,13 @@ CMD ["python", "-m", "backend.router.app"]
 # Start production stage from builder to avoid inheriting dev tools
 FROM builder AS production
 
-COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
-
+# COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
 WORKDIR ${PYTHONPATH}/backend
-RUN uv sync --frozen --no-install-project --no-dev
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project --no-dev
 
 # Copy application files
 COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
