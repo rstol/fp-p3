@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class TeamPlaysScatterResource(Resource):
     """Resource for serving team play data for scatter plot visualization."""
 
-    INITIAL_CLUSTER_NUM = 8
+    INITIAL_CLUSTER_NUM = 7
 
     def __init__(self):
         self.dataset_manager = DatasetManager()
@@ -215,6 +215,7 @@ class TeamPlaysScatterResource(Resource):
                 [pl.col("moments").list.get(0).struct.field("quarter").alias("quarter")]
             )
             .drop("moments")
+            .filter(pl.col("event_type").is_in([1, 2]))  # made / miss
             .collect()
         )
         return plays_df.join(game_dates, on="game_id", how="left")
@@ -247,6 +248,7 @@ class TeamPlaysScatterResource(Resource):
         for plays in cluster_plays.values():
             for cluster_play in plays:
                 embeddings.append(cluster_play.embedding)
+                # TODO add centroids as supervised labels?
                 if getattr(cluster_play.play, "is_tagged", False):
                     y.append(cluster.id)
                 else:
