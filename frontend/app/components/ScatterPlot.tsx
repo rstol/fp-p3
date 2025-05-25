@@ -357,7 +357,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
           .x((d) => xScale(d.x))
           .y((d) => yScale(d.y))
           .size([defaultDimensions.width, defaultDimensions.height])
-          .bandwidth(10)(cluster.points);
+          .bandwidth(8)(cluster.points);
 
         const outermost = density.slice(0, 1);
         container

@@ -116,17 +116,17 @@ class PlayClustering:
         cluster_assignments,
         num_clusters: int | None = None,
     ):
-        plays = (
-            plays.join(
-                embedding_ids.with_row_count("row_nr"), on=["game_id", "event_id"], how="inner"
-            )
-            .sort("row_nr")
-            .drop("row_nr")
-        )
+        plays = plays.join(
+            embedding_ids.with_row_index("local_index"), on=["game_id", "event_id"], how="inner"
+        ).sort("local_index")
         num_clusters = num_clusters or self.initial_k
         cluster_play_lists = [[] for _ in range(num_clusters)]
         for play, embedding, distance, cluster_assignment in zip(
-            plays.iter_rows(named=True), embeddings, distances, cluster_assignments, strict=True
+            plays.iter_rows(named=True),
+            embeddings[plays["local_index"]],
+            distances[plays["local_index"]],
+            cluster_assignments[plays["local_index"]],
+            strict=True,
         ):
             play_id = PlayId(play["game_id"], play["event_id"])
             play = Play(

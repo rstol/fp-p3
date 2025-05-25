@@ -17,7 +17,7 @@ from backend.resources.cluster import Cluster
 from backend.resources.dataset_manager import DatasetManager
 from backend.resources.play_clustering import PlayClustering
 from backend.resources.playid import PlayId
-from backend.settings import DATA_DIR, UPDATE_PLAY_SCHEMA
+from backend.settings import DATA_DIR, TEAM_IDS_SAMPLE, UPDATE_PLAY_SCHEMA
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -27,34 +27,38 @@ logger = logging.getLogger(__name__)
 class TeamPlaysScatterResource(Resource):
     """Resource for serving team play data for scatter plot visualization."""
 
-    INITIAL_CLUSTER_NUM = 7
+    INITIAL_CLUSTER_NUM = 6
 
-    def __init__(self):
+    def __init__(self, force_init=False):
+        self.force_init = force_init
+        self.inital_state = True
         self.dataset_manager = DatasetManager()
         self.umap_model = umap.UMAP(n_neighbors=5, metric="cosine", verbose=True, low_memory=False)
         self.clusters: list[Cluster] | None = None
+        self._init_clusters()
 
-    def _init_clusters(self, team_id: int):
-        fpath = Path(f"{DATA_DIR}/user_updates/{team_id}.parquet")
-        if not fpath.exists():
-            user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
+    def _init_clusters(self):
+        for team_id in TEAM_IDS_SAMPLE:
+            fpath = Path(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+            if not fpath.exists():
+                user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
+                fpath.parent.mkdir(parents=True, exist_ok=True)
+                user_updates.write_parquet(fpath)
+
+            if not self.force_init and Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
+                return
+
+            game_ids, plays = self._load_plays_for_team(team_id)
+            logger.info(f"Plays for team {team_id}: {plays.height}")
+            play_clustering = PlayClustering(
+                team_id=team_id, game_ids=game_ids, initial_k=self.INITIAL_CLUSTER_NUM
+            )
+            initial_clusters = play_clustering.get_initial_clusters(plays)
+
+            fpath = Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl")
             fpath.parent.mkdir(parents=True, exist_ok=True)
-            user_updates.write_parquet(fpath)
-
-        if Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
-            return
-
-        game_ids, plays = self._load_plays_for_team(team_id)
-        logger.info(f"Plays for team {team_id}: {plays.height}")
-        play_clustering = PlayClustering(
-            team_id=team_id, game_ids=game_ids, initial_k=self.INITIAL_CLUSTER_NUM
-        )
-        initial_clusters = play_clustering.get_initial_clusters(plays)
-
-        fpath = Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl")
-        fpath.parent.mkdir(parents=True, exist_ok=True)
-        with fpath.open("wb") as f:
-            pickle.dump(initial_clusters, f)
+            with fpath.open("wb") as f:
+                pickle.dump(initial_clusters, f)
 
     def _load_plays_for_team(self, team_id: int, timeframe=5):
         games = self.dataset_manager.get_games_for_team(team_id, as_dicts=False)
@@ -64,7 +68,7 @@ class TeamPlaysScatterResource(Resource):
         return game_ids, self._concat_plays_from_games(game_ids, games)
 
     def _load_clusters_for_team(self, team_id: int):
-        if Path(f"{DATA_DIR}/clusters/{team_id}.pkl").exists():
+        if not self.force_init and Path(f"{DATA_DIR}/clusters/{team_id}.pkl").exists():
             with Path(f"{DATA_DIR}/clusters/{team_id}.pkl").open("rb") as f:
                 self.clusters = pickle.load(f)
         if Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
@@ -194,8 +198,6 @@ class TeamPlaysScatterResource(Resource):
 
     def _prepare_scatter_data_for_response(self, team_id: int, timeframe: int):
         logger.info(f"Prep scatter data: team {team_id}, timeframe {timeframe}")
-        self._init_clusters(team_id)
-
         self._load_clusters_for_team(team_id)
 
         self.apply_user_updates(team_id, timeframe)
@@ -354,5 +356,5 @@ class ClusterResource(Resource):
 
 
 if __name__ == "__main__":
-    resource = TeamPlaysScatterResource()
-    resource._prepare_scatter_data_for_response(1610612755, 3)
+    """Run this as a script to prerender the inital clusters"""
+    resource = TeamPlaysScatterResource(force_init=True)
