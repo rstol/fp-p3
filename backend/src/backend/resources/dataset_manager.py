@@ -86,3 +86,13 @@ class DatasetManager:
 
     def _load_game_plays(self, game_id: str) -> DataFrame:
         return self.plays.filter(pl.col("game_id") == game_id).collect()
+
+
+if __name__ == "__main__":
+    dataset_manager = DatasetManager()
+    game = dataset_manager.get_game_details("0021500632")
+    home = dataset_manager.get_team_details(game["home_team_id"])
+    visitor = dataset_manager.get_team_details(game["visitor_team_id"])
+    play = dataset_manager.get_play_raw_data("0021500632", "50")
+    event = Event(play, home, visitor)
+    event.prerender()

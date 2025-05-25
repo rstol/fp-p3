@@ -153,15 +153,12 @@ class TeamPlaysScatterResource(Resource):
                 cluster_dict[updated_cluster_id].last_modified = time.time()
                 play_index[play_id] = (cluster_dict[updated_cluster_id], cluster_play)
 
-        # TODO save updated clusters
-        # Clear user updates?
         fpath = Path(f"{DATA_DIR}/clusters/{team_id}.pkl")
         fpath.parent.mkdir(parents=True, exist_ok=True)
         with fpath.open("wb") as f:
             pickle.dump(self.clusters, f)
         user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
         user_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
-        print("New cluster ids", new_cluster_ids)
 
     def _clusters_to_dicts(self, cluster_plays):
         json = []

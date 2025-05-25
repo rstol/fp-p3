@@ -131,7 +131,7 @@ export default function ClusterView() {
     currentCluster && allPoints ? (100 / allPoints.length) * currentCluster.points.length : 0;
   const misses = currentCluster?.points.filter((p) => p.event_type === 2);
   const makes = currentCluster?.points.filter((p) => p.event_type === 1);
-  const makeMissRatio = misses && makes ? makes?.length / misses?.length : 0;
+  const makeMissRatio = misses && makes ? makes?.length / (makes.length + misses?.length) : 0;
 
   return (
     <Card className="gap-4 border-none pb-1 shadow-none">
