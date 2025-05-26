@@ -118,7 +118,7 @@ function EditTagDialog({
     });
 
     if (selectedPlays.length > 0) {
-      stageSelectedPlayClusterUpdate(updatedCluster.id);
+      stageSelectedPlayClusterUpdate(updatedCluster.id, selectedPlays.length);
     }
 
 

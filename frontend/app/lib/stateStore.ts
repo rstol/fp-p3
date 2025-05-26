@@ -12,7 +12,7 @@ type State = {
 type Action = {
   updateSelectedPoint: (point: Point) => void;
   resetSelectedPoint: () => void;
-  stageSelectedPlayClusterUpdate: (clusterId: string) => void;
+  stageSelectedPlayClusterUpdate: (clusterId: string, count?: number) => void;
   clearPendingClusterUpdates: () => void;
   updateSelectedCluster: (cluster: ClusterMetadata) => void;
   setClusters: (clusters: ClusterData[]) => void;
@@ -38,11 +38,11 @@ export const useDashboardStore = create<State & Action>((set) => ({
     set(() => ({
       selectedPoint: null,
     })),
-  stageSelectedPlayClusterUpdate: (clusterId) =>
+  stageSelectedPlayClusterUpdate: (clusterId, count = 1) =>
     set((state) => {
       const { stagedChangesCount } = state;
       return {
-        stagedChangesCount: stagedChangesCount + 1,
+        stagedChangesCount: stagedChangesCount + count,
       };
     }),
   clearPendingClusterUpdates: () =>
