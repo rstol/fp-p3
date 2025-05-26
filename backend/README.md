@@ -106,10 +106,31 @@ When working with Docker Compose and need to add new packages:
 
 ## Data Preparation
 
-Before running the application, you need to download and prepare the data:
+Before running the application, you need to download and prepare the data and optionally prerender resources:
+
+### Raw Data preparation
+The script will download the necessary data files and place them in the correct location for the application to use.
 
 ```
-python scripts/prepare_data.py
+uv run python scripts/prepare_data.py
 ```
 
-This script will download the necessary data files and place them in the correct location for the application to use.
+### Initial clusters
+The initial clusters are computed and stored in the git-repo under `data/init_clusters`.
+Run the script:
+
+```python
+uv run python src/backend/resources/scatter_data.py
+```
+
+> !Important: After modifying the code of initial cluster computation the script has to be rerun again. Then commit the changed prerenderd clusters.
+
+### Videos
+We store the prerendered videos in git. 
+To prerender the videos again run the script:
+
+```python 
+uv run python scripts/prerender_videos.py
+```
+
+This will put the prerended videos in the frontend/public folder for direct access in the browser.
