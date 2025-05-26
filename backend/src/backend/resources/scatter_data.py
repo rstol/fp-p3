@@ -46,7 +46,7 @@ class TeamPlaysScatterResource(Resource):
                 user_updates.write_parquet(fpath)
 
             if not self.force_init and Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
-                return
+                continue
 
             game_ids, plays = self._load_plays_for_team(team_id)
             logger.info(f"Plays for team {team_id}: {plays.height}")
@@ -76,6 +76,7 @@ class TeamPlaysScatterResource(Resource):
                 self.clusters = pickle.load(f)
 
     def apply_user_updates(self, team_id: int, timeframe: int):
+        """Apply user updates to the clusters."""
         user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
 
         if self.clusters is None:
