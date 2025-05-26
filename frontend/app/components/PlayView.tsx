@@ -108,7 +108,6 @@ function PlayForm() {
     setIsSubmitting(false);
   }
 
-  //TODO define for to new cluster data format
   const generateTagId = () => {
     const randomString = Math.random().toString(36).substring(2, 10); // base36, removes "0." prefix
     return `new_cluster_${randomString}`;
@@ -200,7 +199,6 @@ export default function PlayView() {
   const data = useLoaderData<typeof clientLoader>();
   const teams = data?.teams ?? [];
   const games = data?.games ?? [];
-  // TODO loader during submitting feedback & updating the clusters
 
   useEffect(() => {
     if (!selectedPoint) return;
@@ -262,7 +260,6 @@ export default function PlayView() {
       prev.set('fetch_scatter', 'True');
       return prev;
     });
-    // TODO fix cluster update hook
     clearPendingClusterUpdates();
   };
 

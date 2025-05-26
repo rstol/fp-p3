@@ -106,13 +106,19 @@ function EditTagDialog({
       cluster_label: updatedCluster.text,
     };
     // TODO bulk update
-    // await fetch(`${BASE_URL}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
+    const updatePayload = selectedPlays.map((play) => ({
+      game_id: play.game_id,
+      event_id: play.event_id,
+      ...payload,
+    }));
+    // await fetch(`${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
     //   method: 'PUT',
     //   headers: {
     //     'Content-Type': 'application/json',
     //   },
-    //   body: JSON.stringify(payload),
+    //   body: JSON.stringify(updatePayload),
     // });
+    //TODO handle state updates like in PlayView.PlayForm or do an "apply-all" button submission
     onOpenChange(false);
   }
 
@@ -213,13 +219,18 @@ function EditNoteDialog({
   async function onSubmit(data: z.infer<typeof EditNoteFormSchema>) {
     console.log('submit', data);
     // TODO bulk endpoint for all points
-    // await fetch(`${BASE_URL}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
+    const updatePlayIds = selectedPlays.map((play) => ({
+      game_id: play.game_id,
+      event_id: play.event_id,
+    }));
+    // await fetch(`${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
     //   method: 'PUT',
     //   headers: {
     //     'Content-Type': 'application/json',
     //   },
-    //   body: JSON.stringify(data),
+    //   body: JSON.stringify({play_ids: updatePlayIds, note: data.note}),
     // });
+    //TODO handle state updates like in PlayView.PlayForm or do an apply-all button
     onOpenChange(false);
   }
   return (
@@ -297,7 +308,7 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
   const [noteDialogOpen, setNoteDialogOpen] = React.useState(false);
   const [selectedPlays, setSelectedPlays] = React.useState<Point[]>([]);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
-  // TODO Loading // Hide if no Play is selected!
+  // TODO Loading indicator
 
   // Action handlers
   function handleEditTag(play: Point) {

@@ -23,9 +23,6 @@ DEFENSE_COLOR = "#006BB6"
 class Event:
     """A class for handling and showing events"""
 
-    # TODO: maybe make Event class that can basically only do a lookup if there is a video already
-    #   and if there isn't, it has an initialize() function where it initializes itself (by getting its event json with the data manager)
-    #   and a generate video function and then the video can be loaded afterwards.
     def __init__(self, event, home, visitor):
         moments = event["moments"]
         self.moments = [Moment(moment) for moment in moments]
