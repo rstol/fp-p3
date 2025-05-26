@@ -14,7 +14,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { type Tag as TagType, TagInput } from 'emblor';
-import { ArrowUpDown, ChevronDown, Edit, Eye, MoreHorizontal, Tag } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, Edit, Eye, Loader2, MoreHorizontal, Tag } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { useLoaderData } from 'react-router';
@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
+import { BASE_URL } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
 import type { Point } from '~/types/data';
@@ -94,6 +95,8 @@ function EditTagDialog({
   const { setValue } = form;
   const [tags, setTags] = React.useState<TagType[]>(initialTag);
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const { teamID } = useLoaderData<typeof clientLoader>();
 
   async function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
     const updatedCluster = data.clusters[0];
@@ -118,25 +121,45 @@ function EditTagDialog({
       stageSelectedPlayClusterUpdate(updatedCluster.id);
     }
 
-    const payload = {
+
+
+    const payloadForBackend = {
       cluster_id: updatedCluster.id.startsWith('new_cluster') ? null : updatedCluster.id,
       cluster_label: updatedCluster.text,
     };
-    // TODO bulk update
+
     const updatePayload = selectedPlays.map((play) => ({
       game_id: play.game_id,
       event_id: play.event_id,
-      ...payload,
+      note: play.note,
+      ...payloadForBackend,
     }));
-    // await fetch(`${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
-    //   method: 'PUT',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify(updatePayload),
-    // });
-    //TODO handle state updates like in PlayView.PlayForm or do an "apply-all" button submission
-    onOpenChange(false);
+
+    if (updatePayload.length > 0) {
+      setIsSubmitting(true);
+      try {
+        const response = await fetch(`${BASE_URL}/teams/${teamID}/scatterpoints`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updatePayload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Batch update failed:', errorData);
+          throw new Error(errorData.error || 'Failed to batch update plays');
+        }
+
+        console.log('Batch update successful');
+        onOpenChange(false);
+      } catch (error) {
+        console.error('Error during batch update:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
   }
 
   const generateTagId = () => {
@@ -148,7 +171,7 @@ function EditTagDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} id="edit-tag-form">
             <DialogHeader>
               <DialogTitle>
                 {selectedPlays.length > 1
@@ -199,10 +222,13 @@ function EditTagDialog({
               />
             </div>
             <DialogFooter>
-              <Button onClick={() => onOpenChange(false)} variant="outline">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit" form="edit-tag-form" disabled={isSubmitting || tags.length === 0}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Assign Cluster
+              </Button>
             </DialogFooter>
           </form>
         </Form>
@@ -247,7 +273,7 @@ function EditNoteDialog({
     //   },
     //   body: JSON.stringify({play_ids: updatePlayIds, note: data.note}),
     // });
-    //TODO handle state updates like in PlayView.PlayForm or do an apply-all button
+    //TODO handle state updates like in PlayView.PlayForm or do an "apply-all" button submission
     onOpenChange(false);
   }
   return (

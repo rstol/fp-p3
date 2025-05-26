@@ -18,6 +18,9 @@ def add_routes(app):
         res.scatter_data.ScatterPointResource,
         API + "teams/<string:team_id>/scatterpoint/<string:game_id>/<string:event_id>",
     )
+    api.add_resource(
+        res.scatter_data.BatchScatterPointResource, API + "teams/<string:team_id>/scatterpoints"
+    )
     # NBA Data endpoints
     api.add_resource(res.nba_data.TeamsResource, API + "teams")
     api.add_resource(res.nba_data.TeamDetailsResource, API + "teams/<string:team_id>")

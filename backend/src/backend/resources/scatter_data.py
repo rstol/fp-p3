@@ -320,11 +320,10 @@ class ScatterPointResource(Resource):
             # Create new cluster id
             update_play_data["cluster_id"] = str(uuid.uuid4())
 
-        print(update_play_data)
         try:
             df_update = create_partial_dataframe(update_play_data, UPDATE_PLAY_SCHEMA)
-        except ValueError as err:
-            logger.error(err)
+        except ValueError:
+            logger.exception()
             return {"error": "Invalid play ID format"}, 400
 
         user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
@@ -332,6 +331,31 @@ class ScatterPointResource(Resource):
         user_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
 
         return {"message": "Play updated successfully"}, 200
+
+
+class BatchScatterPointResource(Resource):
+    def put(self, team_id: str):
+        updates = request.get_json()
+
+        try:
+            df_update = create_partial_dataframe(updates, UPDATE_PLAY_SCHEMA)
+        except ValueError:
+            logger.exception()
+            return {"error": "Invalid play ID format"}, 400
+
+        df_update = df_update.with_columns(
+            pl.col("cluster_id").map_elements(
+                lambda x: str(uuid.uuid4()) if x is None else x,
+                return_dtype=pl.Utf8,
+                skip_nulls=False,
+            )
+        )
+
+        user_updates_df = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+        user_updates_df = user_updates_df.update(df_update, on=["game_id", "event_id"], how="full")
+        user_updates_df.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+
+        return {"message": "Plays updated successfully in batch"}, 200
 
 
 class ClusterResource(Resource):
