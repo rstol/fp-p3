@@ -25,7 +25,7 @@ import { cn } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
 
 const allGameFilters = [
-  { value: GameFilter.LAST1, label: 'Last Game' },
+  // { value: GameFilter.LAST1, label: 'Last Game' },
   { value: GameFilter.LAST2, label: 'Last 2 Games' },
   { value: GameFilter.LAST3, label: 'Last 3 Games' },
   { value: GameFilter.LAST4, label: 'Last 4 Games' },

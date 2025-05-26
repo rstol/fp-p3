@@ -4,7 +4,7 @@ export const BASE_URL =
     : 'http://localhost:8080/api/v1';
 
 export enum GameFilter {
-  LAST1 = 1,
+  // LAST1 = 1,
   LAST2 = 2,
   LAST3 = 3,
   LAST4 = 4,
