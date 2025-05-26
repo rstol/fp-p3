@@ -97,10 +97,27 @@ function EditTagDialog({
 
   async function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
     const updatedCluster = data.clusters[0];
-    const defaultCluster = form.formState.defaultValues?.clusters?.[0];
-    if (updatedCluster.id !== defaultCluster?.id) {
+    const { movePointToCluster, createNewClusterWithPoint, stageSelectedPlayClusterUpdate, clusters: currentClustersInStore } = useDashboardStore.getState();
+    selectedPlays.forEach(play => {
+      const existingPlayCluster = currentClustersInStore.find(c => c.points.some(p => p.game_id === play.game_id && p.event_id === play.event_id));
+      if (existingPlayCluster && existingPlayCluster.cluster_id === updatedCluster.id) {
+        return;
+      }
+
+      if (updatedCluster.id.startsWith('new_cluster')) {
+        createNewClusterWithPoint(
+          { cluster_id: updatedCluster.id, cluster_label: updatedCluster.text },
+          play
+        );
+      } else {
+        movePointToCluster(play, updatedCluster.id);
+      }
+    });
+
+    if (selectedPlays.length > 0) {
       stageSelectedPlayClusterUpdate(updatedCluster.id);
     }
+
     const payload = {
       cluster_id: updatedCluster.id.startsWith('new_cluster') ? null : updatedCluster.id,
       cluster_label: updatedCluster.text,
