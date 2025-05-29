@@ -68,9 +68,6 @@ class TeamPlaysScatterResource(Resource):
         return game_ids, self._concat_plays_from_games(game_ids, games)
 
     def _load_clusters_for_team(self, team_id: int):
-        if not self.force_init and Path(f"{DATA_DIR}/clusters/{team_id}.pkl").exists():
-            with Path(f"{DATA_DIR}/clusters/{team_id}.pkl").open("rb") as f:
-                self.clusters = pickle.load(f)
         if Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
             with Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").open("rb") as f:
                 self.clusters = pickle.load(f)
@@ -87,7 +84,6 @@ class TeamPlaysScatterResource(Resource):
             (play.play_id): (cluster, play) for cluster in self.clusters for play in cluster.plays
         }
         new_cluster_ids = set()
-
         for row in user_updates.iter_rows(named=True):
             play_id = None
             updated_cluster_id = row.get("cluster_id")
@@ -138,7 +134,7 @@ class TeamPlaysScatterResource(Resource):
                     target_play_ids = set(
                         play.play_id
                         for play in cluster_play_list
-                        if play.play_id != cluster_play.play_id and not cluster_play.play.is_tagged
+                        if play.play_id != cluster_play.play_id and not play.play.is_tagged
                     )
                     moved_plays = []
                     for cluster in cluster_dict.values():
@@ -157,13 +153,6 @@ class TeamPlaysScatterResource(Resource):
                 cluster_dict[updated_cluster_id].plays.append(cluster_play)
                 cluster_dict[updated_cluster_id].last_modified = time.time()
                 play_index[play_id] = (cluster_dict[updated_cluster_id], cluster_play)
-
-        fpath = Path(f"{DATA_DIR}/clusters/{team_id}.pkl")
-        fpath.parent.mkdir(parents=True, exist_ok=True)
-        with fpath.open("wb") as f:
-            pickle.dump(self.clusters, f)
-        user_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
-        user_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
 
     def _clusters_to_dicts(self, cluster_plays):
         json = []
@@ -251,11 +240,11 @@ class TeamPlaysScatterResource(Resource):
         for plays in cluster_plays.values():
             for cluster_play in plays:
                 embeddings.append(cluster_play.embedding)
-                # TODO add centroids as supervised labels?
-                if getattr(cluster_play.play, "is_tagged", False):
-                    y.append(cluster.id)
-                else:
-                    y.append(-1)
+                y.append(cluster.id)
+                # if getattr(cluster_play.play, "is_tagged", False):
+                #     y.append(cluster.id)
+                # else:
+                #     y.append(-1)
         X = np.stack(embeddings)
         y = np.array(y)
 
