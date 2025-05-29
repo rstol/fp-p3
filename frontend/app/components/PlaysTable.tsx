@@ -51,6 +51,7 @@ import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
 import type { Point } from '~/types/data';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
+import { generateTagId } from '~/lib/utils';
 
 const EditTagFormSchema = z.object({
   clusters: z
@@ -73,11 +74,14 @@ function EditTagDialog({
   onOpenChange: (open: boolean) => void;
   selectedPlays: Point[];
 }) {
-  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
-  const stageSelectedPlayClusterUpdate = useDashboardStore(
-    (state) => state.stageSelectedPlayClusterUpdate,
-  );
-  const clusterData = useDashboardStore((state) => state.clusters);
+  const {
+    movePointToCluster,
+    selectedCluster,
+    updateIsTagged,
+    createNewClusterWithPoint,
+    stageSelectedPlayClusterUpdate,
+    clusters: clusterData,
+  } = useDashboardStore.getState();
   const tagOptions = clusterData
     .map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' }))
     .sort();
@@ -92,28 +96,37 @@ function EditTagDialog({
       clusters: initialTag,
     },
   });
-  const { setValue } = form;
+  const { setValue, reset } = form;
   const [tags, setTags] = React.useState<TagType[]>(initialTag);
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const { teamID } = useLoaderData<typeof clientLoader>();
 
+  React.useEffect(() => {
+    reset({
+      clusters: initialTag,
+    });
+  }, [selectedCluster, reset]);
+
   async function onSubmit(data: z.infer<typeof EditTagFormSchema>) {
     const updatedCluster = data.clusters[0];
-    const { movePointToCluster, createNewClusterWithPoint, stageSelectedPlayClusterUpdate, clusters: currentClustersInStore } = useDashboardStore.getState();
-    selectedPlays.forEach(play => {
-      const existingPlayCluster = currentClustersInStore.find(c => c.points.some(p => p.game_id === play.game_id && p.event_id === play.event_id));
+    selectedPlays.forEach((play) => {
+      const existingPlayCluster = clusterData.find((c) =>
+        c.points.some((p) => p.game_id === play.game_id && p.event_id === play.event_id),
+      );
       if (existingPlayCluster && existingPlayCluster.cluster_id === updatedCluster.id) {
         return;
       }
 
-      if (updatedCluster.id.startsWith('new_cluster')) {
+      if (updatedCluster && !tagOptions.some((t) => t.id === updatedCluster.id)) {
         createNewClusterWithPoint(
           { cluster_id: updatedCluster.id, cluster_label: updatedCluster.text },
-          play
+          play,
         );
-      } else {
+      } else if (updatedCluster && updatedCluster.id !== selectedCluster?.cluster_id) {
         movePointToCluster(play, updatedCluster.id);
+      } else {
+        updateIsTagged(play);
       }
     });
 
@@ -121,17 +134,14 @@ function EditTagDialog({
       stageSelectedPlayClusterUpdate(updatedCluster.id, selectedPlays.length);
     }
 
-
-
     const payloadForBackend = {
-      cluster_id: updatedCluster.id.startsWith('new_cluster') ? null : updatedCluster.id,
+      cluster_id: updatedCluster.id,
       cluster_label: updatedCluster.text,
     };
 
     const updatePayload = selectedPlays.map((play) => ({
       game_id: play.game_id,
       event_id: play.event_id,
-      note: play.note,
       ...payloadForBackend,
     }));
 
@@ -152,7 +162,6 @@ function EditTagDialog({
           throw new Error(errorData.error || 'Failed to batch update plays');
         }
 
-        console.log('Batch update successful');
         onOpenChange(false);
       } catch (error) {
         console.error('Error during batch update:', error);
@@ -161,11 +170,6 @@ function EditTagDialog({
       }
     }
   }
-
-  const generateTagId = () => {
-    const randomString = Math.random().toString(36).substring(2, 10); // base36, removes "0." prefix
-    return `new_cluster_${randomString}`;
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -206,7 +210,7 @@ function EditTagDialog({
                           }}
                           generateTagId={generateTagId}
                           enableAutocomplete
-                          placeholder="Select or create cluster"
+                          placeholder="Select or type a new tag"
                           setTags={(newTags) => {
                             setTags(newTags);
                             setValue('clusters', newTags as [TagType, ...TagType[]]);
@@ -222,10 +226,19 @@ function EditTagDialog({
               />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
+              >
                 Cancel
               </Button>
-              <Button type="submit" form="edit-tag-form" disabled={isSubmitting || tags.length === 0}>
+              <Button
+                type="submit"
+                form="edit-tag-form"
+                disabled={isSubmitting || tags.length === 0}
+              >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Assign Cluster
               </Button>
@@ -250,30 +263,25 @@ function EditNoteDialog({
   onOpenChange: (open: boolean) => void;
   selectedPlays: Point[];
 }) {
-  const firstNote = selectedPlays[0]?.note || '';
-  const allSameNote = selectedPlays.every((play) => play.note === firstNote);
+  const { teamID } = useLoaderData<typeof clientLoader>();
+  const play = selectedPlays?.[0] ?? {};
+  const updatePointNote = useDashboardStore((state) => state.updatePointNote);
   const form = useForm<z.infer<typeof EditNoteFormSchema>>({
     resolver: zodResolver(EditNoteFormSchema),
     defaultValues: {
-      note: allSameNote ? firstNote : '',
+      note: play?.note ?? '',
     },
   });
 
   async function onSubmit(data: z.infer<typeof EditNoteFormSchema>) {
-    console.log('submit', data);
-    // TODO bulk endpoint for all points
-    const updatePlayIds = selectedPlays.map((play) => ({
-      game_id: play.game_id,
-      event_id: play.event_id,
-    }));
-    // await fetch(`${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`, {
-    //   method: 'PUT',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({play_ids: updatePlayIds, note: data.note}),
-    // });
-    //TODO handle state updates like in PlayView.PlayForm or do an "apply-all" button submission
+    await fetch(`${BASE_URL}/teams/${teamID}/scatterpoint/${play?.game_id}/${play?.event_id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    updatePointNote(play, data.note ?? '');
     onOpenChange(false);
   }
   return (

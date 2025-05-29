@@ -10,16 +10,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
+import { EventType } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import { getPointId } from '~/lib/utils';
 import type { clientLoader } from '~/routes/_index';
-import type { ClusterMetadata, Point } from '~/types/data';
+import type { Point } from '~/types/data';
 import Filters from './Filters';
 import { ScatterPlotSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { EventType } from '~/lib/const';
 
+const color = d3.scaleOrdinal([...d3.schemeCategory10, d3.schemeSet3]); // 24 colors
 const defaultDimensions = { width: 500, height: 400 };
 const margin = { top: 60, right: 20, bottom: 20, left: 20 };
 
@@ -33,16 +34,17 @@ const getZoomMethod =
   };
 
 function Legend({
-  clusters,
-  color,
   zoomedCluster,
   onSelectCluster,
 }: {
-  clusters: ClusterMetadata[];
-  color: d3.ScaleOrdinal<string, string | readonly string[], never>;
   zoomedCluster: string | null;
   onSelectCluster: (clusterId: string) => void;
 }) {
+  const scatterData = useDashboardStore((state) => state.clusters);
+  const clusters =
+    scatterData
+      ?.filter((c) => c.points.length)
+      ?.map(({ cluster_id, cluster_label }) => ({ cluster_id, cluster_label })) ?? [];
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
   if (isLoading) return null;
@@ -58,11 +60,11 @@ function Legend({
         </SelectTrigger>
         <SelectContent>
           {clusters.map((cluster, index) => {
-            const c = color(String(cluster.cluster_id));
+            const c = color(String(cluster.cluster_id)) as string;
             return (
               <SelectItem key={index} value={cluster.cluster_id}>
-                <span className="flex items-center gap-1">
-                  <Circle fill={c as string} stroke={c as string} width={10} height={10} />
+                <span className="flex items-center gap-1" style={{ color: c }}>
+                  <Circle fill={c} stroke={c} width={10} height={10} />
                   Cluster {cluster.cluster_label}
                 </span>
               </SelectItem>
@@ -175,9 +177,9 @@ function InfoBar() {
   );
 }
 
-const ScatterPlot = ({ teamID }: { teamID: string }) => {
+const ScatterPlot = () => {
   const loaderData = useLoaderData<typeof clientLoader>();
-  const { scatterData: initialScatterData } = loaderData;
+  const { scatterData: initialScatterData, teamID } = loaderData;
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
   const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
@@ -194,8 +196,6 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       setClusters(initialScatterData);
     }
   }, [initialScatterData]);
-
-  const color = d3.scaleOrdinal([...d3.schemeCategory10, d3.schemeSet3]); // 24 colors
 
   const zoomed = useCallback(
     ({ transform }: d3.D3ZoomEvent<Element, unknown> | { transform: d3.ZoomTransform }) => {
@@ -448,8 +448,6 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
 
   const navigation = useNavigation();
   const isLoading = Boolean(navigation.location);
-  const clusters =
-    scatterData?.map(({ cluster_id, cluster_label }) => ({ cluster_id, cluster_label })) ?? [];
 
   return (
     <div className="flex flex-col">
@@ -460,12 +458,7 @@ const ScatterPlot = ({ teamID }: { teamID: string }) => {
       ) : (
         <div className="relative">
           <Filters teamID={teamID} />
-          <Legend
-            clusters={clusters}
-            color={color}
-            zoomedCluster={zoomedCluster}
-            onSelectCluster={zoomIntoCluster}
-          />
+          <Legend zoomedCluster={zoomedCluster} onSelectCluster={zoomIntoCluster} />
           <ZoomControls svgRef={svgRef} />
           {isLoading ? (
             <ScatterPlotSkeleton />

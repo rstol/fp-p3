@@ -72,7 +72,6 @@ function ClusterLabelForm({
 
     updateClusterLabel(data.clusterId, data.clusterLabel);
     updateSelectedCluster({ cluster_id: data.clusterId, cluster_label: data.clusterLabel });
-    form.reset();
   }
   return (
     <Form {...form}>
@@ -131,7 +130,8 @@ export default function ClusterView() {
     currentCluster && allPoints ? (100 / allPoints.length) * currentCluster.points.length : 0;
   const misses = currentCluster?.points.filter((p) => p.event_type === 2);
   const makes = currentCluster?.points.filter((p) => p.event_type === 1);
-  const makeMissRatio = misses && makes ? makes?.length / (makes.length + misses?.length) : 0;
+  const makeMissRatio =
+    misses && makes ? (100 * makes?.length) / (makes.length + misses?.length) : 0;
 
   return (
     <Card className="gap-4 border-none pb-1 shadow-none">
@@ -143,13 +143,13 @@ export default function ClusterView() {
         <div>
           <div className="divide-y divide-solid">
             <div className="flex gap-4 pb-1">
-              <span className="shrink-0">Usage:</span>
+              <span className="shrink-0">Usage</span>
               <span className="flex-1 text-right">{usage.toFixed(1)}%</span>
             </div>
             <div className="py-1">
               <div className="flex gap-4">
-                <span className="shrink-0">Success ratio:</span>
-                <span className="flex-1 text-right">{makeMissRatio.toFixed(1)}</span>
+                <span className="shrink-0">Success</span>
+                <span className="flex-1 text-right">{makeMissRatio.toFixed(1)}%</span>
               </div>
               <small>made shot vs. missed shot</small>
             </div>

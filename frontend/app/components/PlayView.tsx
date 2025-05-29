@@ -14,6 +14,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
+import { generateTagId } from '~/lib/utils';
 
 interface PlayDetailState {
   videoURL?: string;
@@ -32,19 +33,19 @@ const FormSchema = z.object({
 });
 
 function PlayForm() {
-  const clusterData = useDashboardStore((state) => state.clusters);
+  const {
+    movePointToCluster,
+    selectedPoint,
+    updatePointNote,
+    selectedCluster,
+    createNewClusterWithPoint,
+    updateIsTagged,
+    stageSelectedPlayClusterUpdate,
+    clusters: clusterData,
+  } = useDashboardStore.getState();
   const tagOptions = clusterData
     .map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' }))
     .sort();
-  const stageSelectedPlayClusterUpdate = useDashboardStore(
-    (state) => state.stageSelectedPlayClusterUpdate,
-  );
-  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
-  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
-  const movePointToCluster = useDashboardStore((state) => state.movePointToCluster);
-  const updatePointNote = useDashboardStore((state) => state.updatePointNote);
-  const createNewClusterWithPoint = useDashboardStore((state) => state.createNewClusterWithPoint);
-  const updateIsTagged = useDashboardStore((state) => state.updateIsTagged);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { teamID } = useLoaderData<typeof clientLoader>();
   const initialTag =
@@ -61,7 +62,14 @@ function PlayForm() {
   });
   const [tags, setTags] = useState<Tag[]>(initialTag);
   const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
-  const { setValue } = form;
+  const { setValue, reset } = form;
+
+  useEffect(() => {
+    reset({
+      note: selectedPoint?.note ?? '',
+      clusters: initialTag,
+    });
+  }, [selectedPoint, selectedCluster, reset]);
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     if (!selectedPoint || !selectedCluster) return;
@@ -69,7 +77,7 @@ function PlayForm() {
     const updatedCluster = data.clusters.length ? data.clusters[0] : null;
     const clusterPayload = updatedCluster
       ? {
-          cluster_id: updatedCluster.id.startsWith('new_cluster') ? null : updatedCluster.id,
+          cluster_id: updatedCluster.id,
           cluster_label: updatedCluster.text,
         }
       : { ...selectedCluster }; // Always send the cluster
@@ -87,19 +95,18 @@ function PlayForm() {
         }),
       },
     );
-
-    if (updatedCluster && updatedCluster.id.startsWith('new_cluster')) {
+    if (updatedCluster && !tagOptions.some((t) => t.id === updatedCluster.id)) {
       createNewClusterWithPoint(
         { cluster_id: updatedCluster.id, cluster_label: updatedCluster.text },
         selectedPoint,
       );
+      stageSelectedPlayClusterUpdate(updatedCluster?.id);
     } else if (updatedCluster && updatedCluster.id !== selectedCluster?.cluster_id) {
       movePointToCluster(selectedPoint, updatedCluster.id);
-    } else {
-      updateIsTagged(selectedPoint, true);
-    }
-    if (updatedCluster) {
-      stageSelectedPlayClusterUpdate(updatedCluster?.id ?? selectedCluster.cluster_id);
+      stageSelectedPlayClusterUpdate(updatedCluster?.id);
+    } else if (!initialTag.length && updatedCluster) {
+      updateIsTagged(selectedPoint);
+      stageSelectedPlayClusterUpdate(updatedCluster?.id);
     }
 
     if (data.note && selectedPoint.note !== data.note) {
@@ -107,11 +114,6 @@ function PlayForm() {
     }
     setIsSubmitting(false);
   }
-
-  const generateTagId = () => {
-    const randomString = Math.random().toString(36).substring(2, 10); // base36, removes "0." prefix
-    return `new_cluster_${randomString}`;
-  };
 
   return (
     <>
@@ -138,7 +140,7 @@ function PlayForm() {
                       }}
                       generateTagId={generateTagId}
                       enableAutocomplete
-                      placeholder="Select or create cluster"
+                      placeholder="Select or type a new tag"
                       setTags={(newTags) => {
                         setTags(newTags);
                         setValue('clusters', newTags as [Tag, ...Tag[]]);

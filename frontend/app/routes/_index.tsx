@@ -77,20 +77,18 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 clientLoader.hydrate = true;
 
 export default function Home() {
-  const [searchParams] = useSearchParams();
-  const teamID = searchParams.get('teamid');
-  const data = useLoaderData<typeof clientLoader>();
+  const { scatterData: initialScatterData, teamID } = useLoaderData<typeof clientLoader>();
   const location = useLocation();
   const scatterData = useDashboardStore((state) => state.clusters);
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
 
   useEffect(() => {
-    if (data.scatterData) {
+    if (initialScatterData) {
       const url = new URL(window.location.href);
       url.searchParams.delete('fetch_scatter');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [location, data.scatterData]);
+  }, [location, initialScatterData]);
 
   let tableData =
     scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
@@ -100,7 +98,7 @@ export default function Home() {
       <div className="space-y-4">
         <ResizablePanelGroup direction="horizontal" className="min-h-[500px]">
           <ResizablePanel id="left-panel" defaultSize={70}>
-            {teamID ? <ScatterPlot teamID={teamID} /> : <EmptyScatterGuide />}
+            {teamID ? <ScatterPlot /> : <EmptyScatterGuide />}
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={30}>
@@ -113,8 +111,6 @@ export default function Home() {
       </div>
       <div className="mt-12 mb-16 space-y-10">
         <PlaysTable data={tableData} title={tableTitle} />
-        {/* <TeamsTable />
-        <GamesTable /> */}
       </div>
     </>
   );

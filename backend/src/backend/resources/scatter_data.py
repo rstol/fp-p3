@@ -1,7 +1,6 @@
 import logging
 import pickle
 import time
-import uuid
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -33,7 +32,9 @@ class TeamPlaysScatterResource(Resource):
         self.force_init = force_init
         self.inital_state = True
         self.dataset_manager = DatasetManager()
-        self.umap_model = umap.UMAP(n_neighbors=5, metric="cosine", verbose=True, low_memory=False)
+        self.umap_model = umap.UMAP(
+            n_neighbors=5, min_dist=0.1, spread=1.5, metric="cosine", verbose=True, low_memory=False
+        )
         self.clusters: list[Cluster] | None = None
         self._init_clusters()
 
@@ -237,12 +238,12 @@ class TeamPlaysScatterResource(Resource):
 
         embeddings = []
         y = []
-        for plays in cluster_plays.values():
+        for cluster_id, plays in cluster_plays.items():
             for cluster_play in plays:
                 embeddings.append(cluster_play.embedding)
-                y.append(cluster.id)
+                y.append(cluster_id)
                 # if getattr(cluster_play.play, "is_tagged", False):
-                #     y.append(cluster.id)
+                #     y.append(cluster_id)
                 # else:
                 #     y.append(-1)
         X = np.stack(embeddings)
@@ -305,14 +306,9 @@ class ScatterPointResource(Resource):
         update_play_data["event_id"] = event_id
         update_play_data["game_id"] = game_id
 
-        if not update_play_data["cluster_id"]:
-            # Create new cluster id
-            update_play_data["cluster_id"] = str(uuid.uuid4())
-
         try:
             df_update = create_partial_dataframe(update_play_data, UPDATE_PLAY_SCHEMA)
         except ValueError:
-            logger.exception()
             return {"error": "Invalid play ID format"}, 400
 
         user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
@@ -328,17 +324,9 @@ class BatchScatterPointResource(Resource):
 
         try:
             df_update = create_partial_dataframe(updates, UPDATE_PLAY_SCHEMA)
-        except ValueError:
-            logger.exception()
+        except ValueError as err:
+            logger.error(err)
             return {"error": "Invalid play ID format"}, 400
-
-        df_update = df_update.with_columns(
-            pl.col("cluster_id").map_elements(
-                lambda x: str(uuid.uuid4()) if x is None else x,
-                return_dtype=pl.Utf8,
-                skip_nulls=False,
-            )
-        )
 
         user_updates_df = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
         user_updates_df = user_updates_df.update(df_update, on=["game_id", "event_id"], how="full")
@@ -360,10 +348,8 @@ class ClusterResource(Resource):
         except ValueError as err:
             logger.error(err)
             return {"error": "Invalid play ID format"}, 400
-        print(df_update)
         user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
         user_updates = user_updates.update(df_update, on=["cluster_id"], how="full")
-        print(user_updates)
         user_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
 
         return {"message": "Play updated successfully"}, 200
