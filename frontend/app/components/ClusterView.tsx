@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { BASE_URL } from '~/lib/const';
@@ -12,7 +12,7 @@ import { Input } from './ui/input';
 import { useLoaderData } from 'react-router';
 import type { clientLoader } from '~/routes/_index';
 import type { ClusterMetadata } from '~/types/data';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 function createFormSchema(existingLabels: string[]) {
   return z.object({
@@ -35,6 +35,7 @@ function ClusterLabelForm({
 }) {
   const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
   const updateClusterLabel = useDashboardStore((state) => state.updateClusterLabel);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { teamID } = useLoaderData<typeof clientLoader>();
   const existingLabels = clusters
     .map((c) => c.cluster_label)
@@ -57,6 +58,7 @@ function ClusterLabelForm({
   }, [selectedCluster, form]);
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
+    setIsSubmitting(true);
     console.log('submit', data);
 
     const payload = {
@@ -72,6 +74,7 @@ function ClusterLabelForm({
 
     updateClusterLabel(data.clusterId, data.clusterLabel);
     updateSelectedCluster({ cluster_id: data.clusterId, cluster_label: data.clusterLabel });
+    setIsSubmitting(false);
   }
   return (
     <Form {...form}>
@@ -86,8 +89,8 @@ function ClusterLabelForm({
                 <FormControl>
                   <Input type="text" placeholder="Add cluster label" {...field} />
                 </FormControl>
-                <Button type="submit" size="sm" className="h-9 w-10">
-                  <Check size={6} />
+                <Button disabled={isSubmitting} type="submit" size="sm" className="h-9 w-10">
+                  {isSubmitting ? <Loader2 className="animate-spin" /> : <Check size={6} />}
                 </Button>
               </div>
               <FormMessage />

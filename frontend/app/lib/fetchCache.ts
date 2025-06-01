@@ -25,7 +25,7 @@ export const purgeScatterDataCache = async (teamID: string | null) => {
   if (!teamID) return;
   const keys = await localforage.keys();
   keys.forEach((key) => {
-    if (key.startsWith(`${BASE_URL}/teams/${teamID}/plays/scatter`)) {
+    if (key.includes(`/teams/${teamID}/plays/scatter`)) {
       console.log('Purging cache key: ', key);
       localforage
         .removeItem(key)

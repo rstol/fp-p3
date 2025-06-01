@@ -2,6 +2,7 @@ import logging
 import pickle
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +24,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class UpdateBatch:
+    """Represents a batch of user updates to be applied atomically."""
+
+    cluster_moves: list[tuple[PlayId, str, str]] = None  # (play_id, old_cluster_id, new_cluster_id)
+    cluster_labels: dict[str, str] = None  # cluster_id -> new_label
+    play_notes: dict[PlayId, str] = None  # play_id -> note
+
+    def __post_init__(self):
+        if self.cluster_moves is None:
+            self.cluster_moves = []
+        if self.cluster_labels is None:
+            self.cluster_labels = {}
+        if self.play_notes is None:
+            self.play_notes = {}
+
+
 class TeamPlaysScatterResource(Resource):
     """Resource for serving team play data for scatter plot visualization."""
 
@@ -33,7 +51,7 @@ class TeamPlaysScatterResource(Resource):
         self.inital_state = True
         self.dataset_manager = DatasetManager()
         self.umap_model = umap.UMAP(
-            n_neighbors=5, min_dist=0.1, spread=1.5, metric="cosine", verbose=True, low_memory=False
+            n_neighbors=20, min_dist=0.3, metric="cosine", verbose=True, low_memory=False
         )
         self.clusters: list[Cluster] | None = None
         self._init_clusters()
@@ -69,13 +87,16 @@ class TeamPlaysScatterResource(Resource):
         return game_ids, self._concat_plays_from_games(game_ids, games)
 
     def _load_clusters_for_team(self, team_id: int):
-        if Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
+        if not self.force_init and Path(f"{DATA_DIR}/clusters/{team_id}.pkl").exists():
+            with Path(f"{DATA_DIR}/clusters/{team_id}.pkl").open("rb") as f:
+                self.clusters = pickle.load(f)
+        elif Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").exists():
             with Path(f"{DATA_DIR}/init_clusters/{team_id}.pkl").open("rb") as f:
                 self.clusters = pickle.load(f)
 
-    def apply_user_updates(self, team_id: int, timeframe: int):
-        """Apply user updates to the clusters."""
-        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+    def _stage_updates(self, user_updates: pl.DataFrame) -> UpdateBatch:
+        """Stage all user updates for atomic application."""
+        batch = UpdateBatch()
 
         if self.clusters is None:
             raise ValueError("Clusters attribute is not set")
@@ -84,76 +105,162 @@ class TeamPlaysScatterResource(Resource):
         play_index = {
             (play.play_id): (cluster, play) for cluster in self.clusters for play in cluster.plays
         }
-        new_cluster_ids = set()
+
         for row in user_updates.iter_rows(named=True):
             play_id = None
             updated_cluster_id = row.get("cluster_id")
             updated_label = row.get("cluster_label")
+            note = row.get("note")
+
             if (game_id := row.get("game_id")) and (event_id := row.get("event_id")):
                 play_id = PlayId(game_id, event_id)
-            elif updated_cluster_id and updated_label:
-                # No play just label update
-                cluster_dict[updated_cluster_id].label = updated_label
+
+            # Stage cluster label updates
+            if updated_cluster_id and updated_label and updated_cluster_id in cluster_dict:
+                batch.cluster_labels[updated_cluster_id] = updated_label
 
             if not play_id or play_id not in play_index:
-                continue  # Mabye log this
+                continue
 
             current_cluster, cluster_play = play_index[play_id]
 
-            cluster_play.play.note = row["note"]
+            # Stage note updates
+            if note:
+                batch.play_notes[play_id] = note
+
+            # Stage cluster moves
+            if updated_cluster_id and current_cluster.id != updated_cluster_id:
+                batch.cluster_moves.append((play_id, current_cluster.id, updated_cluster_id))
+        return batch
+
+    def _apply_batch(self, batch: UpdateBatch, team_id: int, timeframe: int):
+        """Apply all staged updates atomically."""
+        cluster_dict = {cluster.id: cluster for cluster in self.clusters}
+        play_index = {
+            (play.play_id): (cluster, play) for cluster in self.clusters for play in cluster.plays
+        }
+
+        # Apply cluster label updates
+        for cluster_id, new_label in batch.cluster_labels.items():
+            if cluster_id in cluster_dict:
+                cluster_dict[cluster_id].label = new_label
+
+        # Apply note updates
+        for play_id, note in batch.play_notes.items():
+            if play_id in play_index:
+                _, cluster_play = play_index[play_id]
+                cluster_play.play.note = note
+
+        for play_id, old_cluster_id, new_cluster_id in batch.cluster_moves:
+            if play_id not in play_index:
+                continue
+
+            current_cluster, cluster_play = play_index[play_id]
             cluster_play.play.is_tagged = True
 
-            # Move to new cluster if cluster_id changed
-            if updated_cluster_id and current_cluster.id != updated_cluster_id:
-                current_cluster.plays.remove(cluster_play)
+            # Remove from current cluster
+            current_cluster.plays.remove(cluster_play)
 
-                # Add to new cluster, create if necessary
-                if updated_cluster_id not in cluster_dict:
-                    new_cluster_ids.add(updated_cluster_id)
+            # Create new cluster if it doesn't exist
+            if new_cluster_id not in cluster_dict:
+                new_cluster = self._create_new_cluster(
+                    new_cluster_id,
+                    batch.cluster_labels.get(new_cluster_id, f"Cluster {new_cluster_id[:3]}"),
+                    cluster_play,
+                    team_id,
+                    timeframe,
+                    cluster_dict,
+                )
+                self.clusters.append(new_cluster)
+                cluster_dict[new_cluster_id] = new_cluster
 
-                    new_cluster = Cluster(
-                        id=updated_cluster_id,
-                        label=updated_label,
-                        centroid=cluster_play.embedding,
-                        plays=[],
-                        confidence=None,
-                        created=time.time(),
-                        last_modified=time.time(),
-                        created_by="user",
-                    )
+            # Add to new cluster
+            cluster_dict[new_cluster_id].plays.append(cluster_play)
+            cluster_dict[new_cluster_id].last_modified = time.time()
 
-                    game_ids, plays = self._load_plays_for_team(team_id, timeframe)
-                    play_clustering = PlayClustering(team_id=team_id, game_ids=game_ids)
-                    embedding_ids, distances, embeddings = play_clustering.find_similar_plays(
-                        new_cluster.centroid
-                    )
-                    cluster_assignments = np.full((len(embedding_ids),), 0)
+            # Update play index
+            play_index[play_id] = (cluster_dict[new_cluster_id], cluster_play)
 
-                    cluster_play_list = play_clustering.merge_plays_embeddings(
-                        plays, embedding_ids, embeddings, distances, cluster_assignments, 1
-                    )[0]
-                    target_play_ids = set(
-                        play.play_id
-                        for play in cluster_play_list
-                        if play.play_id != cluster_play.play_id and not play.play.is_tagged
-                    )
-                    moved_plays = []
-                    for cluster in cluster_dict.values():
-                        remaining_plays = []
-                        for cluster_play in cluster.plays:
-                            if cluster_play.play_id in target_play_ids:
-                                moved_plays.append(cluster_play)
-                            else:
-                                remaining_plays.append(cluster_play)
-                        cluster.plays = remaining_plays
+    def _create_new_cluster(
+        self,
+        cluster_id: str,
+        label: str,
+        cluster_play,
+        team_id: int,
+        timeframe: int,
+        cluster_dict: dict,
+    ) -> Cluster:
+        """Create a new cluster and populate it with similar plays."""
+        new_cluster = Cluster(
+            id=cluster_id,
+            label=label,
+            centroid=cluster_play.embedding,
+            plays=[],
+            confidence=None,
+            created=time.time(),
+            last_modified=time.time(),
+            created_by="user",
+        )
 
-                    new_cluster.plays.extend(moved_plays)
-                    self.clusters.append(new_cluster)
-                    cluster_dict[updated_cluster_id] = new_cluster
+        # Find similar plays to populate the new cluster
+        game_ids, plays = self._load_plays_for_team(team_id, timeframe)
+        play_clustering = PlayClustering(team_id=team_id, game_ids=game_ids)
+        embedding_ids, distances, embeddings = play_clustering.find_similar_plays(
+            new_cluster.centroid
+        )
+        cluster_assignments = np.full((len(embedding_ids),), 0)
 
-                cluster_dict[updated_cluster_id].plays.append(cluster_play)
-                cluster_dict[updated_cluster_id].last_modified = time.time()
-                play_index[play_id] = (cluster_dict[updated_cluster_id], cluster_play)
+        cluster_play_list = play_clustering.merge_plays_embeddings(
+            plays, embedding_ids, embeddings, distances, cluster_assignments, 1
+        )[0]
+
+        target_play_ids = set(
+            play.play_id
+            for play in cluster_play_list
+            if play.play_id != cluster_play.play_id and not play.play.is_tagged
+        )
+
+        # Move similar plays from other clusters
+        moved_plays = []
+        for cluster in cluster_dict.values():
+            remaining_plays = []
+            for cp in cluster.plays:
+                if cp.play_id in target_play_ids:
+                    moved_plays.append(cp)
+                else:
+                    remaining_plays.append(cp)
+            cluster.plays = remaining_plays
+
+        new_cluster.plays.extend(moved_plays)
+        return new_cluster
+
+    def _save_clusters(self, team_id: int):
+        """Save clusters to disk."""
+        fpath = Path(f"{DATA_DIR}/clusters/{team_id}.pkl")
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        with fpath.open("wb") as f:
+            pickle.dump(self.clusters, f)
+
+    def _clear_updates(self, team_id: int):
+        """Clear processed user updates."""
+        empty_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
+        empty_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+
+    def apply_user_updates(self, team_id: int, timeframe: int):
+        """Apply user updates to the clusters using batch processing."""
+        user_updates = pl.read_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+
+        if user_updates.height == 0:
+            return
+
+        try:
+            batch = self._stage_updates(user_updates)
+            self._apply_batch(batch, team_id, timeframe)
+            self._save_clusters(team_id)
+            self._clear_updates(team_id)
+        except Exception as e:
+            logger.error(f"Failed to apply user updates for team {team_id}: {e}")
+            raise
 
     def _clusters_to_dicts(self, cluster_plays):
         json = []

@@ -49,7 +49,8 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   timeframe = Math.min(totalGames, timeframe);
 
   const bypassScatterCache = Boolean(fetchScatter);
-  if (bypassScatterCache) purgeScatterDataCache(teamID);
+  console.log(bypassScatterCache, fetchScatter);
+  if (bypassScatterCache) await purgeScatterDataCache(teamID);
 
   const fetchPromises: [Promise<Team[]>, Promise<ClusterData[] | null>] = [
     fetchWithCache<Team[]>(`${BASE_URL}/teams`),
@@ -78,17 +79,17 @@ clientLoader.hydrate = true;
 
 export default function Home() {
   const { scatterData: initialScatterData, teamID } = useLoaderData<typeof clientLoader>();
-  const location = useLocation();
   const scatterData = useDashboardStore((state) => state.clusters);
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
-
+  const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
-    if (initialScatterData) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('fetch_scatter');
-      window.history.replaceState({}, '', url.toString());
+    if (initialScatterData && searchParams.get('fetch_scatter')) {
+      setSearchParams((prev) => {
+        prev.delete('fetch_scatter');
+        return prev;
+      });
     }
-  }, [location, initialScatterData]);
+  }, [searchParams, initialScatterData]);
 
   let tableData =
     scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
