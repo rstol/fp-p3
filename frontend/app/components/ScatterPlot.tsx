@@ -179,23 +179,16 @@ function InfoBar() {
 
 const ScatterPlot = () => {
   const loaderData = useLoaderData<typeof clientLoader>();
-  const { scatterData: initialScatterData, teamID } = loaderData;
+  const { teamID } = loaderData;
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
   const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
   const resetSelectedPoint = useDashboardStore((state) => state.resetSelectedPoint);
-  const setClusters = useDashboardStore((state) => state.setClusters);
   const scatterData = useDashboardStore((state) => state.clusters);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
   const [zoomedCluster, setZoomedCluster] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (initialScatterData) {
-      setClusters(initialScatterData);
-    }
-  }, [initialScatterData]);
 
   const zoomed = useCallback(
     ({ transform }: d3.D3ZoomEvent<Element, unknown> | { transform: d3.ZoomTransform }) => {

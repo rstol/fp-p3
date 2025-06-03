@@ -147,25 +147,24 @@ class PlayClustering:
         return cluster_play_lists
 
     def find_similar_plays(self, q_embedding: np.ndarray):
-        self._build_index(self.game_embeddings)
+        self._init_kmeans()
+        min_limit, max_limit = 3, 5
         q = np.expand_dims(q_embedding, axis=0)
-        distances, index = self.index.search(q, self.game_embeddings.shape[0])
-        mask = (distances[0] > 0.95) & (distances[0] < 1)  # Radius: Cosine similarity threshold
-        masked_indices = index[0][mask]
-        masked_distances = distances[0][mask]
+        distances, index = self.kmeans_index.search(q, max_limit)
+        indices = index[0][...]
+        distances = distances[0][...]
 
         # Handle limits
-        min_limit, max_limit = 2, 5
-        if len(masked_indices) < min_limit:
+        if len(indices) < min_limit:
             final_indices = index[0][:min_limit]
             final_distances = distances[0][:min_limit]
-        elif len(masked_indices) > max_limit:
+        elif len(indices) > max_limit:
             # Too many — keep top max_limit most similar in radius
-            final_indices = masked_indices[:max_limit]
-            final_distances = masked_distances[:max_limit]
+            final_indices = indices[:max_limit]
+            final_distances = distances[:max_limit]
         else:
-            final_indices = masked_indices
-            final_distances = masked_distances
+            final_indices = indices
+            final_distances = distances
 
         embedding_ids = self.game_embedding_ids[final_indices]
         embeddings = self.game_embeddings[final_indices]

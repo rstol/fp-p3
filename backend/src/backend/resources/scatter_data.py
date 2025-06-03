@@ -116,7 +116,7 @@ class TeamPlaysScatterResource(Resource):
                 play_id = PlayId(game_id, event_id)
 
             # Stage cluster label updates
-            if updated_cluster_id and updated_label and updated_cluster_id in cluster_dict:
+            if updated_cluster_id and updated_label:
                 batch.cluster_labels[updated_cluster_id] = updated_label
 
             if not play_id or play_id not in play_index:
@@ -163,6 +163,17 @@ class TeamPlaysScatterResource(Resource):
 
             # Create new cluster if it doesn't exist
             if new_cluster_id not in cluster_dict:
+                # Add similar plays only if this is the only play in the batch for this cluster
+                add_similar_plays = (
+                    len(
+                        {
+                            play_id
+                            for play_id, _, cluster_id in batch.cluster_moves
+                            if cluster_id == new_cluster_id
+                        }
+                    )
+                    == 1
+                )
                 new_cluster = self._create_new_cluster(
                     new_cluster_id,
                     batch.cluster_labels.get(new_cluster_id, f"Cluster {new_cluster_id[:3]}"),
@@ -170,6 +181,7 @@ class TeamPlaysScatterResource(Resource):
                     team_id,
                     timeframe,
                     cluster_dict,
+                    add_similar_plays,
                 )
                 self.clusters.append(new_cluster)
                 cluster_dict[new_cluster_id] = new_cluster
@@ -189,6 +201,7 @@ class TeamPlaysScatterResource(Resource):
         team_id: int,
         timeframe: int,
         cluster_dict: dict,
+        add_similar_plays: bool,
     ) -> Cluster:
         """Create a new cluster and populate it with similar plays."""
         new_cluster = Cluster(
@@ -201,6 +214,9 @@ class TeamPlaysScatterResource(Resource):
             last_modified=time.time(),
             created_by="user",
         )
+        if not add_similar_plays:
+            # If no similar plays are to be added, just return the new cluster
+            return new_cluster
 
         # Find similar plays to populate the new cluster
         game_ids, plays = self._load_plays_for_team(team_id, timeframe)
@@ -440,6 +456,14 @@ class BatchScatterPointResource(Resource):
         user_updates_df.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
 
         return {"message": "Plays updated successfully in batch"}, 200
+
+    def delete(self, team_id: str):
+        empty_updates = pl.DataFrame(schema=UPDATE_PLAY_SCHEMA)
+        empty_updates.write_parquet(f"{DATA_DIR}/user_updates/{team_id}.parquet")
+        cluster_file = Path(f"{DATA_DIR}/clusters/{team_id}.pkl")
+        if cluster_file.exists():
+            cluster_file.unlink()
+        return {"message": f"User updates for team {team_id} deleted successfully"}, 200
 
 
 class ClusterResource(Resource):

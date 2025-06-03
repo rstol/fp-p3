@@ -50,7 +50,9 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 
   const bypassScatterCache = Boolean(fetchScatter);
   console.log(bypassScatterCache, fetchScatter);
-  if (bypassScatterCache) await purgeScatterDataCache(teamID);
+  if (bypassScatterCache) {
+    await purgeScatterDataCache(teamID);
+  }
 
   const fetchPromises: [Promise<Team[]>, Promise<ClusterData[] | null>] = [
     fetchWithCache<Team[]>(`${BASE_URL}/teams`),
@@ -80,15 +82,18 @@ clientLoader.hydrate = true;
 export default function Home() {
   const { scatterData: initialScatterData, teamID } = useLoaderData<typeof clientLoader>();
   const scatterData = useDashboardStore((state) => state.clusters);
+  const setClusters = useDashboardStore((state) => state.setClusters);
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     if (initialScatterData && searchParams.get('fetch_scatter')) {
+      useDashboardStore.persist.clearStorage();
       setSearchParams((prev) => {
         prev.delete('fetch_scatter');
         return prev;
       });
     }
+    if (initialScatterData) setClusters(initialScatterData);
   }, [searchParams, initialScatterData]);
 
   let tableData =

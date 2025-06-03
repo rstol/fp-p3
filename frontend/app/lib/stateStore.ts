@@ -11,10 +11,11 @@ type State = {
 };
 
 type Action = {
-  updateSelectedPoint: (point: Point) => void;
+  updateSelectedPoint: (point: Point | null) => void;
   resetSelectedPoint: () => void;
   stageSelectedPlayClusterUpdate: (clusterId: string, count?: number) => void;
   clearPendingClusterUpdates: () => void;
+  clearSelectedCluster: () => void;
   updateSelectedCluster: (cluster: ClusterMetadata) => void;
   setClusters: (clusters: ClusterData[]) => void;
   updatePointNote: (point: Point, newNote: string) => void;
@@ -37,6 +38,10 @@ export const useDashboardStore = create<Store>()(
       updateSelectedCluster: ({ cluster_id, cluster_label }) =>
         set(() => ({
           selectedCluster: { cluster_id, cluster_label },
+        })),
+      clearSelectedCluster: () =>
+        set(() => ({
+          selectedCluster: null,
         })),
       resetSelectedPoint: () =>
         set(() => ({
@@ -119,7 +124,7 @@ export const useDashboardStore = create<Store>()(
         }),
     }),
     {
-      name: 'scatter-storage',
+      name: 'useDashboardStore',
       storage: createJSONStorage(() => sessionStorage),
     },
   ),

@@ -81,7 +81,7 @@ function PlayForm() {
           cluster_label: updatedCluster.text,
         }
       : { ...selectedCluster }; // Always send the cluster
-
+    console.log(initialTag);
     await fetch(
       `${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`,
       {
@@ -96,6 +96,7 @@ function PlayForm() {
       },
     );
     if (updatedCluster && !tagOptions.some((t) => t.id === updatedCluster.id)) {
+      console.log({ cluster_id: updatedCluster.id, cluster_label: updatedCluster.text });
       createNewClusterWithPoint(
         { cluster_id: updatedCluster.id, cluster_label: updatedCluster.text },
         selectedPoint,
@@ -195,6 +196,8 @@ export default function PlayView() {
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const stagedChangesCount = useDashboardStore((state) => state.stagedChangesCount);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
+  const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
+  const clearSelectedCluster = useDashboardStore((state) => state.clearSelectedCluster);
   const [playDetails, setPlayDetails] = useState<PlayDetailState | null>(null);
   const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
   const [_, setSearchParams] = useSearchParams();
@@ -262,7 +265,9 @@ export default function PlayView() {
       prev.set('fetch_scatter', 'True');
       return prev;
     });
+    updateSelectedPoint(null);
     clearPendingClusterUpdates();
+    clearSelectedCluster();
   };
 
   if (isLoadingPlayDetails) {

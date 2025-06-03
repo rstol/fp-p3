@@ -51,7 +51,7 @@ import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
 import type { Point } from '~/types/data';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
-import { generateTagId } from '~/lib/utils';
+import { generateTagId, getPointId } from '~/lib/utils';
 
 const EditTagFormSchema = z.object({
   clusters: z
@@ -333,6 +333,7 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
+  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const loaderData = useLoaderData<typeof clientLoader>();
   const { games, teams } = loaderData;
 
@@ -341,16 +342,18 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
   const enhancedData =
     React.useMemo(
       () =>
-        data.map((point) => {
-          const game = gameMap.get(point.game_id);
-          const visitorTeamName = game ? teamMap.get(game.visitor_team_id) : undefined;
+        data
+          .filter((point) => getPointId(point) !== getPointId(selectedPoint))
+          .map((point) => {
+            const game = gameMap.get(point.game_id);
+            const visitorTeamName = game ? teamMap.get(game.visitor_team_id) : undefined;
 
-          return {
-            ...point,
-            videoURL: `/videos/${point.game_id}/${point.event_id}.mp4`,
-            visitorTeamName,
-          };
-        }),
+            return {
+              ...point,
+              videoURL: `/videos/${point.game_id}/${point.event_id}.mp4`,
+              visitorTeamName,
+            };
+          }),
       [data],
     ) ?? [];
 
