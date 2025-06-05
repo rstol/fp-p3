@@ -1,5 +1,7 @@
 import localforage from 'localforage';
 import { BASE_URL } from './const';
+import { useDashboardStore } from './stateStore';
+import type { ClusterData } from '~/types/data';
 
 function createCacheKey(fullUrl: string, includeSearch: boolean = false): string {
   const urlObj = new URL(fullUrl);
@@ -39,13 +41,16 @@ export async function fetchWithCache<T>(
   url: string,
   includeSearch: boolean = false,
   bypass = false,
+  setStateOnMiss = false,
 ): Promise<T> {
   const key = createCacheKey(url, includeSearch);
 
   if (!bypass) {
     const cached = await localforage.getItem<T>(key);
     if (cached) {
-      console.log(`Cache hit for ${key}`);
+      if (setStateOnMiss && useDashboardStore.getState().clusters.length === 0) {
+        useDashboardStore.getState().setClusters(cached as ClusterData[]);
+      }
       return cached;
     }
     console.log(`Cache miss for ${key}`);
@@ -58,5 +63,8 @@ export async function fetchWithCache<T>(
 
   const data: T = await res.json();
   await localforage.setItem(key, data);
+  if (setStateOnMiss && (data || useDashboardStore.getState().clusters.length === 0)) {
+    useDashboardStore.getState().setClusters(data as ClusterData[]);
+  }
   return data;
 }

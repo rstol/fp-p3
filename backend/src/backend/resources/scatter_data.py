@@ -123,6 +123,7 @@ class TeamPlaysScatterResource(Resource):
                 continue
 
             current_cluster, cluster_play = play_index[play_id]
+            cluster_play.play.is_tagged = True
 
             # Stage note updates
             if note:
@@ -280,8 +281,11 @@ class TeamPlaysScatterResource(Resource):
 
     def _clusters_to_dicts(self, cluster_plays):
         json = []
+        plays_by_cluster = defaultdict(list)
+        for cluster_id, cluster_play in cluster_plays:
+            plays_by_cluster[cluster_id].append(cluster_play)
         for cluster in self.clusters:
-            plays = cluster_plays[cluster.id]
+            plays = plays_by_cluster[cluster.id]
             json.append(
                 {
                     "cluster_id": cluster.id,
@@ -341,34 +345,29 @@ class TeamPlaysScatterResource(Resource):
         games = games.sort("game_date", descending=True).limit(timeframe)
         allowed_game_ids = games.select("game_id").to_series().to_list()
 
-        cluster_plays = defaultdict(list)
-        for cluster in self.clusters:
-            for cluster_play in cluster.plays:
-                if cluster_play.play_id.game_id in allowed_game_ids:
-                    cluster_plays[cluster.id].append(cluster_play)
+        cluster_plays = [
+            (cluster.id, cluster_play)
+            for cluster in self.clusters
+            for cluster_play in cluster.plays
+            if cluster_play.play_id.game_id in allowed_game_ids
+        ]
 
-        play_dates = []
-        for plays in cluster_plays.values():
-            for cluster_play in plays:
-                try:
-                    date = datetime.strptime(cluster_play.play.game_date, "%Y-%m-%d").date()
-                    play_dates.append(date)
-                except Exception:
-                    pass
+        play_dates = [
+            datetime.strptime(cluster_play.play.game_date, "%Y-%m-%d").date()
+            for _, cluster_play in cluster_plays
+        ]
         min_date = min(play_dates)
-        max_date = max(play_dates)
-        date_range = (max_date - min_date).days or 1
+        date_range = (max(play_dates) - min_date).days or 1
 
         embeddings = []
         y = []
-        for cluster_id, plays in cluster_plays.items():
-            for cluster_play in plays:
-                embeddings.append(cluster_play.embedding)
-                y.append(cluster_id)
-                # if getattr(cluster_play.play, "is_tagged", False):
-                #     y.append(cluster_id)
-                # else:
-                #     y.append(-1)
+        for cluster_id, cluster_play in cluster_plays:
+            embeddings.append(cluster_play.embedding)
+            y.append(cluster_id)
+            # if getattr(cluster_play.play, "is_tagged", False):
+            #     y.append(cluster_id)
+            # else:
+            #     y.append(-1)
         X = np.stack(embeddings)
         y = np.array(y)
 
@@ -376,18 +375,16 @@ class TeamPlaysScatterResource(Resource):
         y_encoded = np.where(y != -1, encoder.fit_transform(y), -1)
         xys = self.umap_model.fit_transform(X, y=y_encoded)
 
-        idx = 0
-        for plays in cluster_plays.values():
-            for cluster_play in plays:
-                cluster_play.x = float(xys[idx, 0])
-                cluster_play.y = float(xys[idx, 1])
+        for idx, (_, cluster_play) in enumerate(cluster_plays):
+            cluster_play.x = float(xys[idx, 0])
+            cluster_play.y = float(xys[idx, 1])
 
-                play_date = datetime.strptime(cluster_play.play.game_date, "%Y-%m-%d").date()
-                days_since_oldest = (play_date - min_date).days
-                recency = days_since_oldest / date_range
+            play_date = datetime.strptime(cluster_play.play.game_date, "%Y-%m-%d").date()
+            days_since_oldest = (play_date - min_date).days
+            recency = days_since_oldest / date_range
 
-                cluster_play.recency = recency
-                idx += 1
+            cluster_play.recency = recency
+
         return cluster_plays
 
     def get(self, team_id):

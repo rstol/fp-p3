@@ -184,7 +184,8 @@ const ScatterPlot = () => {
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
   const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
   const resetSelectedPoint = useDashboardStore((state) => state.resetSelectedPoint);
-  const scatterData = useDashboardStore((state) => state.clusters);
+  let scatterData = useDashboardStore((state) => state.clusters);
+  scatterData = scatterData?.length ? scatterData : (loaderData.scatterData ?? []);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);

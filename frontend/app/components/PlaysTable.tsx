@@ -332,8 +332,6 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
-  const selectedCluster = useDashboardStore((state) => state.selectedCluster);
-  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const loaderData = useLoaderData<typeof clientLoader>();
   const { games, teams } = loaderData;
 
@@ -342,18 +340,16 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
   const enhancedData =
     React.useMemo(
       () =>
-        data
-          .filter((point) => getPointId(point) !== getPointId(selectedPoint))
-          .map((point) => {
-            const game = gameMap.get(point.game_id);
-            const visitorTeamName = game ? teamMap.get(game.visitor_team_id) : undefined;
+        data.map((point) => {
+          const game = gameMap.get(point.game_id);
+          const visitorTeamName = game ? teamMap.get(game.visitor_team_id) : undefined;
 
-            return {
-              ...point,
-              videoURL: `/videos/${point.game_id}/${point.event_id}.mp4`,
-              visitorTeamName,
-            };
-          }),
+          return {
+            ...point,
+            videoURL: `/videos/${point.game_id}/${point.event_id}.mp4`,
+            visitorTeamName,
+          };
+        }),
       [data],
     ) ?? [];
 
@@ -542,8 +538,6 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
       rowSelection,
     },
   });
-
-  if (!selectedCluster) return null;
 
   return (
     <div className="w-full">

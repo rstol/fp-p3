@@ -1,10 +1,5 @@
 import { useEffect } from 'react';
-import {
-  useLoaderData,
-  useLocation,
-  useSearchParams,
-  type ClientLoaderFunctionArgs,
-} from 'react-router';
+import { useLoaderData, useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import { PlaysTable } from '~/components/PlaysTable';
@@ -19,6 +14,7 @@ import {
   purgeScatterDataCache,
 } from '~/lib/fetchCache';
 import { useDashboardStore } from '~/lib/stateStore';
+import { getPointId } from '~/lib/utils';
 import type { ClusterData, Game, Team } from '~/types/data';
 import type { Route } from './+types/_index';
 
@@ -49,7 +45,6 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   timeframe = Math.min(totalGames, timeframe);
 
   const bypassScatterCache = Boolean(fetchScatter);
-  console.log(bypassScatterCache, fetchScatter);
   if (bypassScatterCache) {
     await purgeScatterDataCache(teamID);
   }
@@ -61,10 +56,10 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
           `${BASE_URL}/teams/${teamID}/plays/scatter${timeframe ? `?timeframe=last_${timeframe}` : ''}`,
           true,
           bypassScatterCache,
+          true,
         )
       : Promise.resolve(null),
   ];
-
   const [teams, scatterData] = await Promise.all(fetchPromises);
 
   return {
@@ -82,22 +77,25 @@ clientLoader.hydrate = true;
 export default function Home() {
   const { scatterData: initialScatterData, teamID } = useLoaderData<typeof clientLoader>();
   const scatterData = useDashboardStore((state) => state.clusters);
-  const setClusters = useDashboardStore((state) => state.setClusters);
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
+  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const [searchParams, setSearchParams] = useSearchParams();
+
   useEffect(() => {
     if (initialScatterData && searchParams.get('fetch_scatter')) {
-      useDashboardStore.persist.clearStorage();
       setSearchParams((prev) => {
         prev.delete('fetch_scatter');
         return prev;
       });
     }
-    if (initialScatterData) setClusters(initialScatterData);
   }, [searchParams, initialScatterData]);
 
   let tableData =
-    scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? [];
+    selectedCluster && selectedPoint
+      ? (
+          scatterData?.find((d) => d.cluster_id === selectedCluster?.cluster_id)?.points ?? []
+        ).filter((p) => getPointId(p) !== getPointId(selectedPoint))
+      : [];
   const tableTitle = `Similar plays in cluster ${selectedCluster?.cluster_label ?? ''}`;
   return (
     <>
@@ -115,8 +113,8 @@ export default function Home() {
           <ResizableHandle />
         </ResizablePanelGroup>
       </div>
-      <div className="mt-12 mb-16 space-y-10">
-        <PlaysTable data={tableData} title={tableTitle} />
+      <div className="mt-12 mb-16 space-y-6">
+        {selectedCluster ? <PlaysTable data={tableData} title={tableTitle} /> : null}
       </div>
     </>
   );
