@@ -55,6 +55,8 @@ export interface Point {
   game_date?: string;
   event_type: number;
   is_tagged: boolean;
+  tags: string[];
+  manually_clustered: boolean;
   note: null | string;
   score: string | number;
   similarity_distance: number;
@@ -69,5 +71,13 @@ export interface ClusterMetadata {
 }
 
 export interface ClusterData extends ClusterMetadata {
+  points: Array<Point>;
+}
+
+export interface TagMetadata {
+  tag_label: string;
+}
+
+export interface TagData extends TagMetadata {
   points: Array<Point>;
 }

@@ -29,6 +29,12 @@ const FormSchema = z.object({
       text: z.string(),
     }),
   ),
+  tags: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+    }),
+  ),
   note: z.string().optional(),
 });
 
@@ -37,37 +43,55 @@ function PlayForm() {
     movePointToCluster,
     selectedPoint,
     updatePointNote,
+    updatePointTags,
     selectedCluster,
     createNewClusterWithPoint,
+    createNewTagWithPoint,
     updateIsTagged,
+    updateManuallyClustered,
     stageSelectedPlayClusterUpdate,
     clusters: clusterData,
+    tags: tagData,
   } = useDashboardStore.getState();
-  const tagOptions = clusterData
+
+  const tagOptions = tagData
+    .map((t) => ({id: t.tag_label, text: t.tag_label}))
+    .sort();
+  const clusterOptions = clusterData
     .map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' }))
     .sort();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { teamID } = useLoaderData<typeof clientLoader>();
-  const initialTag =
-    selectedPoint?.is_tagged && selectedCluster
+  const initialCluster =
+    selectedPoint?.manually_clustered && selectedCluster
       ? [{ id: selectedCluster?.cluster_id, text: selectedCluster?.cluster_label ?? '' }]
+      : [];
+  const initialTags =
+    selectedPoint?.tags
+      ? selectedPoint?.tags.map(t => ({ id: t, text: t }))
       : [];
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      clusters: initialTag,
+      clusters: initialCluster,
       note: selectedPoint?.note ?? '',
+      tags: initialTags,
     },
   });
-  const [tags, setTags] = useState<Tag[]>(initialTag);
+
+  const [playTags, setPlayTags] = useState<Tag[]>(initialTags);
+  const [clusterTags, setClusterTags] = useState<Tag[]>(initialCluster);
   const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
+  const [activeClusterIndex, setActiveClusterIndex] = useState<number | null>(null);
   const { setValue, reset } = form;
 
+  // TODO can I fix the problem with the deleted pills here?
   useEffect(() => {
     reset({
       note: selectedPoint?.note ?? '',
-      clusters: initialTag,
+      clusters: initialCluster,
+      tags: initialTags,
     });
   }, [selectedPoint, selectedCluster, reset]);
 
@@ -75,13 +99,17 @@ function PlayForm() {
     if (!selectedPoint || !selectedCluster) return;
     setIsSubmitting(true);
     const updatedCluster = data.clusters.length ? data.clusters[0] : null;
+    const dataTags = data.tags.map((t) => t.text)
+    const addedTags = dataTags.length ? 
+      dataTags.filter(tag => !selectedPoint.tags.includes(tag))
+      : null;
     const clusterPayload = updatedCluster
       ? {
           cluster_id: updatedCluster.id,
           cluster_label: updatedCluster.text,
         }
       : { ...selectedCluster }; // Always send the cluster
-    console.log(initialTag);
+    console.log(initialCluster);
     await fetch(
       `${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`,
       {
@@ -95,7 +123,7 @@ function PlayForm() {
         }),
       },
     );
-    if (updatedCluster && !tagOptions.some((t) => t.id === updatedCluster.id)) {
+    if (updatedCluster && !clusterOptions.some((t) => t.id === updatedCluster.id)) {
       console.log({ cluster_id: updatedCluster.id, cluster_label: updatedCluster.text });
       createNewClusterWithPoint(
         { cluster_id: updatedCluster.id, cluster_label: updatedCluster.text },
@@ -105,15 +133,23 @@ function PlayForm() {
     } else if (updatedCluster && updatedCluster.id !== selectedCluster?.cluster_id) {
       movePointToCluster(selectedPoint, updatedCluster.id);
       stageSelectedPlayClusterUpdate(updatedCluster?.id);
-    } else if (!initialTag.length && updatedCluster) {
-      updateIsTagged(selectedPoint);
+    } else if (!initialCluster.length && updatedCluster) {
+      updateManuallyClustered(selectedPoint);
       stageSelectedPlayClusterUpdate(updatedCluster?.id);
     }
 
     if (data.note && selectedPoint.note !== data.note) {
       updatePointNote(selectedPoint, data.note);
     }
-    setIsSubmitting(false);
+    
+    if (dataTags && selectedPoint.tags !== dataTags) {
+      if (addedTags && addedTags.some((newTag) => !tagOptions.some((t => t.text === newTag))))
+        addedTags.map((newTag) => createNewTagWithPoint(newTag, selectedPoint));
+      updatePointTags(selectedPoint, dataTags)
+      updateIsTagged(selectedPoint)
+      }
+
+  setIsSubmitting(false);
   }
 
   return (
@@ -125,14 +161,56 @@ function PlayForm() {
             name="clusters"
             render={({ field }) => (
               <FormItem className="flex flex-col items-start">
+                <FormLabel className="text-sm">Manually Re-Assign Cluster</FormLabel>
+                <div className="flex w-full gap-2">
+                  <FormControl>
+                    <TagInput
+                      {...field}
+                      autocompleteOptions={clusterOptions}
+                      maxTags={1}
+                      tags={clusterTags} // TODO
+                      inlineTags
+                      addTagsOnBlur
+                      styleClasses={{
+                        input: 'focus-visible:outline-none shadow-none w-full',
+                        tag: { body: 'h-7' },
+                      }}
+                      generateTagId={generateTagId}
+                      enableAutocomplete
+                      placeholder="Select a cluster or enter a new cluster name"
+                      setTags={(newTags) => {
+                        setClusterTags(newTags);
+                        setValue('clusters', newTags as [Tag, ...Tag[]]);
+                      }}
+                      activeTagIndex={activeClusterIndex}
+                      setActiveTagIndex={setActiveClusterIndex}
+                    />
+                  </FormControl>
+                  <Button
+                    disabled={isSubmitting}
+                    onClick={form.handleSubmit(onSubmit)}
+                    size="sm"
+                    className="h-9 w-10"
+                  >
+                    {isSubmitting ? <Loader2 className="animate-spin" /> : <Check size={6} />}
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="tags"
+            render={({ field }) => (
+              <FormItem className="flex flex-col items-start">
                 <FormLabel className="text-sm">Tag Play</FormLabel>
                 <div className="flex w-full gap-2">
                   <FormControl>
                     <TagInput
                       {...field}
                       autocompleteOptions={tagOptions}
-                      maxTags={1}
-                      tags={tags}
+                      tags={playTags}
                       inlineTags
                       addTagsOnBlur
                       styleClasses={{
@@ -143,8 +221,8 @@ function PlayForm() {
                       enableAutocomplete
                       placeholder="Select or type a new tag"
                       setTags={(newTags) => {
-                        setTags(newTags);
-                        setValue('clusters', newTags as [Tag, ...Tag[]]);
+                        setPlayTags(newTags);
+                        setValue('tags', newTags as [Tag, ...Tag[]]);
                       }}
                       activeTagIndex={activeTagIndex}
                       setActiveTagIndex={setActiveTagIndex}
@@ -327,6 +405,7 @@ export default function PlayView() {
               {selectedPoint?.event_desc_away !== 'nan' && `${selectedPoint?.event_desc_away}`}
             </span>
           </div>
+          // TODO Remove this?
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Tagged</span>
             <span className="flex-1 text-right">{selectedPoint?.is_tagged ? 'Yes' : 'No'}</span>
