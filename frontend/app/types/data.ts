@@ -55,6 +55,7 @@ export interface Point {
   game_date?: string;
   event_type: number;
   is_tagged: boolean;
+  original_cluster: ClusterMetadata | null;
   tags: string[];
   manually_clustered: boolean;
   note: null | string;

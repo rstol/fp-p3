@@ -110,7 +110,10 @@ function PlayForm() {
           cluster_id: updatedCluster.id,
           cluster_label: updatedCluster.text,
         }
-    : { ...selectedCluster };
+    : selectedPoint.original_cluster? {
+      cluster_id: selectedPoint.original_cluster.cluster_id,
+      cluster_label: selectedPoint.original_cluster.cluster_label,
+      } : null;
 
     // Send update to server
     await fetch(
@@ -133,13 +136,18 @@ function PlayForm() {
         { cluster_id: updatedCluster.id, cluster_label: updatedCluster.text },
         selectedPoint,
       );
-    stageSelectedPlayClusterUpdate(updatedCluster.id);
+      stageSelectedPlayClusterUpdate(updatedCluster.id);
     } else if (updatedCluster && updatedCluster.id !== selectedCluster?.cluster_id) {
       movePointToCluster(selectedPoint, updatedCluster.id);
-    stageSelectedPlayClusterUpdate(updatedCluster.id);
+      stageSelectedPlayClusterUpdate(updatedCluster.id);
     } else if (!initialValues.clusters.length && updatedCluster) {
       updateManuallyClustered(selectedPoint);
-    stageSelectedPlayClusterUpdate(updatedCluster.id);
+      stageSelectedPlayClusterUpdate(updatedCluster.id);
+    } else if (!updatedCluster && selectedPoint.original_cluster) {
+      // Revert to original cluster
+      movePointToCluster(selectedPoint, selectedPoint.original_cluster.cluster_id);
+      updateManuallyClustered(selectedPoint, false);
+      stageSelectedPlayClusterUpdate(selectedPoint.original_cluster.cluster_id);
     }
 
     // Update note if changed
