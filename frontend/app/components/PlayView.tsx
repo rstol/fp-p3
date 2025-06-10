@@ -4,7 +4,7 @@ import { Check, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLoaderData, useSearchParams } from 'react-router';
-import { z } from 'zod';
+import { string, z } from 'zod';
 import { BASE_URL, DefenseColor, EventType, OffenseColor } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
@@ -145,9 +145,11 @@ function PlayForm() {
     if (dataTags && selectedPoint.tags !== dataTags) {
       if (addedTags && addedTags.some((newTag) => !tagOptions.some((t => t.text === newTag))))
         addedTags.map((newTag) => createNewTagWithPoint(newTag, selectedPoint));
-      updatePointTags(selectedPoint, dataTags)
-      updateIsTagged(selectedPoint)
-      }
+      if (addedTags) {
+        updatePointTags(selectedPoint, addedTags)
+        updateIsTagged(selectedPoint)
+        }
+    }
 
   setIsSubmitting(false);
   }
@@ -228,14 +230,17 @@ function PlayForm() {
                       setActiveTagIndex={setActiveTagIndex}
                     />
                   </FormControl>
-                  <Button
+                  <Button type="submit" size="sm" className="h-9 w-10">
+                    {isSubmitting ? <Loader2 className="animate-spin" /> : <Check size={6} />}
+                  </Button>
+                  {/* <Button
                     disabled={isSubmitting}
                     onClick={form.handleSubmit(onSubmit)}
                     size="sm"
                     className="h-9 w-10"
                   >
                     {isSubmitting ? <Loader2 className="animate-spin" /> : <Check size={6} />}
-                  </Button>
+                  </Button> */}
                 </div>
                 <FormMessage />
               </FormItem>
@@ -351,7 +356,7 @@ export default function PlayView() {
   if (isLoadingPlayDetails) {
     return <PlayDetailsSkeleton />;
   }
-
+// TODO remove "Is Tagged" field?
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
       <CardHeader>
@@ -405,7 +410,6 @@ export default function PlayView() {
               {selectedPoint?.event_desc_away !== 'nan' && `${selectedPoint?.event_desc_away}`}
             </span>
           </div>
-          // TODO Remove this?
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Tagged</span>
             <span className="flex-1 text-right">{selectedPoint?.is_tagged ? 'Yes' : 'No'}</span>
