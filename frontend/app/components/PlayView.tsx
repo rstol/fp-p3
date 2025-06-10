@@ -209,7 +209,11 @@ export default function PlayView() {
   const games = data?.games ?? [];
 
   useEffect(() => {
-    if (!selectedPoint) return;
+    if (!selectedPoint) {
+          // Clear video URL and play details when no point is selected
+          setPlayDetails(null);
+          return;
+        }
 
     seIsLoadingPlayDetails(true);
     const fetchPlayDetails = async () => {
@@ -248,10 +252,20 @@ export default function PlayView() {
 
     fetchPlayDetails();
 
+    // Cleanup Blob URL on unmount or when selectedPoint changes
+    return () => {
+      if (playDetails?.videoURL?.startsWith('blob:')) {
+        URL.revokeObjectURL(playDetails.videoURL);
+      }
+    };
+
+  }, [selectedPoint, games, teams, playDetails?.videoURL]);
+
+  useEffect(() => {
     if (videoRef.current) {
       videoRef.current.playbackRate = playbackSpeed;
     }
-  }, [selectedPoint, playbackSpeed, playDetails?.videoURL]);
+  }, [playbackSpeed, playDetails, videoRef]);
 
   if (!selectedPoint) {
     return (
@@ -296,7 +310,7 @@ export default function PlayView() {
                 value={playbackSpeed}
                 onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
               >
-                {[1, 1.5, 2, 4, 6, 8].map((s) => (
+                {[1, 1.5, 2, 3, 4, 5, 6, 8].map((s) => (
                   <option key={s} value={s}>
                     {s}×
                   </option>
