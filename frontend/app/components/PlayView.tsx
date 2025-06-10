@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { type Tag, TagInput } from 'emblor';
 import { Check, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLoaderData, useSearchParams } from 'react-router';
 import { z } from 'zod';
@@ -198,6 +198,9 @@ export default function PlayView() {
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
   const clearSelectedCluster = useDashboardStore((state) => state.clearSelectedCluster);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const playbackSpeed = useDashboardStore((s) => s.playbackSpeed);
+  const setPlaybackSpeed = useDashboardStore((s) => s.setPlaybackSpeed);
   const [playDetails, setPlayDetails] = useState<PlayDetailState | null>(null);
   const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
   const [_, setSearchParams] = useSearchParams();
@@ -244,7 +247,11 @@ export default function PlayView() {
     };
 
     fetchPlayDetails();
-  }, [selectedPoint]);
+
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackSpeed;
+    }
+  }, [selectedPoint, playbackSpeed, playDetails?.videoURL]);
 
   if (!selectedPoint) {
     return (
@@ -281,7 +288,23 @@ export default function PlayView() {
       </CardHeader>
       <CardContent className="space-y-4">
         {playDetails?.videoURL && (
+          <>
+            <div className="mb-2">
+              <label className="text-sm">Playback Speed:</label>
+              <select
+                className="ml-2 border rounded p-1 text-sm"
+                value={playbackSpeed}
+                onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+              >
+                {[1, 1.5, 2, 4, 6, 8].map((s) => (
+                  <option key={s} value={s}>
+                    {s}×
+                  </option>
+                ))}
+              </select>
+            </div>
           <video
+            ref={videoRef}
             key={playDetails.videoURL} // Force remount component on change
             controls
             onError={(e) => console.error('Video error', e)}
@@ -294,6 +317,7 @@ export default function PlayView() {
             <source src={playDetails.videoURL} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
+          </>
         )}
         <div className="divide-y divide-solid text-sm">
           <div className="flex gap-4 pb-1" style={{ color: OffenseColor }}>

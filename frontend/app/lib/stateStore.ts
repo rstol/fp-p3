@@ -8,6 +8,7 @@ type State = {
   selectedPoint: Point | null;
   stagedChangesCount: number;
   selectedCluster: ClusterMetadata | null;
+  playbackSpeed: number;
 };
 
 type Action = {
@@ -18,6 +19,7 @@ type Action = {
   clearSelectedCluster: () => void;
   updateSelectedCluster: (cluster: ClusterMetadata) => void;
   setClusters: (clusters: ClusterData[]) => void;
+  setPlaybackSpeed: (speed: number) => void;
   updatePointNote: (point: Point, newNote: string) => void;
   movePointToCluster: (point: Point, targetClusterId: string) => void;
   createNewClusterWithPoint: (newCluster: ClusterMetadata, point: Point) => void;
@@ -33,12 +35,15 @@ export const useDashboardStore = create<Store>()(
       selectedPoint: null,
       stagedChangesCount: 0,
       selectedCluster: null,
+      playbackSpeed: 1,
       setClusters: (clusters) => set(() => ({ clusters })),
       updateSelectedPoint: (selectedPoint) => set(() => ({ selectedPoint })),
       updateSelectedCluster: ({ cluster_id, cluster_label }) =>
         set(() => ({
           selectedCluster: { cluster_id, cluster_label },
         })),
+      setPlaybackSpeed: (speed: number) =>
+        set(() => ({ playbackSpeed: speed })),
       clearSelectedCluster: () =>
         set(() => ({
           selectedCluster: null,
