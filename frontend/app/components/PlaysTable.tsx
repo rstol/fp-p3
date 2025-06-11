@@ -210,7 +210,7 @@ function EditTagDialog({
                           }}
                           generateTagId={generateTagId}
                           enableAutocomplete
-                          placeholder="Select or type a new tag"
+                          placeholder="Select or type a new Select a cluster or enter a new cluster name"
                           setTags={(newTags) => {
                             setTags(newTags);
                             setValue('clusters', newTags as [TagType, ...TagType[]]);
