@@ -329,14 +329,21 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
       desc: true,
     },
   ]);
+  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const loaderData = useLoaderData<typeof clientLoader>();
   const { games, teams } = loaderData;
-
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const gameMap = new Map(games?.map((game) => [game.game_id, game]));
   const teamMap = new Map(teams.map((team) => [team.teamid, team.name]));
+  const playbackSpeed = useDashboardStore((s) => s.playbackSpeed);
+  const setPlaybackSpeed = useDashboardStore((s) => s.setPlaybackSpeed);
+
+  // Manage multiple video refs
+  const videoRefs = React.useRef<Map<string, HTMLVideoElement>>(new Map());
+
   const enhancedData =
     React.useMemo(
       () =>
@@ -359,6 +366,12 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
   const [selectedPlays, setSelectedPlays] = React.useState<Point[]>([]);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
   // TODO Loading indicator
+
+  React.useEffect(() => {
+    videoRefs.current.forEach((video) => {
+      video.playbackRate = playbackSpeed;
+    });
+  }, [playbackSpeed]);
 
   // Action handlers
   function handleEditTag(play: Point) {
@@ -475,6 +488,14 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
           <video
             key={row.getValue('videoURL')} // Force remount component on change
             controls
+            ref={(el) => {
+              if (el) {
+                videoRefs.current.set(row.getValue('videoURL'), el);
+                el.playbackRate = playbackSpeed; // Set initial playbackRate
+              } else {
+                videoRefs.current.delete(row.getValue('videoURL'));
+              }
+            }}
             disablePictureInPicture
             disableRemotePlayback
             muted
