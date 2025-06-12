@@ -1,178 +1,94 @@
-# Project Title
+# Basketball Analytics Dashboard
 
-[[_TOC_]]
+A full-stack application for visualizing and analyzing similar basketball plays from tracking data using machine learning models and interactive visualizations.
 
 ## Team Members
 
 1. Mike Boss
 2. Konstantin Heep
-3. Madeleine Soukup
-4. Romeo Stoll
+3. Romeo Stoll
 
-## Project Description
+## Project Overview
 
-Describe here your project in detail and define your goals.
+This dashboard provides comprehensive analysis of NBA player movement patterns through:
+- **Data visualization** of generated play clusterings and player tracking data
+- **Machine learning models** for finding similar plays (using trajectory prediction)
+- **Interactive components** for exploring opponent team offensive tactics
 
-### Users
+### Target Users
 
-List your projects target Users.
+- **Basketball analysts** seeking data-driven insights
+- **Coaches** looking to understand team dynamics and strategies  
+- **Basketball enthusiasts** exploring advanced analytics
 
-### Tasks
+### Core Features
 
-Define all the tasks you want your dashboard solve.
+TODO
 
----
+## Architecture
 
-## Folder Structure
-
-Specify here the structure of you code and comment what the most important files contain
-
-```bash
-├── README.md
-├── backend
-│   ├── setup.py   # main app
-│   ├── .dockerignore
-│   ├── Dockerfile
-│   ├── MANIFEST.in
-│   ├── README.md
-│   ├── pyproject.toml
-│   ├── data
-│   │   ├── ames-housing-features.json
-│   │   ├── ames-housing-gam-instance-data.json
-│   │   └── ames-housing-gam.json
-│   └── src/gamut_server
-│       ├── resources
-│       │   ├── __init__.py
-│       │   ├── description.py
-│       │   ├── features.py
-│       │   └── instances.py
-│       ├── router
-│       │   ├── __init__.py
-│       │   ├── app.py
-│       │   └── routes.py
-│       └── __init__.py
-├── frontend
-│   ├── README.md
-│   ├── package-lock.json
-│   ├── package.json
-│   ├── src
-│   │   ├── App.css
-│   │   ├── App.test.tsx
-│   │   ├── App.tsx
-│   │   ├── Visualization.tsx
-│   │   ├── backend
-│   │   │   ├── BackendQueryEngine.tsx
-│   │   │   └── json-decoder.ts
-│   │   ├── components
-│   │   │   ├── BasicLineChart
-│   │   │   │   ├── BasicLineChart.scss
-│   │   │   │   ├── BasicLineChart.tsx
-│   │   │   │   └── types.ts
-│   │   │   ├── DataChoiceComponent.tsx
-│   │   │   ├── DataPointComponent.tsx
-│   │   │   └── ScatterPlot
-│   │   │       ├── ScatterPlot.scss
-│   │   │       ├── ScatterPlot.tsx
-│   │   │       └── types.ts
-│   │   ├── index.css
-│   │   ├── index.tsx
-│   │   ├── logo.svg
-│   │   ├── react-app-env.d.ts
-│   │   ├── reportWebVitals.ts
-│   │   ├── setupTests.ts
-│   │   └── types
-│   │       ├── DataArray.ts
-│   │       ├── DataPoint.ts
-│   │       └── Margins.ts
-│   └── tsconfig.json
-└── requirements.txt
+```
+basketball-analytics/
+├── frontend/          # React.js dashboard with TypeScript
+├── backend/           # Python API server with Flask API
+├── backend/model/     # ML preprocessing, transformer model training pipeline
+└── docker-compose.yml # Development environment
 ```
 
-## Requirements
+## Quick Start
 
-Write here all intructions to build the environment and run your code.\
-**NOTE:** If we cannot run your code following these requirements we will not be able to evaluate it.
+### Prerequisites
 
-## How to Run
+- Docker and Docker Compose
+- Node.js 18+ (for local frontend development)
+- Python 3.13+ (for local backend development)
 
-### Using Docker Compose (Recommended)
+### Development Setup
 
-To run the development server using Docker Compose:
+1. **Clone and setup environment:**
+   ```bash
+   git clone <repository-url>
+   cd basketball-analytics
+   ```
 
-1. Make sure you have Docker and Docker Compose installed
-2. From the project root directory, run:
+2. **Start all services:**
    ```bash
    docker compose up
    ```
-   This will start both the frontend and backend services in development mode.
-   - Frontend will be available at: http://localhost:3000
-   - Backend will be available at: http://localhost:8080/api/v1/
+   
+   Services will be available at:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8080/api/v1/
 
-To rebuild the containers (e.g., after making changes to the Dockerfile or dependencies):
+### Individual Service Setup
 
-```bash
-docker compose up --build
-```
+For detailed setup instructions:
+- **Frontend**: See [frontend/README.md](frontend/README.md)
+- **Backend**: See [backend/README.md](backend/README.md)  
+- **ML Models**: See [model/README.md](backend/src/backend/model/README.md)
 
-To view the logs:
+## Data Pipeline
 
-```bash
-docker compose logs -f
-```
+1. **Raw NBA tracking data** → Stored in `backend/data/nba_tracking_data/`
+2. **Preprocessing** → ML model training and feature extraction
+3. **Clustering** → Initial position clusters computed and cached
+4. **Video rendering** → Synchronized tracking overlays
+5. **API serving** → Data access for frontend and interaction loop for user feedback
 
-You can also view logs for specific services:
+## Development Workflow
 
-```bash
-docker compose logs -f frontend  # for frontend logs
-docker compose logs -f backend   # for backend logs
-```
+### Working with Data
 
-To stop the services:
+- **Adding teams**: Update `TEAM_IDS_SAMPLE` in `backend/settings.py`
+- **Reprocessing data**: Run `uv run python scripts/prepare_data.py`
+- **Updating clusters**: Run `uv run python src/backend/resources/scatter_data.py`
+- **Regenerating videos**: Run `uv run python scripts/prerender_videos.py`
 
-```bash
-docker compose down
-```
+## Deployment
 
-## Milestones
+Automatically on merge to `main` branch by CI/CD pipeline.
 
-Document here the major milestones of your code and future planned steps.\
+## Resources
 
-- [x] Week 1
-
-  - [x] Completed Sub-task: [#20984ec2](https://gitlab.inf.ethz.ch/COURSE-XAI-IML22/dummy-fullstack/-/commit/20984ec2197fa8dcdc50f19723e5aa234b9588a3)
-  - [x] Completed Sub-task: ...
-
-- [ ] Week 2
-  - [ ] Sub-task: [#2](https://gitlab.inf.ethz.ch/COURSE-XAI-IML22/dummy-fullstack/-/issues/2)
-  - [ ] Sub-task: ...
-
-Create a list subtask.\
-Open an issue for each subtask. Once you create a subtask, link the corresponding issue.\
-Create a merge request (with corresponding branch) from each issue.\
-Finally accept the merge request once issue is resolved. Once you complete a task, link the corresponding merge commit.\
-Take a look at [Issues and Branches](https://www.youtube.com/watch?v=DSuSBuVYpys) for more details.
-
-This will help you have a clearer overview of what you are currently doing, track your progress and organise your work among yourselves. Moreover it gives us more insights on your progress.
-
-## Weekly Summary
-
-Write here a short summary with weekly progress, including challanges and open questions.\
-We will use this to understand what your struggles and where did the weekly effort go to.
-
-## Versioning
-
-Create stable versions of your code each week by using gitlab tags.\
-Take a look at [Gitlab Tags](https://docs.gitlab.com/ee/topics/git/tags.html) for more details.
-
-Then list here the weekly tags. \
-We will evaluate your code every week, based on the corresponding version.
-
-Tags:
-
-- Week 1: [Week 1 Tag](https://gitlab.inf.ethz.ch/COURSE-XAI-IML22/dummy-fullstack/-/tags/stable-readme)
-- Week 2: ..
-- Week 3: ..
-- ...
-
-link pitch video:
-https://polybox.ethz.ch/index.php/s/bjtuIzQxFkGUOqX
+- **Pitch Video**: [Project Presentation](https://polybox.ethz.ch/index.php/s/bjtuIzQxFkGUOqX)
+- **Documentation**: See individual component READMEs

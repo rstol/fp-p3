@@ -1,139 +1,222 @@
-# Backend
+# Basketball Analytics Backend
 
-## Prerequisites
+FastAPI-based backend service providing NBA tracking data analysis, machine learning clustering, and real-time API endpoints.
+
+## Tech Stack
+
+- **Python 3.13** with modern async/await patterns
+- **FastAPI** for high-performance API development
+- **Pandas** for data manipulation and analysis
+- **Scikit-learn** for machine learning models
+- **UV** for fast Python package management
+- **Docker** for containerized development
+
+## Quick Start
+
+### Prerequisites
 
 - Python 3.13 (install with `pyenv install 3.13`)
+- UV package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - Docker and Docker Compose
-- UV (Python package manager)
 
-## Installation
+### Installation
 
-1. Clone the repository and navigate to the backend directory:
-
-   ```
+1. **Navigate to backend directory:**
+   ```bash
    cd backend
    ```
 
-2. Activate the virtual environment:
-
-   ```
+2. **Create and activate virtual environment:**
+   ```bash
    uv venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
-  Then run the generated `source ...` command that uv provides.
 
-3. Install dependencies using uv:
-
-   ```
+3. **Install dependencies:**
+   ```bash
    uv sync
    ```
 
-4. Verify the installation:
+4. **Verify installation:**
+   ```bash
+   which python3  # Should point to UV virtual environment
+   ```
 
-   ```
-   which python3  # Should return a path to uv virtualenvs
-   ```
-
-5. Install pre-commit hooks for code quality:
-   ```
+5. **Setup development tools:**
+   ```bash
    pre-commit install
    ```
 
-### Setting up `.basketball_profile`
+### Environment Configuration
 
-Create a file called `.basketball_profile` in your home directory:
+Create `.basketball_profile` in your home directory:
 
 ```bash
 nano ~/.basketball_profile
 ```
 
-and copy and paste in the contents of [`.basketball_profile`](.basketball_profile), replacing each of the variable values with paths relevant to your environment.
-Next, add the following line to the end of your `~/.bashrc` or `./.zshrc`:
+Add the following configuration (adjust paths for your environment):
 
 ```bash
-source ~/.basketball_profile
+export PROJECT_DIR=
+export DATA_DIR=
+export SCRIPTS_DIR=
+export TRACKING_DIR=${DATA_DIR}/nba_tracking_data
+export GAMES_DIR=${DATA_DIR}/games_preprocessed
+export EXPERIMENTS_DIR=${DATA_DIR}/experiments
 ```
 
-run:
+Add to your shell profile:
 
 ```bash
+echo "source ~/.basketball_profile" >> ~/.bashrc
 source ~/.bashrc
 ```
-You should now be able to copy and paste all of the commands in the various instructions sections.
-For example:
 
-```bash
-echo ${PROJECT_DIR}
+## Project Structure
+
+```
+├── data
+│   ├── clusters
+│   ├── embeddings
+│   ├── experiments
+│   ├── games_preprocessed
+│   ├── init_clusters       # Precomputed clustering
+│   ├── nba_tracking_data   # Raw game data
+│   └── user_updates
+├── Dockerfile
+├── gunicorn.conf.py
+├── pyproject.toml
+├── README.md
+├── scripts
+│   ├── load_nba_tracking_data_15_16.py
+│   ├── prepare_data.py
+│   ├── prerender_videos.py
+│   ├── train_model_v2.sh
+│   └── train_model.sh
+├── src
+│   └── backend
+└── uv.lock
 ```
 
 ## Running the Application
 
+### Docker Development (Recommended)
+
+```bash
+# Start backend service
+docker compose up backend
+
+# With hot-reload for development
+docker compose up backend --build
+
+# View logs
+docker compose logs -f backend
+```
+
 ### Local Development
 
-1. Start the backend service:
+```bash
+# Install dependencies
+uv sync
 
-   ```
-   docker compose up backend
-   ```
-
-   For development with hot-reload:
-
-   ```
-   docker compose up backend --build
-   ```
-
-### Docker Compose Development
-
-When working with Docker Compose and need to add new packages:
-
-1. Add the package to `pyproject.toml` in the `[tool.poetry.dependencies]` section
-   ```
-   poetry add package-name  # Example: poetry add pandas
-   ```
-2. Rebuild the Docker container:
-   ```
-   docker compose build backend
-   ```
-3. Restart the container:
-   ```
-   docker compose up -d backend
-   ```
-
-## Data Preparation
-
-Before running the application, you need to download and prepare the data and optionally prerender resources:
-
-### Raw Data
-The data used for the backend and served to the frontend is stored in `data/nba_tracking_data`. 
-
-Currently we restrict to store the data of 3 teams defined in `TEAM_IDS_SAMPLE` in `settings.py` 
-
-To add more teams add more team ids from `data/nba_tracking_data/teams.json` to `TEAM_IDS_SAMPLE` 
-
-Then rerun: 
-```
-uv run python scripts/prepare_data.py
+# Run development server
+uv run uvicorn src.gamut_server.router.app:app --reload --host 0.0.0.0 --port 8080
 ```
 
-Now rebuild the application. 
+API will be available at `http://localhost:8080`.
 
-### Initial clusters
-The initial clusters are computed and stored in the git-repo under `data/init_clusters`.
-Run the script:
+## Data Management
+
+### Team Configuration
+
+Current sample teams are defined in `settings.py`:
 
 ```python
-uv run python src/backend/resources/scatter_data.py
+TEAM_IDS_SAMPLE = [
+    1610612748, 1610612752, 1610612755
+]
 ```
 
-> !Important: After modifying the code of initial cluster computation the script has to be rerun again. Then commit the changed prerenderd clusters.
+### Data Preparation Pipeline
 
-### Videos
-We store the prerendered videos in git version control to not need external volumes in production. 
-To prerender the videos again run the script:
+1. **Prepare raw data (optional):**
+   ```bash
+   uv run python scripts/prepare_data.py
+   ```
 
-```python 
-uv run python scripts/prerender_videos.py
+2. **Generate initial clusters (optional):**
+   ```bash
+   uv run python src/backend/resources/scatter_data.py
+   ```
+
+3. **Prerender videos (optional):**
+   ```bash
+   uv run python scripts/prerender_videos.py
+   ```
+
+### Adding New Teams
+
+1. Find team ID in `data/nba_tracking_data/teams.json`
+2. Add ID to `TEAM_IDS_SAMPLE` in `settings.py`
+3. Run data preparation scripts
+4. Rebuild Docker container if using containerized development
+
+## API Endpoints
+
+### Scatter Plot & Clustering
+
+```python
+# Team play scatter data
+GET /api/v1/teams/{team_id}/plays/scatter
+
+# Cluster information
+GET /api/v1/teams/{team_id}/cluster/{cluster_id}
+
+# Individual scatter points
+GET /api/v1/teams/{team_id}/scatterpoint/{game_id}/{event_id}
+
+# Batch scatter points
+POST /api/v1/teams/{team_id}/scatterpoints
 ```
 
-This will put the prerended videos in the frontend/public folder for direct access in the browser.
+### NBA Data
 
-To add more teams to prerender: add more team ids from `data/nba_tracking_data/teams.json` to `TEAM_IDS_SAMPLE` and rerun the script. 
+```python
+# Teams
+GET /api/v1/teams
+GET /api/v1/teams/{team_id}
+GET /api/v1/teams/{team_id}/games
+
+# Games
+GET /api/v1/games
+GET /api/v1/games/{game_id}
+GET /api/v1/games/{game_id}/plays
+
+# Plays and Videos
+GET /api/v1/games/{game_id}/plays/{play_id}/raw
+GET /api/v1/plays/{game_id}/{event_id}/video
+GET /api/v1/plays/{game_id}/{event_id}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**UV virtual environment issues:**
+```bash
+uv venv --python 3.13
+source .venv/bin/activate
+uv sync --all-extras
+```
+
+**Docker build failures:**
+```bash
+docker compose build backend --no-cache
+docker compose up backend
+```
+
+**Data processing errors:**
+- Verify data files exist in `data/nba_tracking_data/`
+- Check file permissions and formats
+- Ensure sufficient disk space for processing

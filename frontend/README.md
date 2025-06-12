@@ -1,83 +1,109 @@
-# Welcome to the frontend
+# Basketball Analytics Frontend
 
-A React applications using React Router.
+A React 19 application providing interactive visualizations for NBA player tracking data analysis.
 
-## Getting Started
+## Tech Stack
+
+- **React 19** with TypeScript for type safety
+- **Tailwind CSS** for utility-first styling
+- **shadcn/ui** for accessible component library
+- **D3.js** for custom data visualizations
+- **React Router** for client-side navigation
+
+## Quick Start
 
 ### Installation
-
-Install the dependencies:
 
 ```bash
 npm install --force
 ```
 
-The force is needed unfortunatetly since we are using the latest react.js version 19.x but the `emblor` package requirements are "incompatible" with react-19. 
+> **Note**: `--force` is required due to React 19 compatibility issues with the `emblor` package. This is a temporary issue.
 
 ### Development
-
-Start the development server with HMR:
 
 ```bash
 npm run dev
 ```
 
-Your application will be available at `http://localhost:3000`.
+Application runs at `http://localhost:3000` with hot module replacement.
 
-#### Development with Docker
-
-You can also run the frontend using Docker Compose:
+### Docker Development
 
 ```bash
+# Start frontend only
 docker compose up -d frontend
-```
 
-Note: If you add new packages to the project, you'll need to rebuild the container:
-
-```bash
+# With rebuild (after package changes)
 docker compose up frontend --build
 ```
 
-## Building for Production
+## Project Structure
 
-Create a production build:
-
-```bash
-npm run build
+```
+.
+├── app
+│   ├── app.css
+│   ├── components      # Reusable UI components
+│   ├── lib
+│   ├── root.tsx
+│   ├── routes
+│   ├── routes.ts
+│   ├── setupTests.ts
+│   └── types
+├── components.json
+├── Dockerfile
+├── globals.d.ts
+├── package-lock.json
+├── package.json
+├── public
+│   ├── favicon.ico
+│   ├── spurs.gif
+│   └── videos
+├── react-router.config.ts
+├── README.md
+├── tsconfig.json
+└── vite.config.ts
 ```
 
-## Styling
-
-This template comes with several styling solutions pre-configured:
+## Styling Architecture
 
 ### Tailwind CSS
-
-[Tailwind CSS](https://tailwindcss.com/) is configured out of the box for utility-first styling. You can start using Tailwind classes immediately in your components:
+Utility-first CSS framework configured for rapid development:
 
 ```jsx
-<div className="flex items-center justify-between p-4">{/* Your component content */}</div>
+<div className="flex items-center justify-between p-4 bg-slate-100 rounded-lg">
+  {/* Component content */}
+</div>
 ```
 
 ### shadcn/ui Components
-
-This project includes [shadcn/ui](https://ui.shadcn.com/) for beautiful, accessible, and customizable components. To add new components:
-
-1. Use the CLI to add components:
+Pre-built accessible components. Add new components:
 
 ```bash
 npx shadcn-ui@latest add button
+npx shadcn-ui@latest add dialog
 ```
 
-2. Import and use components in your React files:
+### Common Issues
 
-```jsx
-import { Button } from '@/components/ui/button';
-
-export default function Page() {
-  return <Button>Click me</Button>;
-}
+**Hot reload not working:**
+```bash
+# Clear cache and restart
+rm -rf node_modules/.cache
+npm run dev
 ```
 
-All shadcn/ui components are built with Tailwind CSS and can be customized through the `tailwind.config.js` file.
+**Build failures:**
+```bash
+# Check TypeScript errors
+npm run type-check
 
----
+# Verify all dependencies
+npm install --force
+```
+
+**API connection issues:**
+- Verify backend is running on correct port
+- Check CORS configuration
+- Confirm API endpoint URLs in environment variables
