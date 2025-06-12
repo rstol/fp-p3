@@ -4,7 +4,7 @@ import { Check, Loader2 } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLoaderData, useSearchParams } from 'react-router';
-import { string, z } from 'zod';
+import { z } from 'zod';
 import { BASE_URL, DefenseColor, EventType, OffenseColor } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
 import type { clientLoader } from '~/routes/_index';
@@ -67,16 +67,16 @@ function PlayForm() {
 
   // Compute initial values only when selectedPoint or selectedCluster changes
   const initialValues = useMemo(
-      () => ({
-        clusters:
-          selectedPoint?.manually_clustered && selectedCluster
-            ? [{ id: selectedCluster.cluster_id, text: selectedCluster.cluster_label ?? '' }]
-            : [],
-        tags: selectedPoint?.tags ? selectedPoint.tags.map((t) => ({ id: t, text: t })) : [],
-        note: selectedPoint?.note ?? '',
-      }),
-      [selectedPoint, selectedCluster],
-    );
+    () => ({
+      clusters:
+        selectedPoint?.manually_clustered && selectedCluster
+          ? [{ id: selectedCluster.cluster_id, text: selectedCluster.cluster_label ?? '' }]
+          : [],
+      tags: selectedPoint?.tags ? selectedPoint.tags.map((t) => ({ id: t, text: t })) : [],
+      note: selectedPoint?.note ?? '',
+    }),
+    [selectedPoint, selectedCluster],
+  );
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -94,7 +94,7 @@ function PlayForm() {
     reset(initialValues);
     setPlayTags(initialValues.tags);
     setClusterTags(initialValues.clusters);
-    }, [initialValues, reset]);
+  }, [initialValues, reset]);
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     if (!selectedPoint || !selectedCluster) return;
@@ -110,14 +110,16 @@ function PlayForm() {
           cluster_id: updatedCluster.id,
           cluster_label: updatedCluster.text,
         }
-    : selectedPoint.original_cluster? {
-      cluster_id: selectedPoint.original_cluster.cluster_id,
-      cluster_label: selectedPoint.original_cluster.cluster_label,
-      } : null;
+      : selectedPoint.original_cluster
+        ? {
+            cluster_id: selectedPoint.original_cluster.cluster_id,
+            cluster_label: selectedPoint.original_cluster.cluster_label,
+          }
+        : null;
 
     // Send update to server
     await fetch(
-    `${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint.game_id}/${selectedPoint.event_id}`,
+      `${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint.game_id}/${selectedPoint.event_id}`,
       {
         method: 'PUT',
         headers: {
@@ -154,20 +156,20 @@ function PlayForm() {
     if (data.note && selectedPoint.note !== data.note) {
       updatePointNote(selectedPoint, data.note);
     }
-    
+
     // Update tags if changed
     if (dataTags.length && JSON.stringify(dataTags) !== JSON.stringify(selectedPoint.tags)) {
-    if (addedTags.length) {
+      if (addedTags.length) {
         addedTags.forEach((newTag) => {
-        if (!tagOptions.some((t) => t.text === newTag)) {
+          if (!tagOptions.some((t) => t.text === newTag)) {
             createNewTagWithPoint(newTag, selectedPoint);
-        }
+          }
         });
         updatePointTags(selectedPoint, addedTags);
         updateIsTagged(selectedPoint);
-        }
+      }
     }
-  setIsSubmitting(false);
+    setIsSubmitting(false);
   }
 
   return (
@@ -198,18 +200,13 @@ function PlayForm() {
                       placeholder="Select a cluster or enter a new cluster name"
                       setTags={(newTags) => {
                         setClusterTags(newTags);
-                      setValue('clusters', newTags as [Tag, ...Tag[]], { shouldValidate: true });
+                        setValue('clusters', newTags as [Tag, ...Tag[]], { shouldValidate: true });
                       }}
                       activeTagIndex={activeClusterIndex}
                       setActiveTagIndex={setActiveClusterIndex}
                     />
                   </FormControl>
-                  <Button
-                    disabled={isSubmitting}
-                    type="submit"
-                    size="sm"
-                    className="h-9 w-10"
-                  >
+                  <Button disabled={isSubmitting} type="submit" size="sm" className="h-9 w-10">
                     {isSubmitting ? <Loader2 className="animate-spin" /> : <Check size={6} />}
                   </Button>
                 </div>
@@ -301,10 +298,10 @@ export default function PlayView() {
 
   useEffect(() => {
     if (!selectedPoint) {
-          // Clear video URL and play details when no point is selected
-          setPlayDetails(null);
-          return;
-        }
+      // Clear video URL and play details when no point is selected
+      setPlayDetails(null);
+      return;
+    }
 
     seIsLoadingPlayDetails(true);
     const fetchPlayDetails = async () => {
@@ -349,7 +346,6 @@ export default function PlayView() {
         URL.revokeObjectURL(playDetails.videoURL);
       }
     };
-
   }, [selectedPoint, games, teams, playDetails?.videoURL]);
 
   useEffect(() => {
@@ -385,7 +381,7 @@ export default function PlayView() {
   if (isLoadingPlayDetails) {
     return <PlayDetailsSkeleton />;
   }
-// TODO remove "Is Tagged" field?
+  // TODO remove "Is Tagged" field?
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
       <CardHeader>
@@ -397,7 +393,7 @@ export default function PlayView() {
             <div className="mb-2">
               <label className="text-sm">Playback Speed:</label>
               <select
-                className="ml-2 border rounded p-1 text-sm"
+                className="ml-2 rounded border p-1 text-sm"
                 value={playbackSpeed}
                 onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
               >
@@ -408,20 +404,20 @@ export default function PlayView() {
                 ))}
               </select>
             </div>
-          <video
-            ref={videoRef}
-            key={playDetails.videoURL} // Force remount component on change
-            controls
-            onError={(e) => console.error('Video error', e)}
-            autoPlay
-            disablePictureInPicture
-            disableRemotePlayback
-            loop
-            muted
-          >
-            <source src={playDetails.videoURL} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
+            <video
+              ref={videoRef}
+              key={playDetails.videoURL} // Force remount component on change
+              controls
+              onError={(e) => console.error('Video error', e)}
+              autoPlay
+              disablePictureInPicture
+              disableRemotePlayback
+              loop
+              muted
+            >
+              <source src={playDetails.videoURL} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
           </>
         )}
         <div className="divide-y divide-solid text-sm">

@@ -329,17 +329,14 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
       desc: true,
     },
   ]);
-  const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const loaderData = useLoaderData<typeof clientLoader>();
   const { games, teams } = loaderData;
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const gameMap = new Map(games?.map((game) => [game.game_id, game]));
   const teamMap = new Map(teams.map((team) => [team.teamid, team.name]));
   const playbackSpeed = useDashboardStore((s) => s.playbackSpeed);
-  const setPlaybackSpeed = useDashboardStore((s) => s.setPlaybackSpeed);
 
   // Manage multiple video refs
   const videoRefs = React.useRef<Map<string, HTMLVideoElement>>(new Map());
