@@ -11,6 +11,8 @@ import type { Route } from './+types/root';
 import './app.css';
 import Header from './components/Header';
 import { BasketballUISkeleton } from './components/LoaderSkeletons';
+// import type { LinksFunction } from '@remix-run/node';
+import introJsStyles from 'intro.js/introjs.css?url';
 
 export const links: Route.LinksFunction = () => [
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
@@ -19,6 +21,7 @@ export const links: Route.LinksFunction = () => [
     href: 'https://fonts.gstatic.com',
     crossOrigin: 'anonymous',
   },
+  { rel: 'stylesheet', href: introJsStyles },
   {
     rel: 'stylesheet',
     href: 'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap',

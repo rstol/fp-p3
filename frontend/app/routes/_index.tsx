@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLoaderData, useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
@@ -13,10 +13,13 @@ import {
   purgeCacheOnGitCommitChange,
   purgeScatterDataCache,
 } from '~/lib/fetchCache';
+import introJs from 'intro.js';
 import { useDashboardStore } from '~/lib/stateStore';
 import { getPointId } from '~/lib/utils';
 import type { ClusterData, Game, Team } from '~/types/data';
 import type { Route } from './+types/_index';
+import { setCookie, getCookie } from '~/lib/cookies';
+import type { IntroJs } from 'intro.js/src/intro';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -83,6 +86,121 @@ export default function Home() {
   const clearSelectedCluster = useDashboardStore((state) => state.clearSelectedCluster);
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Store tour instance and started flag
+  const tourRef = useRef<any>(null);
+  const tourStarted = useRef(false);
+
+  useEffect(() => {
+    // Check if tour has been shown
+    if (getCookie('introjs-tour-shown') || tourStarted.current) {
+      // console.log('Tour skipped: cookie or tourStarted');
+      return;
+    }
+
+    // Wait for table to render
+    const startTour = () => {
+      // Prevent starting if tour already exists
+      if (tourRef.current) {
+        // console.log('Tour already exists, skipping start');
+        return;
+      }
+
+      const tour = introJs();
+      tourRef.current = tour;
+      tourStarted.current = true;
+
+      tour.setOptions({
+        steps: [
+          {
+            title: 'Welcome to DeepPlaybook, the deep-learning based Basketball Play-by-Play Analysis tool!',
+            intro: 'Let’s get started with a quick tour.',
+            position: 'bottom',
+          },
+          {
+            element: '#left-panel',
+            intro: 'Please select a team to analyze.',
+            position: 'right',
+          },
+          {
+            element: '#left-panel',
+            intro: 'Please select a play to analyze by clicking on one of the points.',
+            position: 'right',
+          },
+          {
+            element: '#r${selectedPoint.event_id}',
+            intro: 'This is the play overview.',
+            position: 'right',
+          },
+          {
+            element: '#scatter-plot', // Example: next step after team selection
+            intro: 'This is the scatter plot showing play analysis.',
+            position: 'left',
+          },
+        ],
+        showProgress: true,
+        doneLabel: 'Finish',
+        dontShowAgain: true,
+        dontShowAgainLabel: 'Don’t show again',
+        dontShowAgainCookie: 'introjs-tour-shown',
+        dontShowAgainCookieDays: 365,
+      });
+
+      // Block progression at team selection step until teamid is in searchParams
+      tour.onbeforechange(function () {
+        const currentStep = this._currentStep;
+        if (currentStep === 2) { // Step 2 (team selection, zero-based index)
+          return !!searchParams.get('teamid'); // Proceed only if teamid exists
+        }
+        if (currentStep === 3) {
+          return !!selectedPoint; // Proceed only if selectedPoint exists
+        }
+        return true; // Allow other steps to proceed
+      });
+
+      tour.oncomplete(() => {
+        setCookie('introjs-tour-shown', 'true', 365);
+        tourRef.current = null;
+        tourStarted.current = false;
+      });
+
+      tour.onexit(() => {
+        setCookie('introjs-tour-shown', 'true', 365);
+        tourRef.current = null;
+        tourStarted.current = false;
+      });
+
+      tour.start();
+    };
+
+    // Wait for #teams-table to be rendered
+    setTimeout(startTour, 500);
+    
+// Cleanup on unmount
+    return () => {
+      if (tourRef.current) {
+        console.log('Cleaning up tour on unmount');
+        tourRef.current.exit();
+        tourRef.current = null;
+        tourStarted.current = false;
+      }
+    };
+  }, [searchParams]);
+
+  // Separate effect to handle team and play selection
+  useEffect(() => {
+    if (tourRef.current) {
+      const currentStep = tourRef.current._currentStep;
+      console.log('Selection check, step:', currentStep, 'teamid:', searchParams.get('teamid'), 'selectedPoint:', !!selectedPoint);
+      if (currentStep === 2 && searchParams.get('teamid')) {
+        console.log('Advancing to play selection step');
+        tourRef.current.nextStep();
+      } else if (currentStep === 3 && selectedPoint) {
+        console.log('Advancing to play overview step');
+        tourRef.current.nextStep();
+      }
+    }
+  }, [searchParams, selectedPoint]);
+
   // Clear selectedPoint and selectedCluster when teamID is falsy or on mount
   useEffect(() => {
     if (!teamID) {
@@ -109,7 +227,7 @@ export default function Home() {
   const tableTitle = `Similar plays in cluster ${selectedCluster?.cluster_label ?? ''}`;
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-4" id="main-index">
         <ResizablePanelGroup direction="horizontal" className="min-h-[500px]">
           <ResizablePanel id="left-panel" defaultSize={70}>
             {teamID ? <ScatterPlot /> : <EmptyScatterGuide />}
