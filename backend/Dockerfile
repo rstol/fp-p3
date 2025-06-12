@@ -40,21 +40,20 @@ RUN chown app-user:app-user ${PYTHONPATH}
 EXPOSE ${PORT}
 
 # Uncomment for local docker development
-# FROM builder AS development
+FROM builder AS development
 
-# COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
+COPY --chown=app-user:app-user uv.lock pyproject.toml ${PYTHONPATH}
 
-# WORKDIR ${PYTHONPATH}/backend
-# RUN uv sync --frozen --no-install-project
+WORKDIR ${PYTHONPATH}/backend
+RUN uv sync --frozen --no-install-project
 
-# # Copy application files
-# COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
-# # Copy data files
-# COPY --chown=app-user:app-user data/embeddings ${PYTHONPATH}/data/embeddings
-# COPY --chown=app-user:app-user data/nba_tracking_data ${PYTHONPATH}/data/nba_tracking_data
-# COPY --chown=app-user:app-user data/init_clusters ${PYTHONPATH}/data/init_clusters
+# Copy application files
+COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
+# Copy data files
+COPY --chown=app-user:app-user data/embeddings ${PYTHONPATH}/data/embeddings
+COPY --chown=app-user:app-user data/nba_tracking_data ${PYTHONPATH}/data/nba_tracking_data
 
-# CMD ["python", "-m", "backend.router.app"]
+CMD ["python", "-m", "backend.router.app"]
 
 # Start production stage from builder to avoid inheriting dev tools
 FROM builder AS production

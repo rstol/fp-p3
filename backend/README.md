@@ -1,4 +1,4 @@
-# Dummy Backend
+# Backend
 
 ## Prerequisites
 
@@ -69,13 +69,7 @@ echo ${PROJECT_DIR}
 
 ### Local Development
 
-1. First, prepare the required data:
-
-   ```
-   uv run python scripts/prepare_data.py
-   ```
-
-2. Start the backend service:
+1. Start the backend service:
 
    ```
    docker compose up backend
@@ -108,12 +102,19 @@ When working with Docker Compose and need to add new packages:
 
 Before running the application, you need to download and prepare the data and optionally prerender resources:
 
-### Raw Data preparation
-The script will download the necessary data files and place them in the correct location for the application to use.
+### Raw Data
+The data used for the backend and served to the frontend is stored in `data/nba_tracking_data`. 
 
+Currently we restrict to store the data of 3 teams defined in `TEAM_IDS_SAMPLE` in `settings.py` 
+
+To add more teams add more team ids from `data/nba_tracking_data/teams.json` to `TEAM_IDS_SAMPLE` 
+
+Then rerun: 
 ```
 uv run python scripts/prepare_data.py
 ```
+
+Now rebuild the application. 
 
 ### Initial clusters
 The initial clusters are computed and stored in the git-repo under `data/init_clusters`.
@@ -126,7 +127,7 @@ uv run python src/backend/resources/scatter_data.py
 > !Important: After modifying the code of initial cluster computation the script has to be rerun again. Then commit the changed prerenderd clusters.
 
 ### Videos
-We store the prerendered videos in git. 
+We store the prerendered videos in git version control to not need external volumes in production. 
 To prerender the videos again run the script:
 
 ```python 
@@ -134,3 +135,5 @@ uv run python scripts/prerender_videos.py
 ```
 
 This will put the prerended videos in the frontend/public folder for direct access in the browser.
+
+To add more teams to prerender: add more team ids from `data/nba_tracking_data/teams.json` to `TEAM_IDS_SAMPLE` and rerun the script. 
