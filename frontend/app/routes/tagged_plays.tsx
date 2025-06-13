@@ -41,7 +41,7 @@ export default function TaggedPlaysView() {
 
   return (
     <div className="mt-6">
-      {!hasTaggedPlays
+      {hasTaggedPlays
         ? tags?.map((tag) => {
             return tag?.points.length ? (
               <PlaysTable
@@ -49,7 +49,9 @@ export default function TaggedPlaysView() {
                 data={tag.points}
                 title={`Plays tagged with ${tag.tag_label}`}
               />
-            ) : null;
+            ) : (
+              'No plays tagged'
+            );
           })
         : 'No plays tagged'}
     </div>

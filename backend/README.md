@@ -103,6 +103,8 @@ source ~/.bashrc
 
 ### Docker Development (Recommended)
 
+First uncomment the section in the `backend/Dockerfile` following the line "# Uncomment for local docker development" until the production stage. This is currently a limitation since the CI/CD otherwise builds not only the `production` stage and times out. 
+
 ```bash
 # Start backend service
 docker compose up backend
