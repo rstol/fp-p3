@@ -1,6 +1,6 @@
 # Basketball Analytics Dashboard
 
-A full-stack application for visualizing and analyzing similar basketball plays from tracking data using machine learning models and interactive visualizations.
+The task of scouting an upcoming opponent in professional Basketball often requires hours of manual labor, with only a small proportion of it requiring the domain expertise of the coaches carrying out the task. Yet the task is not easily solved by an algorithm or an ML agent. We present the mixed-initiative system DeepPlaybook that enables easy exploration, organization and presentation of Basketball plays in an interactive dashboard with a semi-supervised projection and an interactive clustering fueled by a transformer model with a VAE bottleneck.
 
 ## Team Members
 
