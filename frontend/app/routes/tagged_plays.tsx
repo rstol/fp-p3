@@ -36,20 +36,18 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 clientLoader.hydrate = true;
 
 export default function TaggedPlaysView() {
-  const scatterData = useDashboardStore((state) => state.clusters);
-  const loaderData = useLoaderData<typeof clientLoader>();
-  const clusters = scatterData?.length ? scatterData : loaderData.scatterData;
-  const hasTaggedPlays = clusters?.some((cluster) => cluster.points.some((p) => p.is_tagged));
+  const tags = useDashboardStore((state) => state.tags);
+  const hasTaggedPlays = tags?.some((tag) => tag.points.some((p) => p.is_tagged));
+
   return (
     <div className="mt-6">
-      {hasTaggedPlays
-        ? clusters?.map((cluster) => {
-            const points = cluster.points.filter((p) => p.is_tagged);
-            return points.length ? (
+      {!hasTaggedPlays
+        ? tags?.map((tag) => {
+            return tag?.points.length ? (
               <PlaysTable
-                key={cluster.cluster_id}
-                data={points}
-                title={`Tagged plays in cluster ${cluster.cluster_label ?? ''}`}
+                key={tag.tag_label}
+                data={tag.points}
+                title={`Plays tagged with ${tag.tag_label}`}
               />
             ) : null;
           })

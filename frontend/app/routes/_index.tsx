@@ -79,7 +79,17 @@ export default function Home() {
   const scatterData = useDashboardStore((state) => state.clusters);
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
+  const clearSelectedPoint = useDashboardStore((state) => state.resetSelectedPoint);
+  const clearSelectedCluster = useDashboardStore((state) => state.clearSelectedCluster);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Clear selectedPoint and selectedCluster when teamID is falsy or on mount
+  useEffect(() => {
+    if (!teamID) {
+      clearSelectedPoint();
+      clearSelectedCluster();
+    }
+  }, [teamID, clearSelectedPoint, clearSelectedCluster]);
 
   useEffect(() => {
     if (initialScatterData && searchParams.get('fetch_scatter')) {

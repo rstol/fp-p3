@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { type Tag, TagInput } from 'emblor';
 import { Check, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLoaderData, useSearchParams } from 'react-router';
 import { z } from 'zod';
@@ -29,6 +29,12 @@ const FormSchema = z.object({
       text: z.string(),
     }),
   ),
+  tags: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+    }),
+  ),
   note: z.string().optional(),
 });
 
@@ -37,53 +43,83 @@ function PlayForm() {
     movePointToCluster,
     selectedPoint,
     updatePointNote,
+    updatePointTags,
     selectedCluster,
     createNewClusterWithPoint,
+    createNewTagWithPoint,
     updateIsTagged,
+    updateManuallyClustered,
     stageSelectedPlayClusterUpdate,
     clusters: clusterData,
+    tags: tagData,
   } = useDashboardStore.getState();
-  const tagOptions = clusterData
-    .map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' }))
-    .sort();
+
+  const tagOptions = useMemo(
+    () => tagData.map((t) => ({ id: t.tag_label, text: t.tag_label })).sort(),
+    [tagData],
+  );
+  const clusterOptions = useMemo(
+    () => clusterData.map((c) => ({ id: c.cluster_id, text: c.cluster_label ?? '' })).sort(),
+    [clusterData],
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { teamID } = useLoaderData<typeof clientLoader>();
-  const initialTag =
-    selectedPoint?.is_tagged && selectedCluster
-      ? [{ id: selectedCluster?.cluster_id, text: selectedCluster?.cluster_label ?? '' }]
-      : [];
+
+  // Compute initial values only when selectedPoint or selectedCluster changes
+  const initialValues = useMemo(
+    () => ({
+      clusters:
+        selectedPoint?.manually_clustered && selectedCluster
+          ? [{ id: selectedCluster.cluster_id, text: selectedCluster.cluster_label ?? '' }]
+          : [],
+      tags: selectedPoint?.tags ? selectedPoint.tags.map((t) => ({ id: t, text: t })) : [],
+      note: selectedPoint?.note ?? '',
+    }),
+    [selectedPoint, selectedCluster],
+  );
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
-    defaultValues: {
-      clusters: initialTag,
-      note: selectedPoint?.note ?? '',
-    },
+    defaultValues: initialValues,
   });
-  const [tags, setTags] = useState<Tag[]>(initialTag);
+
+  const [playTags, setPlayTags] = useState<Tag[]>(initialValues.tags);
+  const [clusterTags, setClusterTags] = useState<Tag[]>(initialValues.clusters);
   const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
+  const [activeClusterIndex, setActiveClusterIndex] = useState<number | null>(null);
   const { setValue, reset } = form;
 
+  // Reset form only when initialValues change
   useEffect(() => {
-    reset({
-      note: selectedPoint?.note ?? '',
-      clusters: initialTag,
-    });
-  }, [selectedPoint, selectedCluster, reset]);
+    reset(initialValues);
+    setPlayTags(initialValues.tags);
+    setClusterTags(initialValues.clusters);
+  }, [initialValues, reset]);
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     if (!selectedPoint || !selectedCluster) return;
     setIsSubmitting(true);
+
     const updatedCluster = data.clusters.length ? data.clusters[0] : null;
+    const dataTags = data.tags.map((t) => t.text);
+    const addedTags = dataTags.filter((tag) => !selectedPoint.tags?.includes(tag));
+
+    // Prepare cluster payload
     const clusterPayload = updatedCluster
       ? {
           cluster_id: updatedCluster.id,
           cluster_label: updatedCluster.text,
         }
-      : { ...selectedCluster }; // Always send the cluster
-    console.log(initialTag);
+      : selectedPoint.original_cluster
+        ? {
+            cluster_id: selectedPoint.original_cluster.cluster_id,
+            cluster_label: selectedPoint.original_cluster.cluster_label,
+          }
+        : null;
+
+    // Send update to server
     await fetch(
-      `${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint?.game_id}/${selectedPoint?.event_id}`,
+      `${BASE_URL}/teams/${teamID}/scatterpoint/${selectedPoint.game_id}/${selectedPoint.event_id}`,
       {
         method: 'PUT',
         headers: {
@@ -95,23 +131,43 @@ function PlayForm() {
         }),
       },
     );
-    if (updatedCluster && !tagOptions.some((t) => t.id === updatedCluster.id)) {
-      console.log({ cluster_id: updatedCluster.id, cluster_label: updatedCluster.text });
+
+    // Update cluster if needed
+    if (updatedCluster && !clusterOptions.some((t) => t.id === updatedCluster.id)) {
       createNewClusterWithPoint(
         { cluster_id: updatedCluster.id, cluster_label: updatedCluster.text },
         selectedPoint,
       );
-      stageSelectedPlayClusterUpdate(updatedCluster?.id);
+      stageSelectedPlayClusterUpdate(updatedCluster.id);
     } else if (updatedCluster && updatedCluster.id !== selectedCluster?.cluster_id) {
       movePointToCluster(selectedPoint, updatedCluster.id);
-      stageSelectedPlayClusterUpdate(updatedCluster?.id);
-    } else if (!initialTag.length && updatedCluster) {
-      updateIsTagged(selectedPoint);
-      stageSelectedPlayClusterUpdate(updatedCluster?.id);
+      stageSelectedPlayClusterUpdate(updatedCluster.id);
+    } else if (!initialValues.clusters.length && updatedCluster) {
+      updateManuallyClustered(selectedPoint);
+      stageSelectedPlayClusterUpdate(updatedCluster.id);
+    } else if (!updatedCluster && selectedPoint.original_cluster) {
+      // Revert to original cluster
+      movePointToCluster(selectedPoint, selectedPoint.original_cluster.cluster_id);
+      updateManuallyClustered(selectedPoint, false);
+      stageSelectedPlayClusterUpdate(selectedPoint.original_cluster.cluster_id);
     }
 
+    // Update note if changed
     if (data.note && selectedPoint.note !== data.note) {
       updatePointNote(selectedPoint, data.note);
+    }
+
+    // Update tags if changed
+    if (dataTags.length && JSON.stringify(dataTags) !== JSON.stringify(selectedPoint.tags)) {
+      if (addedTags.length) {
+        addedTags.forEach((newTag) => {
+          if (!tagOptions.some((t) => t.text === newTag)) {
+            createNewTagWithPoint(newTag, selectedPoint);
+          }
+        });
+        updatePointTags(selectedPoint, addedTags);
+        updateIsTagged(selectedPoint);
+      }
     }
     setIsSubmitting(false);
   }
@@ -125,14 +181,51 @@ function PlayForm() {
             name="clusters"
             render={({ field }) => (
               <FormItem className="flex flex-col items-start">
+                <FormLabel className="text-sm">Manually Re-Assign Cluster</FormLabel>
+                <div className="flex w-full gap-2">
+                  <FormControl>
+                    <TagInput
+                      {...field}
+                      autocompleteOptions={clusterOptions}
+                      maxTags={1}
+                      tags={clusterTags}
+                      inlineTags
+                      addTagsOnBlur
+                      styleClasses={{
+                        input: 'focus-visible:outline-none shadow-none w-full',
+                        tag: { body: 'h-7' },
+                      }}
+                      generateTagId={generateTagId}
+                      enableAutocomplete
+                      placeholder="Select a cluster or enter a new cluster name"
+                      setTags={(newTags) => {
+                        setClusterTags(newTags);
+                        setValue('clusters', newTags as [Tag, ...Tag[]], { shouldValidate: true });
+                      }}
+                      activeTagIndex={activeClusterIndex}
+                      setActiveTagIndex={setActiveClusterIndex}
+                    />
+                  </FormControl>
+                  <Button disabled={isSubmitting} type="submit" size="sm" className="h-9 w-10">
+                    {isSubmitting ? <Loader2 className="animate-spin" /> : <Check size={6} />}
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="tags"
+            render={({ field }) => (
+              <FormItem className="flex flex-col items-start">
                 <FormLabel className="text-sm">Tag Play</FormLabel>
                 <div className="flex w-full gap-2">
                   <FormControl>
                     <TagInput
                       {...field}
                       autocompleteOptions={tagOptions}
-                      maxTags={1}
-                      tags={tags}
+                      tags={playTags}
                       inlineTags
                       addTagsOnBlur
                       styleClasses={{
@@ -143,19 +236,14 @@ function PlayForm() {
                       enableAutocomplete
                       placeholder="Select or type a new tag"
                       setTags={(newTags) => {
-                        setTags(newTags);
-                        setValue('clusters', newTags as [Tag, ...Tag[]]);
+                        setPlayTags(newTags);
+                        setValue('tags', newTags as [Tag, ...Tag[]], { shouldValidate: true });
                       }}
                       activeTagIndex={activeTagIndex}
                       setActiveTagIndex={setActiveTagIndex}
                     />
                   </FormControl>
-                  <Button
-                    disabled={isSubmitting}
-                    onClick={form.handleSubmit(onSubmit)}
-                    size="sm"
-                    className="h-9 w-10"
-                  >
+                  <Button type="submit" size="sm" className="h-9 w-10">
                     {isSubmitting ? <Loader2 className="animate-spin" /> : <Check size={6} />}
                   </Button>
                 </div>
@@ -198,6 +286,9 @@ export default function PlayView() {
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
   const clearSelectedCluster = useDashboardStore((state) => state.clearSelectedCluster);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const playbackSpeed = useDashboardStore((s) => s.playbackSpeed);
+  const setPlaybackSpeed = useDashboardStore((s) => s.setPlaybackSpeed);
   const [playDetails, setPlayDetails] = useState<PlayDetailState | null>(null);
   const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
   const [_, setSearchParams] = useSearchParams();
@@ -206,7 +297,11 @@ export default function PlayView() {
   const games = data?.games ?? [];
 
   useEffect(() => {
-    if (!selectedPoint) return;
+    if (!selectedPoint) {
+      // Clear video URL and play details when no point is selected
+      setPlayDetails(null);
+      return;
+    }
 
     seIsLoadingPlayDetails(true);
     const fetchPlayDetails = async () => {
@@ -244,7 +339,20 @@ export default function PlayView() {
     };
 
     fetchPlayDetails();
-  }, [selectedPoint]);
+
+    // Cleanup Blob URL on unmount or when selectedPoint changes
+    return () => {
+      if (playDetails?.videoURL?.startsWith('blob:')) {
+        URL.revokeObjectURL(playDetails.videoURL);
+      }
+    };
+  }, [selectedPoint, games, teams, playDetails?.videoURL]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed, playDetails, videoRef]);
 
   if (!selectedPoint) {
     return (
@@ -273,7 +381,7 @@ export default function PlayView() {
   if (isLoadingPlayDetails) {
     return <PlayDetailsSkeleton />;
   }
-
+  // TODO remove "Is Tagged" field?
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
       <CardHeader>
@@ -281,19 +389,36 @@ export default function PlayView() {
       </CardHeader>
       <CardContent className="space-y-4">
         {playDetails?.videoURL && (
-          <video
-            key={playDetails.videoURL} // Force remount component on change
-            controls
-            onError={(e) => console.error('Video error', e)}
-            autoPlay
-            disablePictureInPicture
-            disableRemotePlayback
-            loop
-            muted
-          >
-            <source src={playDetails.videoURL} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
+          <>
+            <div className="mb-2">
+              <label className="text-sm">Playback Speed:</label>
+              <select
+                className="ml-2 rounded border p-1 text-sm"
+                value={playbackSpeed}
+                onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+              >
+                {[1, 1.5, 2, 3, 4, 5, 6, 8].map((s) => (
+                  <option key={s} value={s}>
+                    {s}×
+                  </option>
+                ))}
+              </select>
+            </div>
+            <video
+              ref={videoRef}
+              key={playDetails.videoURL} // Force remount component on change
+              controls
+              onError={(e) => console.error('Video error', e)}
+              autoPlay
+              disablePictureInPicture
+              disableRemotePlayback
+              loop
+              muted
+            >
+              <source src={playDetails.videoURL} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </>
         )}
         <div className="divide-y divide-solid text-sm">
           <div className="flex gap-4 pb-1" style={{ color: OffenseColor }}>
