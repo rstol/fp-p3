@@ -55,13 +55,13 @@ EXPOSE ${PORT}
 
 # CMD ["python", "-m", "backend.router.app"]
 
-# # Start production stage from builder to avoid inheriting dev tools
-# FROM builder AS production
+# Start production stage from builder to avoid inheriting dev tools
+FROM builder AS production
 
-# COPY --chown=app-user:app-user uv.lock pyproject.toml gunicorn.conf.py ${PYTHONPATH}
+COPY --chown=app-user:app-user uv.lock pyproject.toml gunicorn.conf.py ${PYTHONPATH}
 
-# WORKDIR ${PYTHONPATH}
-# RUN uv sync --locked --no-install-project --no-dev
+WORKDIR ${PYTHONPATH}
+RUN uv sync --locked --no-install-project --no-dev
 
 # Copy application files
 COPY --chown=app-user:app-user src/backend ${PYTHONPATH}/backend/
