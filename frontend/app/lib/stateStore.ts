@@ -47,8 +47,7 @@ export const useDashboardStore = create<Store>()(
         set(() => ({
           selectedCluster: { cluster_id, cluster_label },
         })),
-      setPlaybackSpeed: (speed: number) =>
-        set(() => ({ playbackSpeed: speed })),
+      setPlaybackSpeed: (speed: number) => set(() => ({ playbackSpeed: speed })),
       clearSelectedCluster: () =>
         set(() => ({
           selectedCluster: null,
@@ -126,9 +125,11 @@ export const useDashboardStore = create<Store>()(
             .map((cluster) => {
               const filteredPoints = cluster.points.filter((p) => {
                 if (getPointId(p) === getPointId(point)) {
-                  movedPoint = { ...p,
+                  movedPoint = {
+                    ...p,
                     original_cluster: p.original_cluster ?? cluster,
-                    manually_clustered: true };
+                    manually_clustered: true,
+                  };
                   return false;
                 }
                 return true;
@@ -158,13 +159,12 @@ export const useDashboardStore = create<Store>()(
         set((state) => {
           const oldCluster = state.clusters.find((cluster) => {
             cluster.points.some((p) => {
-              getPointId(p) === getPointId(point)
-            })});
+              getPointId(p) === getPointId(point);
+            });
+          });
           const updatedClusters = state.clusters.map((cluster) => ({
             ...cluster,
-            points: cluster.points.filter((p) => {
-              getPointId(p) !== getPointId(point)
-            }),
+            points: cluster.points.filter((p) => getPointId(p) !== getPointId(point)),
           }));
 
           return {
@@ -172,10 +172,13 @@ export const useDashboardStore = create<Store>()(
               ...updatedClusters,
               {
                 ...newCluster,
-                points: [{
-                  ...point,
-                  original_cluster: oldCluster?? null,
-                  manually_clustered: true }],
+                points: [
+                  {
+                    ...point,
+                    original_cluster: oldCluster ?? null,
+                    manually_clustered: true,
+                  },
+                ],
               },
             ],
           };
