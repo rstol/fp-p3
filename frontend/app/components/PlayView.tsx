@@ -23,12 +23,14 @@ interface PlayDetailState {
 }
 
 const FormSchema = z.object({
-  clusters: z.array(
-    z.object({
-      id: z.string(),
-      text: z.string(),
-    }),
-  ),
+  clusters: z
+    .array(
+      z.object({
+        id: z.string(),
+        text: z.string(),
+      }),
+    )
+    .max(1),
   tags: z.array(
     z.object({
       id: z.string(),
@@ -46,8 +48,6 @@ function PlayForm() {
     updatePointTags,
     selectedCluster,
     createNewClusterWithPoint,
-    createNewTagWithPoint,
-    updateIsTagged,
     updateManuallyClustered,
     stageSelectedPlayClusterUpdate,
     clusters: clusterData,
@@ -69,10 +69,12 @@ function PlayForm() {
   const initialValues = useMemo(
     () => ({
       clusters:
-        selectedPoint?.manually_clustered && selectedCluster
+        selectedPoint?.is_tagged && selectedCluster
           ? [{ id: selectedCluster.cluster_id, text: selectedCluster.cluster_label ?? '' }]
           : [],
-      tags: selectedPoint?.tags ? selectedPoint.tags.map((t) => ({ id: t, text: t })) : [],
+      tags: selectedPoint?.tags?.length
+        ? selectedPoint.tags.map((t) => ({ id: t.tag_id, text: t.tag_label }))
+        : [],
       note: selectedPoint?.note ?? '',
     }),
     [selectedPoint, selectedCluster],
@@ -101,8 +103,6 @@ function PlayForm() {
     setIsSubmitting(true);
 
     const updatedCluster = data.clusters.length ? data.clusters[0] : null;
-    const dataTags = data.tags.map((t) => t.text);
-    const addedTags = dataTags.filter((tag) => !selectedPoint.tags?.includes(tag));
 
     // Prepare cluster payload
     const clusterPayload = updatedCluster
@@ -157,18 +157,15 @@ function PlayForm() {
       updatePointNote(selectedPoint, data.note);
     }
 
-    // Update tags if changed
-    if (dataTags.length && JSON.stringify(dataTags) !== JSON.stringify(selectedPoint.tags)) {
-      if (addedTags.length) {
-        addedTags.forEach((newTag) => {
-          if (!tagOptions.some((t) => t.text === newTag)) {
-            createNewTagWithPoint(newTag, selectedPoint);
-          }
-        });
-        updatePointTags(selectedPoint, addedTags);
-        updateIsTagged(selectedPoint);
-      }
-    }
+    // Update tags
+    updatePointTags(
+      selectedPoint,
+      data.tags.map((tag) => ({
+        tag_id: tag.id,
+        tag_label: tag.text,
+      })),
+    );
+
     setIsSubmitting(false);
   }
 
@@ -381,7 +378,7 @@ export default function PlayView() {
   if (isLoadingPlayDetails) {
     return <PlayDetailsSkeleton />;
   }
-  // TODO remove "Is Tagged" field?
+
   return (
     <Card className="gap-4 border-none pt-1 shadow-none">
       <CardHeader>
@@ -454,7 +451,7 @@ export default function PlayView() {
           </div>
           <div className="flex gap-4 pb-1">
             <span className="shrink-0">Tagged</span>
-            <span className="flex-1 text-right">{selectedPoint?.is_tagged ? 'Yes' : 'No'}</span>
+            <span className="flex-1 text-right">{selectedPoint?.tags?.length ? 'Yes' : 'No'}</span>
           </div>
         </div>
       </CardContent>

@@ -202,17 +202,17 @@ const ScatterPlot = () => {
       container
         .selectAll('circle')
         .attr('r', function (d: any) {
-          const isTagged = d?.is_tagged;
+          const isTagged = d?.tags?.length;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
           return isSelected ? 8 / transform.k : isTagged ? 6 / transform.k : 5 / transform.k;
         })
         .attr('stroke', function (d: any) {
-          const isTagged = d?.is_tagged;
+          const isTagged = d?.tags?.length;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
           return isSelected || isTagged ? 'black' : 'white';
         })
         .attr('stroke-width', function (d: any) {
-          const isTagged = d?.is_tagged;
+          const isTagged = d?.tags?.length;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
           return isSelected || isTagged ? 2 / transform.k : 1 / transform.k;
         });
@@ -378,7 +378,7 @@ const ScatterPlot = () => {
         .join('circle')
         .attr('r', (d) => {
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          const isTagged = d?.is_tagged;
+          const isTagged = d?.tags?.length;
           return isSelected ? 8 : isTagged ? 6 : 5;
         })
         .attr('cx', (d) => xScale(d.x))
@@ -395,11 +395,11 @@ const ScatterPlot = () => {
         })
         .attr('stroke', (d) => {
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
-          const isTagged = d?.is_tagged;
+          const isTagged = d?.tags?.length;
           return isSelected || isTagged ? 'black' : 'white';
         })
         .attr('stroke-width', (d) => {
-          const isTagged = d?.is_tagged;
+          const isTagged = d?.tags?.length;
           const isSelected = selectedPoint && getPointId(selectedPoint) === getPointId(d);
           return isSelected || isTagged ? 2 : 1;
         })

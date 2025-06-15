@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import type { TagData, ClusterData, ClusterMetadata, Point, TagMetadata } from '~/types/data';
+import type { Tag, ClusterData, ClusterMetadata, Point } from '~/types/data';
 import { getPointId } from './utils';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 type State = {
   clusters: ClusterData[];
-  tags: TagData[];
+  tags: Tag[];
   selectedPoint: Point | null;
   stagedChangesCount: number;
   selectedCluster: ClusterMetadata | null;
@@ -22,14 +22,25 @@ type Action = {
   setClusters: (clusters: ClusterData[]) => void;
   setPlaybackSpeed: (speed: number) => void;
   updatePointNote: (point: Point, newNote: string) => void;
-  updatePointTags: (point: Point, newTags: string[]) => void;
-  createNewTagWithPoint: (newTag: string, point: Point) => void;
+  updatePointTags: (point: Point, newTags: Tag[]) => void;
   movePointToCluster: (point: Point, targetClusterId: string) => void;
   createNewClusterWithPoint: (newCluster: ClusterMetadata, point: Point) => void;
-  updateIsTagged: (point: Point, isTagged?: boolean) => void;
   updateManuallyClustered: (point: Point, manuallyClustered?: boolean) => void;
   updateClusterLabel: (clusterId: string, newLabel: string) => void;
 };
+
+const mergePointTags = (newPoint: Point, existingPoint?: Point) => ({
+  ...newPoint,
+  tags: existingPoint?.tags
+    ? [
+        ...(existingPoint.tags || []),
+        ...(newPoint.tags || []).filter(
+          (newTag) =>
+            !existingPoint.tags?.some((existingTag) => existingTag.tag_id === newTag.tag_id),
+        ),
+      ]
+    : newPoint.tags,
+});
 
 type Store = State & Action;
 export const useDashboardStore = create<Store>()(
@@ -41,7 +52,19 @@ export const useDashboardStore = create<Store>()(
       stagedChangesCount: 0,
       selectedCluster: null,
       playbackSpeed: 1,
-      setClusters: (clusters) => set(() => ({ clusters })),
+      setClusters: (clusters) =>
+        set((state) => ({
+          clusters: clusters.map((cluster) => ({
+            ...cluster,
+            points: cluster.points.map((newPoint) => {
+              const existingPoint = state.clusters
+                .flatMap((c) => c.points)
+                .find((p) => getPointId(p) === getPointId(newPoint));
+
+              return mergePointTags(newPoint, existingPoint);
+            }),
+          })),
+        })),
       updateSelectedPoint: (selectedPoint) => set(() => ({ selectedPoint })),
       updateSelectedCluster: ({ cluster_id, cluster_label }) =>
         set(() => ({
@@ -77,40 +100,26 @@ export const useDashboardStore = create<Store>()(
           })),
         })),
       updatePointTags: (point, newTags) =>
-        set((state) => ({
-          tags: state.tags.map((t) =>
-            newTags.includes(t.tag_label) ? { ...t, points: [...(t.points || []), point] } : t,
-          ),
-          clusters: state.clusters.map(({ points, ...cluster }) => ({
-            ...cluster,
-            points: points.map((p) =>
-              getPointId(p) === getPointId(point)
-                ? { ...p, tags: [...(p.tags || []), ...newTags] }
-                : p,
-            ),
-          })),
-        })),
-      updateIsTagged: (point, isTagged = true) =>
-        set((state) => ({
-          clusters: state.clusters.map((cluster) => ({
-            ...cluster,
-            points: cluster.points.map((p) =>
-              getPointId(p) === getPointId(point) ? { ...p, is_tagged: isTagged } : p,
-            ),
-          })),
-        })),
-      createNewTagWithPoint: (newTag, point) =>
         set((state) => {
+          const existingTagIds = new Set((point.tags || []).map((tag) => tag.tag_id));
+          const uniqueNewPointTags = newTags.filter((tag) => !existingTagIds.has(tag.tag_id));
+          console.log('uniqueNewPointTags', uniqueNewPointTags);
+          const globalTagIds = new Set(state.tags.map((tag) => tag.tag_id));
+          const uniqueNewTags = uniqueNewPointTags.filter((tag) => !globalTagIds.has(tag.tag_id));
+          console.log('uniqueNewTags', uniqueNewTags);
           return {
-            tags: [
-              ...state.tags,
-              {
-                tag_label: newTag,
-                points: [point],
-              },
-            ],
+            tags: [...state.tags, ...uniqueNewTags],
+            clusters: state.clusters.map(({ points, ...cluster }) => ({
+              ...cluster,
+              points: points.map((p) =>
+                getPointId(p) === getPointId(point)
+                  ? { ...p, tags: [...(p.tags || []), ...uniqueNewPointTags] }
+                  : p,
+              ),
+            })),
           };
         }),
+
       updateClusterLabel: (clusterId, newLabel) =>
         set((state) => ({
           clusters: state.clusters.map((cluster) =>
@@ -128,7 +137,7 @@ export const useDashboardStore = create<Store>()(
                   movedPoint = {
                     ...p,
                     original_cluster: p.original_cluster ?? cluster,
-                    manually_clustered: true,
+                    is_tagged: true,
                   };
                   return false;
                 }
@@ -149,9 +158,7 @@ export const useDashboardStore = create<Store>()(
           clusters: state.clusters.map((cluster) => ({
             ...cluster,
             points: cluster.points.map((p) =>
-              getPointId(p) === getPointId(point)
-                ? { ...p, manually_clustered: manuallyClustered }
-                : p,
+              getPointId(p) === getPointId(point) ? { ...p, is_tagged: manuallyClustered } : p,
             ),
           })),
         })),
@@ -176,7 +183,7 @@ export const useDashboardStore = create<Store>()(
                   {
                     ...point,
                     original_cluster: oldCluster ?? null,
-                    manually_clustered: true,
+                    is_tagged: true,
                   },
                 ],
               },

@@ -21,10 +21,6 @@ This dashboard provides comprehensive analysis of NBA player movement patterns t
 - **Coaches** looking to understand team dynamics and strategies  
 - **Basketball enthusiasts** exploring advanced analytics
 
-### Core Features
-
-TODO
-
 ## Architecture
 
 ```

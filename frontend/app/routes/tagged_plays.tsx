@@ -3,7 +3,7 @@ import { PlaysTable } from '~/components/PlaysTable';
 import { BASE_URL, GameFilter } from '~/lib/const';
 import { fetchWithCache } from '~/lib/fetchCache';
 import { useDashboardStore } from '~/lib/stateStore';
-import type { ClusterData, Game, Team } from '~/types/data';
+import type { ClusterData, Game, Point, Tag, Team } from '~/types/data';
 
 export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -36,18 +36,32 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 clientLoader.hydrate = true;
 
 export default function TaggedPlaysView() {
-  const tags = useDashboardStore((state) => state.tags);
-  const hasTaggedPlays = tags?.some((tag) => tag.points.some((p) => p.is_tagged));
+  const clusters = useDashboardStore((state) => state.clusters);
+  const hasTaggedPlays = clusters?.some((c) => c.points.some((p) => p?.tags?.length));
+
+  const groupedByTag = clusters
+    .flatMap((cluster) => cluster.points)
+    .reduce<Record<string, { tag: Tag; points: Point[] }>>((acc, point) => {
+      (point.tags || []).forEach((tag) => {
+        const key = tag.tag_id;
+        if (!acc[key]) {
+          acc[key] = { tag, points: [] };
+        }
+        acc[key].points.push(point);
+      });
+      return acc;
+    }, {});
+  const tagGroups = Object.values(groupedByTag);
 
   return (
     <div className="mt-6">
       {hasTaggedPlays
-        ? tags?.map((tag) => {
-            return tag?.points.length ? (
+        ? tagGroups?.map((tagGroup) => {
+            return tagGroup.points.length ? (
               <PlaysTable
-                key={tag.tag_label}
-                data={tag.points}
-                title={`Plays tagged with ${tag.tag_label}`}
+                key={tagGroup.tag.tag_label}
+                data={tagGroup.points}
+                title={`Plays tagged with ${tagGroup.tag.tag_label}`}
               />
             ) : (
               'No plays tagged'

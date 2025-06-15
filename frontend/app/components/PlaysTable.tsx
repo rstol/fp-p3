@@ -77,7 +77,6 @@ function EditTagDialog({
   const {
     movePointToCluster,
     selectedCluster,
-    updateIsTagged,
     createNewClusterWithPoint,
     stageSelectedPlayClusterUpdate,
     clusters: clusterData,
@@ -125,8 +124,6 @@ function EditTagDialog({
         );
       } else if (updatedCluster && updatedCluster.id !== selectedCluster?.cluster_id) {
         movePointToCluster(play, updatedCluster.id);
-      } else {
-        updateIsTagged(play);
       }
     });
 

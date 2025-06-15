@@ -44,7 +44,10 @@ export interface PlayDetail {
   event_score?: string;
   quarter?: number;
 }
-
+export interface Tag {
+  tag_id: string;
+  tag_label: string;
+}
 export interface Point {
   x: number;
   y: number;
@@ -56,8 +59,7 @@ export interface Point {
   event_type: number;
   is_tagged: boolean;
   original_cluster: ClusterMetadata | null;
-  tags: string[];
-  manually_clustered: boolean;
+  tags?: Tag[];
   note: null | string;
   score: string | number;
   similarity_distance: number;
@@ -72,13 +74,5 @@ export interface ClusterMetadata {
 }
 
 export interface ClusterData extends ClusterMetadata {
-  points: Array<Point>;
-}
-
-export interface TagMetadata {
-  tag_label: string;
-}
-
-export interface TagData extends TagMetadata {
   points: Array<Point>;
 }
