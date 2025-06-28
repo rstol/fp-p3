@@ -2,6 +2,8 @@
 
 The task of scouting an upcoming opponent in professional Basketball often requires hours of manual labor, with only a small proportion of it requiring the domain expertise of the coaches carrying out the task. Yet the task is not easily solved by an algorithm or an ML agent. We present the mixed-initiative system DeepPlaybook that enables easy exploration, organization and presentation of Basketball plays in an interactive dashboard with a semi-supervised projection and an interactive clustering fueled by a transformer model with a VAE bottleneck.
 
+Try out the live version at [https://fp-p3.xaiml25.ivia.ch/](https://fp-p3.xaiml25.ivia.ch/)
+
 ## Team Members
 
 1. Mike Boss
