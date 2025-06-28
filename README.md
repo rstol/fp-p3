@@ -15,11 +15,11 @@ This dashboard provides comprehensive analysis of NBA player movement patterns t
 - **Machine learning models** for finding similar plays (using trajectory prediction)
 - **Interactive components** for exploring opponent team offensive tactics
 
-### Target Users
+## Project
 
-- **Basketball analysts** seeking data-driven insights
-- **Coaches** looking to understand team dynamics and strategies  
-- **Basketball enthusiasts** exploring advanced analytics
+![DeepPlaybook](./assets/XAIML_Scientific_Poster.png)
+
+[Report](./assets/XAIML_report_DeepPlaybook.pdf)
 
 ## Architecture
 
