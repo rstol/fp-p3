@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useLoaderData, useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
+import { data, useLoaderData, useSearchParams, type ClientLoaderFunctionArgs } from 'react-router';
 import ClusterView from '~/components/ClusterView';
 import EmptyScatterGuide from '~/components/EmptyScatterGuide';
 import { PlaysTable } from '~/components/PlaysTable';
@@ -8,11 +8,7 @@ import ScatterPlot from '~/components/ScatterPlot';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '~/components/ui/resizable';
 import { Separator } from '~/components/ui/separator';
 import { BASE_URL, GameFilter } from '~/lib/const';
-import {
-  fetchWithCache,
-  purgeCacheOnGitCommitChange,
-  purgeScatterDataCache,
-} from '~/lib/fetchCache';
+import { fetchWrapper, purgeCacheOnGitCommitChange } from '~/lib/fetchCache';
 import { useDashboardStore } from '~/lib/stateStore';
 import { getPointId } from '~/lib/utils';
 import type { ClusterData, Game, Team } from '~/types/data';
@@ -37,35 +33,27 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
       ? GameFilter.LAST3
       : Number(url.searchParams.get('timeframe'));
 
-  const games = await (teamID
-    ? fetchWithCache<Game[]>(`${BASE_URL}/teams/${teamID}/games`)
-    : Promise.resolve(null));
-
-  const totalGames = games?.length ?? 0;
-  timeframe = Math.min(totalGames, timeframe);
-
-  const bypassScatterCache = Boolean(fetchScatter);
-  if (bypassScatterCache) {
-    await purgeScatterDataCache(teamID);
-  }
-
-  const fetchPromises: [Promise<Team[]>, Promise<ClusterData[] | null>] = [
-    fetchWithCache<Team[]>(`${BASE_URL}/teams`),
+  const fetchPromises: [Promise<Team[]>, Promise<ClusterData[] | null>, Promise<Game[] | null>] = [
+    fetchWrapper<Team[]>(`${BASE_URL}/teams`),
     teamID
-      ? fetchWithCache<ClusterData[]>(
+      ? fetchWrapper<ClusterData[]>(
           `${BASE_URL}/teams/${teamID}/plays/scatter${timeframe ? `?timeframe=last_${timeframe}` : ''}`,
-          true,
-          bypassScatterCache,
-          true,
         )
       : Promise.resolve(null),
+    teamID ? fetchWrapper<Game[]>(`${BASE_URL}/teams/${teamID}/games`) : Promise.resolve(null),
   ];
-  const [teams, scatterData] = await Promise.all(fetchPromises);
+  const [teams, scatterData, games] = await Promise.all(fetchPromises);
+
+  const bypassScatterCache = Boolean(fetchScatter);
+  if (bypassScatterCache || useDashboardStore.getState().clusters.length === 0) {
+    useDashboardStore.getState().setClusters(scatterData ?? []);
+  }
+  useDashboardStore.getState().setTeams(teams);
+  useDashboardStore.getState().setGames(games ?? []);
 
   return {
     timeframe,
     teamID,
-    totalGames,
     teams,
     games,
     scatterData,

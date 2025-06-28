@@ -55,7 +55,7 @@ function PlayForm() {
   } = useDashboardStore.getState();
 
   const tagOptions = useMemo(
-    () => tagData.map((t) => ({ id: t.tag_label, text: t.tag_label })).sort(),
+    () => tagData.map((t) => ({ id: t.tag_id, text: t.tag_label })).sort(),
     [tagData],
   );
   const clusterOptions = useMemo(
@@ -72,9 +72,7 @@ function PlayForm() {
         selectedPoint?.is_tagged && selectedCluster
           ? [{ id: selectedCluster.cluster_id, text: selectedCluster.cluster_label ?? '' }]
           : [],
-      tags: selectedPoint?.tags?.length
-        ? selectedPoint.tags.map((t) => ({ id: t.tag_id, text: t.tag_label }))
-        : [],
+      tags: selectedPoint?.tags?.map((t) => ({ id: t.tag_id, text: t.tag_label })) ?? [],
       note: selectedPoint?.note ?? '',
     }),
     [selectedPoint, selectedCluster],
@@ -86,7 +84,7 @@ function PlayForm() {
   });
 
   const [playTags, setPlayTags] = useState<Tag[]>(initialValues.tags);
-  const [clusterTags, setClusterTags] = useState<Tag[]>(initialValues.clusters);
+  const [clusterTags, setManuallyAssignedCluster] = useState<Tag[]>(initialValues.clusters);
   const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
   const [activeClusterIndex, setActiveClusterIndex] = useState<number | null>(null);
   const { setValue, reset } = form;
@@ -95,7 +93,7 @@ function PlayForm() {
   useEffect(() => {
     reset(initialValues);
     setPlayTags(initialValues.tags);
-    setClusterTags(initialValues.clusters);
+    setManuallyAssignedCluster(initialValues.clusters);
   }, [initialValues, reset]);
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
@@ -156,7 +154,6 @@ function PlayForm() {
     if (data.note && selectedPoint.note !== data.note) {
       updatePointNote(selectedPoint, data.note);
     }
-
     // Update tags
     updatePointTags(
       selectedPoint,
@@ -196,7 +193,7 @@ function PlayForm() {
                       enableAutocomplete
                       placeholder="Select a cluster or enter a new cluster name"
                       setTags={(newTags) => {
-                        setClusterTags(newTags);
+                        setManuallyAssignedCluster(newTags);
                         setValue('clusters', newTags as [Tag, ...Tag[]], { shouldValidate: true });
                       }}
                       activeTagIndex={activeClusterIndex}

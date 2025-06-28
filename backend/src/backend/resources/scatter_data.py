@@ -394,8 +394,12 @@ class TeamPlaysScatterResource(Resource):
             parts = timeframe.split("_")
             if len(parts) < 2 or not parts[1].isdigit():
                 msg = "Timeframe format error"
-                raise ValueError(msg)  # noqa: TRY301
+                raise ValueError(msg)
             last_games = int(parts[1])
+            if last_games <= 0 or last_games > 5:
+                msg = "Timeframe must be between 1 and 5 games. Defaulting to 3."
+                logger.error(msg)
+                last_games = 3
         except ValueError:
             logger.exception(f"Invalid timeframe format: {timeframe}")
             return {"error": "Invalid timeframe format"}, 400

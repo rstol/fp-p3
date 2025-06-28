@@ -1,9 +1,11 @@
 import { create } from 'zustand';
-import type { Tag, ClusterData, ClusterMetadata, Point } from '~/types/data';
+import type { Tag, ClusterData, ClusterMetadata, Point, Game, Team } from '~/types/data';
 import { getPointId } from './utils';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 type State = {
+  teams: Team[];
+  games: Game[];
   clusters: ClusterData[];
   tags: Tag[];
   selectedPoint: Point | null;
@@ -13,6 +15,8 @@ type State = {
 };
 
 type Action = {
+  setTeams: (teams: Team[]) => void;
+  setGames: (games: Game[]) => void;
   updateSelectedPoint: (point: Point | null) => void;
   resetSelectedPoint: () => void;
   stageSelectedPlayClusterUpdate: (clusterId: string, count?: number) => void;
@@ -46,12 +50,22 @@ type Store = State & Action;
 export const useDashboardStore = create<Store>()(
   persist(
     (set) => ({
+      games: [],
+      teams: [],
       clusters: [],
       tags: [],
       selectedPoint: null,
       stagedChangesCount: 0,
       selectedCluster: null,
       playbackSpeed: 1,
+      setTeams: (teams) =>
+        set(() => ({
+          teams,
+        })),
+      setGames: (games) =>
+        set(() => ({
+          games,
+        })),
       setClusters: (clusters) =>
         set((state) => ({
           clusters: clusters.map((cluster) => ({
@@ -103,10 +117,10 @@ export const useDashboardStore = create<Store>()(
         set((state) => {
           const existingTagIds = new Set((point.tags || []).map((tag) => tag.tag_id));
           const uniqueNewPointTags = newTags.filter((tag) => !existingTagIds.has(tag.tag_id));
-          console.log('uniqueNewPointTags', uniqueNewPointTags);
+
           const globalTagIds = new Set(state.tags.map((tag) => tag.tag_id));
           const uniqueNewTags = uniqueNewPointTags.filter((tag) => !globalTagIds.has(tag.tag_id));
-          console.log('uniqueNewTags', uniqueNewTags);
+
           return {
             tags: [...state.tags, ...uniqueNewTags],
             clusters: state.clusters.map(({ points, ...cluster }) => ({
@@ -192,8 +206,8 @@ export const useDashboardStore = create<Store>()(
         }),
     }),
     {
-      name: 'useDashboardStore',
-      storage: createJSONStorage(() => sessionStorage),
+      name: 'dashboard-storage', // unique name for the storage
+      storage: createJSONStorage(() => localStorage),
     },
   ),
 );

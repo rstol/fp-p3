@@ -370,7 +370,7 @@ const ScatterPlot = () => {
       }
     });
     const tooltip = d3.select('.tooltip');
-    console.log(scatterData);
+
     scatterData.forEach(({ cluster_id, cluster_label, points }) => {
       container
         .selectAll(`circle.cluster-${cluster_id}`)

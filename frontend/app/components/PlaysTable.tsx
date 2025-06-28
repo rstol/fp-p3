@@ -17,7 +17,7 @@ import { type Tag as TagType, TagInput } from 'emblor';
 import { ArrowUpDown, ChevronDown, Edit, Eye, Loader2, MoreHorizontal, Tag } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
-import { useLoaderData } from 'react-router';
+import { useLoaderData, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -74,6 +74,8 @@ function EditTagDialog({
   onOpenChange: (open: boolean) => void;
   selectedPlays: Point[];
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const teamID = searchParams.get('teamid') ?? null;
   const {
     movePointToCluster,
     selectedCluster,
@@ -99,7 +101,6 @@ function EditTagDialog({
   const [tags, setTags] = React.useState<TagType[]>(initialTag);
   const [activeTagIndex, setActiveTagIndex] = React.useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const { teamID } = useLoaderData<typeof clientLoader>();
 
   React.useEffect(() => {
     reset({
@@ -260,7 +261,8 @@ function EditNoteDialog({
   onOpenChange: (open: boolean) => void;
   selectedPlays: Point[];
 }) {
-  const { teamID } = useLoaderData<typeof clientLoader>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const teamID = searchParams.get('teamid') ?? null;
   const play = selectedPlays?.[0] ?? {};
   const updatePointNote = useDashboardStore((state) => state.updatePointNote);
   const form = useForm<z.infer<typeof EditNoteFormSchema>>({
@@ -320,17 +322,19 @@ function EditNoteDialog({
 }
 
 export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
+  const location = useLocation();
   const [sorting, setSorting] = React.useState<SortingState>([
     {
       id: 'similarity_distance',
       desc: true,
     },
   ]);
+  let navigate = useNavigate();
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
-  const loaderData = useLoaderData<typeof clientLoader>();
-  const { games, teams } = loaderData;
+  const teams = useDashboardStore((state) => state.teams);
+  const games = useDashboardStore((state) => state.games);
   const gameMap = new Map(games?.map((game) => [game.game_id, game]));
   const teamMap = new Map(teams.map((team) => [team.teamid, team.name]));
   const playbackSpeed = useDashboardStore((s) => s.playbackSpeed);
@@ -380,6 +384,7 @@ export function PlaysTable({ title, data }: { title: string; data: Point[] }) {
 
   function handleViewPreview(play: Point) {
     updateSelectedPoint(play);
+    navigate(`/${location.search.replace('&fetch_scatter=True', '')}`);
   }
 
   function handleTagSelected() {

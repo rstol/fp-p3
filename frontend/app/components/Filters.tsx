@@ -48,7 +48,7 @@ export default function Filters({ teamID }: { teamID: string | null }) {
   }));
 
   const timeframe = data.timeframe ?? GameFilter.LAST3;
-  const totalGames = data.totalGames;
+  const totalGames = data.games?.length ?? 0;
 
   return (
     <div className="absolute top-2 left-2 z-10 flex gap-3">

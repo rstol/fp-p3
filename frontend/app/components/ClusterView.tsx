@@ -59,7 +59,6 @@ function ClusterLabelForm({
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     setIsSubmitting(true);
-    console.log('submit', data);
 
     const payload = {
       cluster_label: data.clusterLabel,
