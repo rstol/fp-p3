@@ -1,6 +1,8 @@
-# Basketball Analytics Dashboard
+# DeepPlaybook: Basketball Play-by-Play Analytics Dashboard
 
-The task of scouting an upcoming opponent in professional Basketball often requires hours of manual labor, with only a small proportion of it requiring the domain expertise of the coaches carrying out the task. Yet the task is not easily solved by an algorithm or an ML agent. We present the mixed-initiative system DeepPlaybook that enables easy exploration, organization and presentation of Basketball plays in an interactive dashboard with a semi-supervised projection and an interactive clustering fueled by a transformer model with a VAE bottleneck.
+The task of scouting the playbook (i.e. often used plays) of an upcoming opponent in professional basketball often requires hours of manual labor, with only a small proportion of it requiring the domain expertise of the coaches carrying out the task. Yet the task is not easily solved by an algorithm or an ML agent due to its dynamic nature, missing ground truth and specific mental models of the coaches. We present the mixed-initiative system DeepPlaybook that enables easy exploration, organization, and presentation of Basketball plays in an interactive dashboard. A transformer model trained on finding tactically similar plays supplies high-dimensional embeddings that are downprojected using supervised UMAP. Each point in the interactive clustering plot corresponds to a downprojected play sequence.
+
+Try out the live version at [https://fp-p3.xaiml25.ivia.ch/](https://fp-p3.xaiml25.ivia.ch/)
 
 ## Team Members
 
