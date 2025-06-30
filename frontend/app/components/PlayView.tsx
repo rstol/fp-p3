@@ -65,7 +65,6 @@ function PlayForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { teamID } = useLoaderData<typeof clientLoader>();
 
-  // Compute initial values only when selectedPoint or selectedCluster changes
   const initialValues = useMemo(
     () => ({
       clusters:
@@ -275,6 +274,8 @@ function PlayForm() {
 }
 
 export default function PlayView() {
+  const teams = useDashboardStore((state) => state.teams);
+  const games = useDashboardStore((state) => state.games);
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const stagedChangesCount = useDashboardStore((state) => state.stagedChangesCount);
   const clearPendingClusterUpdates = useDashboardStore((state) => state.clearPendingClusterUpdates);
@@ -286,9 +287,6 @@ export default function PlayView() {
   const [playDetails, setPlayDetails] = useState<PlayDetailState | null>(null);
   const [isLoadingPlayDetails, seIsLoadingPlayDetails] = useState(false);
   const [_, setSearchParams] = useSearchParams();
-  const data = useLoaderData<typeof clientLoader>();
-  const teams = data?.teams ?? [];
-  const games = data?.games ?? [];
 
   useEffect(() => {
     if (!selectedPoint) {

@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
@@ -21,8 +21,9 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { GameFilter, TeamIDs } from '~/lib/const';
+import { useDashboardStore } from '~/lib/stateStore';
 import { cn } from '~/lib/utils';
-import type { clientLoader } from '~/routes/_index';
+import { clientLoader } from '~/routes/_index';
 
 const allGameFilters = [
   // { value: GameFilter.LAST1, label: 'Last Game' },
@@ -33,8 +34,10 @@ const allGameFilters = [
 ];
 
 export default function Filters({ teamID }: { teamID: string | null }) {
-  const data = useLoaderData<typeof clientLoader>();
-  const teams = data?.teams ?? [];
+  const { timeframe } = useLoaderData<typeof clientLoader>();
+  const teams = useDashboardStore((state) => state.teams);
+  const games = useDashboardStore((state) => state.games);
+
   const [open, setOpen] = useState(false);
   const [_, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
@@ -47,8 +50,7 @@ export default function Filters({ teamID }: { teamID: string | null }) {
     abbreviation: team.abbreviation,
   }));
 
-  const timeframe = data.timeframe ?? GameFilter.LAST3;
-  const totalGames = data.games?.length ?? 0;
+  const totalGames = games?.length ?? 0;
 
   return (
     <div className="absolute top-2 left-2 z-10 flex gap-3">
@@ -108,7 +110,7 @@ export default function Filters({ teamID }: { teamID: string | null }) {
       </Popover>
       <div className="grid gap-1">
         <Select
-          value={String(timeframe)}
+          value={String(timeframe ?? GameFilter.LAST3)}
           onValueChange={(value: string) => {
             setSearchParams((prev) => {
               prev.set('timeframe', value);

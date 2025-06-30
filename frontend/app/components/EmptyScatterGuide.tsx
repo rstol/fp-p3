@@ -1,12 +1,11 @@
-import { Link, useLoaderData } from 'react-router';
+import { Link } from 'react-router';
 import { TeamIDs } from '~/lib/const';
-import { clientLoader } from '~/routes/_index';
+import { useDashboardStore } from '~/lib/stateStore';
 import type { Team } from '~/types/data';
 import { Button } from './ui/button';
 
 export default function EmptyScatterGuide() {
-  const data = useLoaderData<typeof clientLoader>();
-  const teams = data?.teams ?? [];
+  const teams = useDashboardStore((state) => state.teams);
   const filteredTeams = teams.filter((team) => TeamIDs.includes(team.teamid));
   return (
     <div className="flex h-full w-full flex-col items-center justify-center p-6">

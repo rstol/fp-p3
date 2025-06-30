@@ -33,37 +33,41 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
       ? GameFilter.LAST3
       : Number(url.searchParams.get('timeframe'));
 
-  const fetchPromises: [Promise<Team[]>, Promise<ClusterData[] | null>, Promise<Game[] | null>] = [
-    fetchWrapper<Team[]>(`${BASE_URL}/teams`),
-    teamID
-      ? fetchWrapper<ClusterData[]>(
-          `${BASE_URL}/teams/${teamID}/plays/scatter${timeframe ? `?timeframe=last_${timeframe}` : ''}`,
-        )
-      : Promise.resolve(null),
-    teamID ? fetchWrapper<Game[]>(`${BASE_URL}/teams/${teamID}/games`) : Promise.resolve(null),
-  ];
-  const [teams, scatterData, games] = await Promise.all(fetchPromises);
-
   const bypassScatterCache = Boolean(fetchScatter);
-  if (bypassScatterCache || useDashboardStore.getState().clusters.length === 0) {
-    useDashboardStore.getState().setClusters(scatterData ?? []);
+  const state = useDashboardStore.getState();
+  const promises = [];
+
+  if (!state.teams.length) {
+    promises.push(fetchWrapper<Team[]>(`${BASE_URL}/teams`).then((teams) => state.setTeams(teams)));
   }
-  useDashboardStore.getState().setTeams(teams);
-  useDashboardStore.getState().setGames(games ?? []);
+
+  if (teamID && (bypassScatterCache || !state.clusters.length)) {
+    promises.push(
+      fetchWrapper<ClusterData[]>(
+        `${BASE_URL}/teams/${teamID}/plays/scatter${timeframe ? `?timeframe=last_${timeframe}` : ''}`,
+      ).then((data) => state.setClusters(data ?? [])),
+    );
+  }
+
+  if (teamID && !state.games.length) {
+    promises.push(
+      fetchWrapper<Game[]>(`${BASE_URL}/teams/${teamID}/games`).then((games) =>
+        state.setGames(games ?? []),
+      ),
+    );
+  }
+  await Promise.all(promises);
 
   return {
     timeframe,
     teamID,
-    teams,
-    games,
-    scatterData,
   };
 }
 
 clientLoader.hydrate = true;
 
 export default function Home() {
-  const { scatterData: initialScatterData, teamID } = useLoaderData<typeof clientLoader>();
+  const { teamID } = useLoaderData<typeof clientLoader>();
   const scatterData = useDashboardStore((state) => state.clusters);
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
@@ -80,13 +84,13 @@ export default function Home() {
   }, [teamID, clearSelectedPoint, clearSelectedCluster]);
 
   useEffect(() => {
-    if (initialScatterData && searchParams.get('fetch_scatter')) {
+    if (scatterData && searchParams.get('fetch_scatter')) {
       setSearchParams((prev) => {
         prev.delete('fetch_scatter');
         return prev;
       });
     }
-  }, [searchParams, initialScatterData]);
+  }, [searchParams, scatterData]);
 
   let tableData =
     selectedCluster && selectedPoint

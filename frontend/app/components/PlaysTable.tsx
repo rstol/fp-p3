@@ -17,7 +17,7 @@ import { type Tag as TagType, TagInput } from 'emblor';
 import { ArrowUpDown, ChevronDown, Edit, Eye, Loader2, MoreHorizontal, Tag } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
-import { useLoaderData, useLocation, useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -48,10 +48,9 @@ import {
 } from '~/components/ui/table';
 import { BASE_URL } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
-import type { clientLoader } from '~/routes/_index';
+import { generateTagId } from '~/lib/utils';
 import type { Point } from '~/types/data';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
-import { generateTagId, getPointId } from '~/lib/utils';
 
 const EditTagFormSchema = z.object({
   clusters: z

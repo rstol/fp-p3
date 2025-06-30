@@ -17,7 +17,7 @@ export const purgeCacheOnGitCommitChange = async () => {
 
 export async function fetchWrapper<T>(url: string): Promise<T> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch from ${url}`);
+  if (!res.ok) throw new Error(`Failed to fetch from ${url}`, { cause: res.statusText });
 
   return res.json() as Promise<T>;
 }

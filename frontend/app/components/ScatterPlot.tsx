@@ -178,14 +178,12 @@ function InfoBar() {
 }
 
 const ScatterPlot = () => {
-  const loaderData = useLoaderData<typeof clientLoader>();
-  const { teamID } = loaderData;
+  const { teamID } = useLoaderData<typeof clientLoader>();
   const selectedPoint = useDashboardStore((state) => state.selectedPoint);
   const updateSelectedPoint = useDashboardStore((state) => state.updateSelectedPoint);
   const updateSelectedCluster = useDashboardStore((state) => state.updateSelectedCluster);
   const resetSelectedPoint = useDashboardStore((state) => state.resetSelectedPoint);
-  let scatterData = useDashboardStore((state) => state.clusters);
-  scatterData = scatterData?.length ? scatterData : (loaderData.scatterData ?? []);
+  const scatterData = useDashboardStore((state) => state.clusters);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [currentTransform, setCurrentTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);

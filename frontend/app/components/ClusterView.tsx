@@ -1,18 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useLoaderData } from 'react-router';
 import { z } from 'zod';
 import { BASE_URL } from '~/lib/const';
 import { useDashboardStore } from '~/lib/stateStore';
+import type { clientLoader } from '~/routes/_index';
+import type { ClusterMetadata } from '~/types/data';
 import { ClusterDetailsSkeleton } from './LoaderSkeletons';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Input } from './ui/input';
-import { useLoaderData } from 'react-router';
-import type { clientLoader } from '~/routes/_index';
-import type { ClusterMetadata } from '~/types/data';
-import { useEffect, useState } from 'react';
 
 function createFormSchema(existingLabels: string[]) {
   return z.object({
@@ -104,8 +104,7 @@ function ClusterLabelForm({
 export default function ClusterView() {
   const selectedCluster = useDashboardStore((state) => state.selectedCluster);
   const clustersState = useDashboardStore((state) => state.clusters);
-  const data = useLoaderData<typeof clientLoader>();
-  const clusterData = clustersState ?? data?.scatterData ?? [];
+  const clusterData = clustersState ?? [];
   const clusters = clusterData.map(({ cluster_id, cluster_label }) => ({
     cluster_id,
     cluster_label,
@@ -126,7 +125,7 @@ export default function ClusterView() {
     );
   }
 
-  const allPoints = data?.scatterData?.flatMap((c) => c.points);
+  const allPoints = clusterData?.flatMap((c) => c.points);
   const currentCluster = clusterData.find((c) => c.cluster_id === selectedCluster.cluster_id);
   const usage =
     currentCluster && allPoints ? (100 / allPoints.length) * currentCluster.points.length : 0;
